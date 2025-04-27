@@ -16,6 +16,8 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
+    "baseUrl": ".",                 // raiz do projeto
+    "paths": { "@/*": ["./*"] }     // faz "@/alguma/coisa" apontar para a raiz
     "plugins": [
       {
         "name": "next"
