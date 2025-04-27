@@ -4,7 +4,7 @@ import { sendVerificationSMS, generateVerificationCode } from '@/lib/twilio/clie
 export async function GET(request: Request) {
   try {
     // Número de teste - substitua pelo seu número para testar
-    const testPhone = '+5511987654321'; // Substitua pelo seu número
+    const testPhone = '+5511995843051'; // Substitua pelo seu número
     const code = await generateVerificationCode();
     
     const result = await sendVerificationSMS(testPhone, code);
