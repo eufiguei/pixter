@@ -1,11 +1,6 @@
-// /src/app/api/stripe/create-payment/route.ts
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase/client';
-import Stripe from 'stripe';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2023-10-16',
-});
+import stripe from '@/lib/stripe/server';
 
 export async function POST(request: Request) {
   try {

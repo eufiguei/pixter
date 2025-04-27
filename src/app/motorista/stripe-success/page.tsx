@@ -1,49 +1,53 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { supabase } from '@/lib/supabase/client';
 
-export default function PagamentoSucesso() {
-  const searchParams = useSearchParams();
-  const sessionId = searchParams.get('session_id');
-  const [paymentStatus, setPaymentStatus] = useState<any>(null);
+export default function StripeSuccess() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [driver, setDriver] = useState<any>(null);
 
   useEffect(() => {
-    async function checkPaymentStatus() {
-      if (!sessionId) {
-        setError('ID da sessão não encontrado');
-        setLoading(false);
-        return;
-      }
-
+    async function checkDriverStatus() {
       try {
-        const response = await fetch(`/api/stripe/payment-status?session_id=${sessionId}`);
-        const data = await response.json();
+        const { data: { session } } = await supabase.auth.getSession();
         
-        if (!response.ok) {
-          throw new Error(data.error || 'Erro ao verificar status do pagamento');
+        if (!session) {
+          router.push('/motorista/login');
+          return;
         }
-        
-        setPaymentStatus(data);
+
+        const { data, error } = await supabase
+          .from('drivers')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        setDriver(data);
       } catch (error) {
         console.error('Erro:', error);
-        setError('Falha ao verificar o status do pagamento');
+        setError('Falha ao verificar status da conta');
       } finally {
         setLoading(false);
       }
     }
 
-    checkPaymentStatus();
-  }, [sessionId]);
+    checkDriverStatus();
+  }, [router]);
 
   if (loading) {
     return (
       <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 text-center">
-          <h2 className="text-2xl font-bold mb-4">Verificando pagamento...</h2>
+          <h2 className="text-2xl font-bold mb-4">Verificando status da conta...</h2>
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
         </div>
       </main>
@@ -56,8 +60,8 @@ export default function PagamentoSucesso() {
         <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 text-center">
           <h2 className="text-2xl font-bold mb-4 text-red-500">Erro</h2>
           <p className="mb-6">{error}</p>
-          <Link href="/" className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded">
-            Voltar para a página inicial
+          <Link href="/motorista/dashboard" className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded">
+            Voltar para o dashboard
           </Link>
         </div>
       </main>
@@ -75,26 +79,29 @@ export default function PagamentoSucesso() {
           </div>
         </div>
         
-        <h2 className="text-2xl font-bold mb-2">Pagamento realizado com sucesso!</h2>
+        <h2 className="text-2xl font-bold mb-2">Conta Stripe configurada com sucesso!</h2>
         <p className="text-gray-600 mb-6">
-          Obrigado por usar o Pixter. Seu pagamento foi processado com sucesso.
+          Sua conta Stripe foi configurada com sucesso. Agora você pode receber pagamentos através do Pixter.
         </p>
         
-        {paymentStatus && (
+        {driver && (
           <div className="bg-gray-50 p-4 rounded-lg mb-6 text-left">
-            <h3 className="font-semibold mb-2">Detalhes do pagamento:</h3>
-            <p><span className="font-medium">Status:</span> {paymentStatus.paymentStatus}</p>
-            {paymentStatus.amount && (
-              <p><span className="font-medium">Valor:</span> R$ {paymentStatus.amount.toFixed(2)}</p>
-            )}
+            <h3 className="font-semibold mb-2">Status da sua conta:</h3>
+            <p>
+              <span className="font-medium">Conta Stripe:</span> {driver.stripe_account_id ? 'Conectada' : 'Não conectada'}
+            </p>
+            <p>
+              <span className="font-medium">Status:</span> {driver.stripe_account_status || 'Pendente'}
+            </p>
+            <p>
+              <span className="font-medium">Pagamentos habilitados:</span> {driver.stripe_account_enabled ? 'Sim' : 'Não'}
+            </p>
           </div>
         )}
         
-        <div className="flex flex-col space-y-3">
-          <Link href="/" className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded">
-            Voltar para a página inicial
-          </Link>
-        </div>
+        <Link href="/motorista/dashboard" className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded">
+          Ir para o dashboard
+        </Link>
       </div>
     </main>
   );
