@@ -14,8 +14,6 @@
     "react-dom": "18.2.0",
     "@stripe/stripe-js": "^2.2.0",
     "@supabase/supabase-js": "^2.38.4"
-    "twilio": "^4.11.0"
-
   },
   "devDependencies": {
     "@types/node": "20.8.10",
