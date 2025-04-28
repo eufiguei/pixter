@@ -1,199 +1,100 @@
-import { createClient } from '@supabase/supabase-js'
+/* ──────────────────────────────────────────────────────────────
+   src/lib/supabase/client.js   〈JS puro〉
+   ———————————————————————————————————————————————————————— */
 
+// 1. Importa o SDK
+import { createClient } from '@supabase/supabase-js';
+
+/*──────────────────── VARIÁVEIS DE AMBIENTE ───────────────────*/
+const supabaseUrl      = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+/*──────────────────── CLIENTES SUPABASE ───────────────────────*/
+
+// • Client para uso no **backend** (rotas / server actions)
 export const supabaseServer = createClient(
-process.env.NEXT_PUBLIC_SUPABASE_URL,
-process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  supabaseUrl,
+  // → use SERVICE_ROLE se estiver disponível; caso contrário, ANON
+  supabaseServiceKey ?? supabaseAnonKey
 );
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// • Client para uso no **front-end**
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Funções de autenticação
+/*──────────────────── FUNÇÕES DE AUTENTICAÇÃO ─────────────────*/
+
+// Cadastro por e-mail
 export const signUp = async (email, password, userData) => {
-  const { data, error } = await supabase.auth.signUp({
+  return supabase.auth.signUp({
     email,
     password,
-    options: {
-      data: userData
-    }
-  })
-  return { data, error }
-}
+    options: { data: userData }
+  });
+};
 
+// Login por e-mail
 export const signIn = async (email, password) => {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password
-  })
-  return { data, error }
-}
+  return supabase.auth.signInWithPassword({ email, password });
+};
 
+// Logout
 export const signOut = async () => {
-  const { error } = await supabase.auth.signOut()
-  return { error }
-}
+  return supabase.auth.signOut();
+};
 
-// Funções específicas para autenticação por telefone
-export const storeVerificationCode = async (phone, code, expiresInMinutes = 10) => {
-  const { data, error } = await supabase
+/*──────────────── TELEFONE (OTP) ────────────────*/
+export const storeVerificationCode = async (
+  phone,
+  code,
+  expiresInMinutes = 10
+) => {
+  return supabase
     .from('verification_codes')
     .upsert({
       phone,
       code,
       created_at: new Date().toISOString(),
-      expires_at: new Date(Date.now() + expiresInMinutes * 60 * 1000).toISOString()
-    })
-  return { data, error }
-}
+      expires_at: new Date(
+        Date.now() + expiresInMinutes * 60 * 1000
+      ).toISOString()
+    });
+};
 
 export const verifyCode = async (phone, code) => {
-  const { data, error } = await supabase
+  return supabase
     .from('verification_codes')
     .select('*')
     .eq('phone', phone)
     .eq('code', code)
     .gt('expires_at', new Date().toISOString())
-    .single()
-  return { data, error }
-}
+    .single();
+};
 
 export const deleteVerificationCode = async (phone) => {
-  const { error } = await supabase
-    .from('verification_codes')
-    .delete()
-    .eq('phone', phone)
-  return { error }
-}
+  return supabase.from('verification_codes').delete().eq('phone', phone);
+};
 
-export const createDriverWithPhone = async (phone, userData) => {
-  // Gera um email único baseado no telefone
-  const email = `${phone.replace(/\D/g, '')}@pixter.temp`
-  
-  // Gera uma senha aleatória e segura
-  const password = Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10)
-  
-  // Cria o usuário na autenticação
-  const { data: authData, error: authError } = await supabase.auth.signUp({
-    email,
-    password,
-    phone,
-    options: {
-      data: {
-        tipo: 'motorista',
-        phone
-      }
-    }
-  })
-  
-  if (authError) {
-    return { error: authError }
-  }
-  
-  const userId = authData.user?.id
-  
-  if (!userId) {
-    return { error: new Error('Falha ao criar usuário') }
-  }
-  
-  // Cria o perfil do motorista
-  const { error: profileError } = await supabase
-    .from('profiles')
-    .insert({
-      id: userId,
-      celular: phone,
-      tipo: 'motorista',
-      nome: userData.nome, // Certifique-se de usar 'nome' em vez de 'nomeCompleto'
-      ...userData,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    })
-  
-  if (profileError) {
-    console.error('Erro ao criar perfil:', profileError)
-    return { error: profileError }
-  }
-  
-  // Faz login com o usuário criado
-  const { data: session, error: sessionError } = await supabase.auth.signInWithPassword({
-    email,
-    password
-  })
-  
-  if (sessionError) {
-    return { error: sessionError }
-  }
-  
-  return { data: { user: authData.user, session, password }, error: null }
-}
+/*──────────── UTILITÁRIOS e DB / STORAGE ────────────*/
 
-export const signInWithPhone = async (phone) => {
-  const email = `${phone.replace(/\D/g, '')}@pixter.temp`
-  
-  // Verifica se o usuário existe
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('celular', phone)
-    .eq('tipo', 'motorista')
-    .single()
-  
-  if (profileError || !profile) {
-    return { error: new Error('Motorista não encontrado') }
-  }
-  
-  // Usa o método de login mágico (sem senha)
-  const { data, error } = await supabase.auth.signInWithOtp({
-    email
-  })
-  
-  return { data, error }
-}
-
-// Função para formatar número de telefone
+// Formata +55 XXXXXXXXXXX
 export function formatPhoneNumber(phone, countryCode = '55') {
-  // Remove todos os caracteres não numéricos
-  const cleanPhone = phone.replace(/\D/g, '');
-  
-  // Se já começa com o código do país, apenas adiciona o +
-  if (cleanPhone.startsWith(countryCode)) {
-    return `+${cleanPhone}`;
-  }
-  
-  // Adiciona o código do país
-  return `+${countryCode}${cleanPhone}`;
+  const clean = phone.replace(/\D/g, '');
+  return clean.startsWith(countryCode) ? `+${clean}` : `+${countryCode}${clean}`;
 }
 
-// Funções de banco de dados
-export const getProfile = async (userId) => {
-  const { data, error } = await supabase
+// CRUD de profile
+export const getProfile = (id) =>
+  supabase.from('profiles').select('*').eq('id', id).single();
+
+export const updateProfile = (id, updates) =>
+  supabase
     .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single()
-  return { data, error }
-}
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id);
 
-export const updateProfile = async (userId, updates) => {
-  const { data, error } = await supabase
-    .from('profiles')
-    .update({
-      ...updates,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', userId)
-  return { data, error }
-}
+// Upload & URL
+export const uploadImage = (bucket, path, file) =>
+  supabase.storage.from(bucket).upload(path, file, { upsert: true });
 
-// Funções de armazenamento
-export const uploadImage = async (bucket, path, file) => {
-  const { data, error } = await supabase.storage
-    .from(bucket)
-    .upload(path, file, {
-      upsert: true
-    })
-  return { data, error }
-}
-
-export const getImageUrl = (bucket, path) => {
-  const { data } = supabase.storage.from(bucket).getPublicUrl(path)
-  return data.publicUrl
-}
+export const getImageUrl = (bucket, path) =>
+  supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
