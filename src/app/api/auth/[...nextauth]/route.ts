@@ -3,7 +3,8 @@ import GoogleProvider from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { supabase } from '@/lib/supabase/client';
 
-export const authOptions = {
+// Configuração do NextAuth
+const handler = NextAuth({
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || '',
@@ -30,19 +31,10 @@ export const authOptions = {
             return null;
           }
 
-          // Buscar perfil do usuário
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', data.user.id)
-            .single();
-
           return {
             id: data.user.id,
             email: data.user.email,
-            name: profileData?.name || data.user.email?.split('@')[0],
-            image: profileData?.avatar_url || null,
-            tipo: profileData?.tipo || 'cliente',
+            name: data.user.email?.split('@')[0],
           };
         } catch (error) {
           console.error('Erro ao autenticar:', error);
@@ -51,22 +43,6 @@ export const authOptions = {
       }
     }),
   ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-        token.tipo = user.tipo;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id;
-        session.user.tipo = token.tipo;
-      }
-      return session;
-    },
-  },
   pages: {
     signIn: '/login',
     newUser: '/cadastro',
@@ -74,8 +50,6 @@ export const authOptions = {
   session: {
     strategy: 'jwt',
   },
-};
+});
 
-// Esta é a parte importante que estava faltando - criar e exportar o handler
-const handler = NextAuth(authOptions);
 export { handler as GET, handler as POST };
