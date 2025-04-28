@@ -53,7 +53,6 @@ export async function GET(request: Request) {
       payment_method: payment.payment_method,
       status: payment.status,
       created_at: payment.created_at,
-      driver_name: payment.profiles?.nome || 'Motorista'
     }));
     
     return NextResponse.json({ payments: formattedPayments });
