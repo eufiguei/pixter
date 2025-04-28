@@ -1,8 +1,14 @@
+/* ──────────────────────────────────────────────────────────────
+   src/lib/supabase/client.js     (JavaScript puro)
+   ———————————————————————————————————————————————————————— */
+
+// 1. Importa o SDK -------------------------------------------------
 import { createClient } from '@supabase/supabase-js';
 
 /*─────────────────── VARIÁVEIS DE AMBIENTE ──────────────────────*/
 const supabaseUrl         = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey     = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseServiceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY;   // ← agora declarado
 
 /*───────────────── CLIENTES SUPABASE ────────────────────────────*/
 // • Backend (rotas / server actions)
