@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
@@ -8,6 +8,9 @@ import { useSession } from 'next-auth/react'
 export default function AddPaymentMethod() {
   const router = useRouter()
   const { data: session, status } = useSession()
+  useEffect(() => {
+    // código do useEffect...
+  }, []);
   
   const [cardData, setCardData] = useState({
     number: '',
