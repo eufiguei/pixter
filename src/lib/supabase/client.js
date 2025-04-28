@@ -144,6 +144,20 @@ export const signInWithPhone = async (phone) => {
   return { data, error }
 }
 
+// Função para formatar número de telefone
+export function formatPhoneNumber(phone, countryCode = '55') {
+  // Remove todos os caracteres não numéricos
+  const cleanPhone = phone.replace(/\D/g, '');
+  
+  // Se já começa com o código do país, apenas adiciona o +
+  if (cleanPhone.startsWith(countryCode)) {
+    return `+${cleanPhone}`;
+  }
+  
+  // Adiciona o código do país
+  return `+${countryCode}${cleanPhone}`;
+}
+
 // Funções de banco de dados
 export const getProfile = async (userId) => {
   const { data, error } = await supabase
