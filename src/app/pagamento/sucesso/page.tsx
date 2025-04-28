@@ -1,8 +1,3 @@
-# Redirecionamento após Pagamento
-
-Este arquivo implementa a página de sucesso após o pagamento, com opções para criar conta ou fazer login.
-
-```jsx
 'use client'
 
 import { useState, useEffect } from 'react'
