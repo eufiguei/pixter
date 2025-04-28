@@ -57,10 +57,14 @@ export default function ClientSignUp() {
       const data = await response.json()
       
       if (!response.ok) {
-        throw new Error(data.error || 'Erro ao criar conta')
+        if (response.status === 400 && data.error.includes('already')) {
+          throw new Error('Este email já está em uso. Tente fazer login ou use outro email.')
+        } else {
+          throw new Error(data.error || 'Erro ao criar conta')
+        }
       }
       
-      // Redirecionar para o dashboard ou página de sucesso
+      // Redirecionar para o dashboard após cadastro bem-sucedido
       router.push('/dashboard')
       
     } catch (err) {
@@ -76,8 +80,8 @@ export default function ClientSignUp() {
       setLoading(true)
       setError('')
       
-      // Redirecionar para a rota de autenticação do Google
-      window.location.href = '/api/auth/signin/google'
+      // Redirecionar para a rota de autenticação do Google com callback para dashboard
+      window.location.href = '/api/auth/signin/google?callbackUrl=/dashboard'
       
     } catch (err) {
       console.error('Erro ao fazer login com Google:', err)

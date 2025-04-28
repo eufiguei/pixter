@@ -41,6 +41,7 @@ export default function CadastroMotorista() {
   // Refs
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
+  const streamRef = useRef(null)
   
   const avatars = Array.from({ length: 9 }, (_, i) => `/images/avatars/avatar_${i + 1}.png`)
   
@@ -60,6 +61,15 @@ export default function CadastroMotorista() {
     
     return () => clearInterval(timer)
   }, [countdown])
+  
+  // Limpar recursos da câmera quando o componente for desmontado
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+      }
+    }
+  }, [])
   
   // Enviar código de verificação
   const enviarCodigoVerificacao = async () => {
@@ -145,9 +155,20 @@ export default function CadastroMotorista() {
   // Funções de câmera
   const iniciarCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      // Parar qualquer stream anterior
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "user" } 
+      })
+      
+      streamRef.current = stream
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream
+        videoRef.current.play()
         setCameraAtiva(true)
       }
     } catch (err) {
@@ -157,30 +178,51 @@ export default function CadastroMotorista() {
   }
 
   const capturarSelfie = () => {
-    if (videoRef.current && canvasRef.current) {
+    if (!videoRef.current || !canvasRef.current) {
+      setError('Erro ao capturar selfie. Tente novamente.')
+      return
+    }
+    
+    try {
       const video = videoRef.current
       const canvas = canvasRef.current
-      const context = canvas.getContext('2d')
       
-      if (context) {
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
-        context.drawImage(video, 0, 0, canvas.width, canvas.height)
-        
-        const selfieDataUrl = canvas.toDataURL('image/png')
-        setSelfiePreview(selfieDataUrl)
-        setSelfieCapturada(true)
-        
-        // Parar a câmera
-        const stream = video.srcObject
-        if (stream) {
-          stream.getTracks().forEach(track => track.stop())
-        }
-        setCameraAtiva(false)
-        
-        // Mostrar seleção de avatar
-        setShowAvatarSelection(true)
+      // Definir dimensões do canvas para corresponder ao vídeo
+      canvas.width = video.videoWidth || 640
+      canvas.height = video.videoHeight || 480
+      
+      const context = canvas.getContext('2d')
+      if (!context) {
+        throw new Error('Não foi possível obter o contexto do canvas')
       }
+      
+      // Desenhar o frame atual do vídeo no canvas
+      context.drawImage(video, 0, 0, canvas.width, canvas.height)
+      
+      // Obter a imagem como data URL
+      const selfieDataUrl = canvas.toDataURL('image/jpeg', 0.8)
+      
+      // Verificar se a imagem não está vazia
+      if (selfieDataUrl === 'data:,') {
+        throw new Error('Não foi possível capturar a imagem')
+      }
+      
+      setSelfiePreview(selfieDataUrl)
+      setSelfieCapturada(true)
+      
+      // Parar a câmera
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+        streamRef.current = null
+      }
+      
+      setCameraAtiva(false)
+      
+      // Mostrar seleção de avatar
+      setShowAvatarSelection(true)
+    } catch (err) {
+      console.error('Erro ao capturar selfie:', err)
+      setError('Erro ao capturar selfie. Tente novamente.')
     }
   }
 
@@ -198,6 +240,10 @@ export default function CadastroMotorista() {
   // Função para converter dataURL para Blob
   const dataURLtoBlob = (dataURL) => {
     const arr = dataURL.split(',')
+    if (arr.length < 2) {
+      throw new Error('DataURL inválido')
+    }
+    
     const mime = arr[0].match(/:(.*?);/)[1]
     const bstr = atob(arr[1])
     let n = bstr.length
@@ -263,8 +309,15 @@ export default function CadastroMotorista() {
       
       // Adicionar selfie se capturada
       if (selfiePreview) {
-        const selfieBlob = dataURLtoBlob(selfiePreview)
-        formData.append('selfie', new File([selfieBlob], 'selfie.jpg', { type: 'image/jpeg' }))
+        try {
+          const selfieBlob = dataURLtoBlob(selfiePreview)
+          formData.append('selfie', new File([selfieBlob], 'selfie.jpg', { type: 'image/jpeg' }))
+        } catch (err) {
+          console.error('Erro ao processar selfie:', err)
+          setError('Erro ao processar selfie. Tente capturar novamente.')
+          setLoading(false)
+          return
+        }
       }
       
       // Enviar dados para API
@@ -465,6 +518,7 @@ export default function CadastroMotorista() {
                   id="profissao"
                   name="profissao"
                   type="text"
+                  required
                   value={profissao}
                   onChange={(e) => setProfissao(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -511,6 +565,7 @@ export default function CadastroMotorista() {
                           ref={videoRef}
                           autoPlay
                           playsInline
+                          muted
                           className="absolute inset-0 w-full h-full object-cover"
                         />
                       </div>
@@ -531,11 +586,13 @@ export default function CadastroMotorista() {
                 <div className="space-y-4">
                   <div className="flex justify-center">
                     <div className="relative w-48 h-48 bg-gray-100 rounded-full overflow-hidden">
-                      <img
-                        src={selfiePreview}
-                        alt="Selfie"
-                        className="absolute inset-0 w-full h-full object-cover"
-                      />
+                      {selfiePreview && (
+                        <img
+                          src={selfiePreview}
+                          alt="Selfie"
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                      )}
                     </div>
                   </div>
                   
@@ -586,6 +643,7 @@ export default function CadastroMotorista() {
                 checked={aceitaTermos}
                 onChange={(e) => setAceitaTermos(e.target.checked)}
                 className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded mt-1"
+                required
               />
               <label htmlFor="aceitaTermos" className="ml-2 block text-sm text-gray-700">
                 Aceito os <a href="/termos" className="text-purple-600 hover:text-purple-800">Termos de Uso</a> e a <a href="/privacidade" className="text-purple-600 hover:text-purple-800">Política de Privacidade</a>
@@ -607,17 +665,11 @@ export default function CadastroMotorista() {
       default:
         return null;
     }
-  };
+  }
 
   return (
     <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-        <div className="mb-6 text-center">
-          <Link href="/" className="text-3xl font-bold text-gray-900">
-            Pixter
-          </Link>
-        </div>
-        
         {renderStepContent()}
       </div>
     </main>

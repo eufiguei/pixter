@@ -99,12 +99,14 @@ export const createDriverWithPhone = async (phone, userData) => {
       id: userId,
       celular: phone,
       tipo: 'motorista',
+      nome: userData.nome, // Certifique-se de usar 'nome' em vez de 'nomeCompleto'
       ...userData,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     })
   
   if (profileError) {
+    console.error('Erro ao criar perfil:', profileError)
     return { error: profileError }
   }
   

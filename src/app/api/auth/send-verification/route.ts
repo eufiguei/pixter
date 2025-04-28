@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { sendVerificationSMS, generateVerificationCode, formatPhoneNumber } from '@/lib/twilio/client';
-import { storeVerificationCode } from '@/lib/supabase/client';
+import { generateVerificationCode, sendVerificationSMS } from '@/lib/twilio/client';
+import { storeVerificationCode, formatPhoneNumber } from '@/lib/supabase/client';
 
 export async function POST(request: Request) {
   try {
@@ -18,37 +18,37 @@ export async function POST(request: Request) {
     // Formata o número de telefone
     const formattedPhone = formatPhoneNumber(phone, countryCode);
     
-    // Gera código de verificação
-    const verificationCode = await generateVerificationCode();
+    // Gera um código de verificação
+    const code = await generateVerificationCode();
     
-    // Armazena o código no Supabase para verificação posterior
-    const { error: storeError } = await storeVerificationCode(formattedPhone, verificationCode);
-      
+    // Armazena o código no banco de dados
+    const { error: storeError } = await storeVerificationCode(formattedPhone, code);
+    
     if (storeError) {
-      console.error('Erro ao armazenar código de verificação:', storeError);
+      console.error('Erro ao armazenar código:', storeError);
       return NextResponse.json(
-        { error: 'Erro ao armazenar código de verificação. Tente novamente.' },
+        { error: 'Erro ao gerar código de verificação' },
         { status: 500 }
       );
     }
     
-    // Envia SMS com o código
-    const { success, error } = await sendVerificationSMS(formattedPhone, verificationCode);
+    // Envia o SMS com o código
+    const { success, error: smsError } = await sendVerificationSMS(formattedPhone, code);
     
     if (!success) {
-      console.error('Erro ao enviar SMS:', error);
+      console.error('Erro ao enviar SMS:', smsError);
       return NextResponse.json(
-        { error: 'Erro ao enviar SMS. Verifique o número de telefone e tente novamente.' },
+        { error: smsError || 'Erro ao enviar SMS' },
         { status: 500 }
       );
     }
-
+    
     return NextResponse.json({
       success: true,
-      message: 'Código de verificação enviado com sucesso'
+      message: 'Código enviado com sucesso'
     });
   } catch (error: any) {
-    console.error('Erro ao enviar código de verificação:', error);
+    console.error('Erro ao enviar código:', error);
     return NextResponse.json(
       { error: error.message || 'Erro ao enviar código de verificação' },
       { status: 500 }

@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { signIn } from 'next-auth/react'
 
-export default function ClientLogin() {
+export default function Login() {
   const router = useRouter()
   const [formData, setFormData] = useState({
     email: '',
@@ -24,7 +25,6 @@ export default function ClientLogin() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    // Validação básica
     if (!formData.email || !formData.password) {
       setError('Por favor, preencha todos os campos')
       return
@@ -34,21 +34,20 @@ export default function ClientLogin() {
       setLoading(true)
       setError('')
       
-      const response = await fetch('/api/auth/signin-client', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password
-        }),
+      const result = await signIn('credentials', {
+        redirect: false,
+        email: formData.email,
+        password: formData.password
       })
       
-      const data = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Credenciais inválidas')
+      if (result?.error) {
+        // Mensagens de erro específicas
+        if (result.error.includes('credentials')) {
+          setError('Email ou senha incorretos')
+        } else {
+          setError(result.error || 'Falha ao fazer login')
+        }
+        return
       }
       
       // Redirecionar para o dashboard
@@ -56,7 +55,7 @@ export default function ClientLogin() {
       
     } catch (err) {
       console.error('Erro ao fazer login:', err)
-      setError(err.message || 'Falha ao fazer login')
+      setError('Ocorreu um erro ao fazer login. Tente novamente.')
     } finally {
       setLoading(false)
     }
@@ -67,12 +66,11 @@ export default function ClientLogin() {
       setLoading(true)
       setError('')
       
-      // Redirecionar para a rota de autenticação do Google
-      window.location.href = '/api/auth/signin/google'
+      await signIn('google', { callbackUrl: '/dashboard' })
       
     } catch (err) {
       console.error('Erro ao fazer login com Google:', err)
-      setError(err.message || 'Falha ao fazer login com Google')
+      setError('Ocorreu um erro ao fazer login com Google. Tente novamente.')
       setLoading(false)
     }
   }
@@ -141,9 +139,14 @@ export default function ClientLogin() {
           </div>
           
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Senha
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                Senha
+              </label>
+              <a href="/esqueci-senha" className="text-sm text-purple-600 hover:text-purple-800">
+                Esqueceu a senha?
+              </a>
+            </div>
             <input
               id="password"
               name="password"
@@ -156,26 +159,6 @@ export default function ClientLogin() {
             />
           </div>
           
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <input
-                id="remember-me"
-                name="remember-me"
-                type="checkbox"
-                className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-              />
-              <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
-                Lembrar de mim
-              </label>
-            </div>
-            
-            <div className="text-sm">
-              <a href="/esqueci-senha" className="text-purple-600 hover:text-purple-800">
-                Esqueceu a senha?
-              </a>
-            </div>
-          </div>
-          
           <button
             type="submit"
             disabled={loading}
@@ -186,6 +169,10 @@ export default function ClientLogin() {
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
+        
+        <div className="mt-6 text-center text-sm text-gray-500">
+          É motorista? <Link href="/motorista/login" className="text-purple-600 hover:text-purple-800">Acesse aqui</Link>
+        </div>
       </div>
     </main>
   )

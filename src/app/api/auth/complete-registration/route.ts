@@ -61,10 +61,14 @@ export async function POST(request: Request) {
       }
     }
 
+    // Definir cookies de sessão para garantir que o usuário esteja logado
+    const session = data?.session;
+    
+    // Retornar a sessão para que o cliente possa armazenar
     return NextResponse.json({
       success: true,
       userId: data?.user?.id,
-      session: data?.session
+      session: session
     });
   } catch (error: any) {
     console.error('Erro ao completar cadastro:', error);

@@ -17,24 +17,22 @@ export async function POST(request: Request) {
     // Formata o número de telefone
     const formattedPhone = formatPhoneNumber(phone, countryCode);
     
-    // Busca o código armazenado
-    const { data: verificationData, error: fetchError } = await verifyCode(formattedPhone, code);
-
-    if (fetchError || !verificationData) {
-      console.error('Erro ao verificar código:', fetchError);
+    // Verifica o código
+    const { data, error } = await verifyCode(formattedPhone, code);
+    
+    if (error || !data) {
       return NextResponse.json(
-        { error: 'Código inválido ou expirado. Tente novamente.' },
-        { status: 400 }
+        { error: 'Código inválido ou expirado' },
+        { status: 401 }
       );
     }
-
-    // Remove o código verificado
+    
+    // Deleta o código usado
     await deleteVerificationCode(formattedPhone);
-
+    
     return NextResponse.json({
       success: true,
-      message: 'Código verificado com sucesso',
-      phone: formattedPhone
+      message: 'Código verificado com sucesso'
     });
   } catch (error: any) {
     console.error('Erro ao verificar código:', error);
