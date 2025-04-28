@@ -1,80 +1,109 @@
-/* ──────────────────────────────────────────────────────────────
-   src/lib/supabase/client.js   〈JS puro〉
-   ———————————————————————————————————————————————————————— */
-
-// 1. Importa o SDK
 import { createClient } from '@supabase/supabase-js';
 
-/*──────────────────── VARIÁVEIS DE AMBIENTE ───────────────────*/
-const supabaseUrl      = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+/*─────────────────── VARIÁVEIS DE AMBIENTE ──────────────────────*/
+const supabaseUrl         = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey     = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-/*──────────────────── CLIENTES SUPABASE ───────────────────────*/
-
-// • Client para uso no **backend** (rotas / server actions)
+/*───────────────── CLIENTES SUPABASE ────────────────────────────*/
+// • Backend (rotas / server actions)
 export const supabaseServer = createClient(
   supabaseUrl,
-  // → use SERVICE_ROLE se estiver disponível; caso contrário, ANON
-  supabaseServiceKey ?? supabaseAnonKey
+  supabaseServiceKey ?? supabaseAnonKey   // usa SERVICE_ROLE se existir
 );
 
-// • Client para uso no **front-end**
+// • Front-end
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-/*──────────────────── FUNÇÕES DE AUTENTICAÇÃO ─────────────────*/
+/*───────────────── FUNÇÕES DE AUTENTICAÇÃO (e-mail) ────────────*/
+export const signUp = (email, password, userData) =>
+  supabase.auth.signUp({ email, password, options: { data: userData } });
 
-// Cadastro por e-mail
-export const signUp = async (email, password, userData) => {
-  return supabase.auth.signUp({
-    email,
-    password,
-    options: { data: userData }
+export const signIn = (email, password) =>
+  supabase.auth.signInWithPassword({ email, password });
+
+export const signOut = () => supabase.auth.signOut();
+
+/*──────── TELEFONE (OTP) E MOTORISTA ───────────────────────────*/
+
+// Grava código OTP
+export const storeVerificationCode = (phone, code, expiresInMinutes = 10) =>
+  supabase.from('verification_codes').upsert({
+    phone,
+    code,
+    created_at: new Date().toISOString(),
+    expires_at: new Date(Date.now() + expiresInMinutes * 60 * 1000).toISOString()
   });
-};
 
-// Login por e-mail
-export const signIn = async (email, password) => {
-  return supabase.auth.signInWithPassword({ email, password });
-};
-
-// Logout
-export const signOut = async () => {
-  return supabase.auth.signOut();
-};
-
-/*──────────────── TELEFONE (OTP) ────────────────*/
-export const storeVerificationCode = async (
-  phone,
-  code,
-  expiresInMinutes = 10
-) => {
-  return supabase
-    .from('verification_codes')
-    .upsert({
-      phone,
-      code,
-      created_at: new Date().toISOString(),
-      expires_at: new Date(
-        Date.now() + expiresInMinutes * 60 * 1000
-      ).toISOString()
-    });
-};
-
-export const verifyCode = async (phone, code) => {
-  return supabase
+// Valida código OTP
+export const verifyCode = (phone, code) =>
+  supabase
     .from('verification_codes')
     .select('*')
     .eq('phone', phone)
     .eq('code', code)
     .gt('expires_at', new Date().toISOString())
     .single();
+
+// Remove código
+export const deleteVerificationCode = (phone) =>
+  supabase.from('verification_codes').delete().eq('phone', phone);
+
+/*——— cria motorista com telefone (usado em complete-registration) ———*/
+export const createDriverWithPhone = async (phone, userData) => {
+  const email = `${phone.replace(/\D/g, '')}@pixter.temp`;
+  const password =
+    Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10);
+
+  // 1) cria usuário Auth
+  const { data: authData, error: authError } = await supabase.auth.signUp({
+    email,
+    password,
+    phone,
+    options: { data: { tipo: 'motorista', phone } }
+  });
+  if (authError) return { error: authError };
+
+  const userId = authData.user?.id;
+  if (!userId) return { error: new Error('Falha ao criar usuário') };
+
+  // 2) cria perfil
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .insert({
+      id: userId,
+      celular: phone,
+      tipo: 'motorista',
+      nome: userData.nome,
+      ...userData,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+  if (profileError) return { error: profileError };
+
+  // 3) login automático
+  const { data: session, error: sessionError } =
+    await supabase.auth.signInWithPassword({ email, password });
+  if (sessionError) return { error: sessionError };
+
+  return { data: { user: authData.user, session, password }, error: null };
 };
 
-export const deleteVerificationCode = async (phone) => {
-  return supabase.from('verification_codes').delete().eq('phone', phone);
+/*——— login OTP para motorista ———*/
+export const signInWithPhone = async (phone) => {
+  const email = `${phone.replace(/\D/g, '')}@pixter.temp`;
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('celular', phone)
+    .eq('tipo', 'motorista')
+    .single();
+  if (!profile) return { error: new Error('Motorista não encontrado') };
+
+  return supabase.auth.signInWithOtp({ email });
 };
 
-/*──────────── UTILITÁRIOS e DB / STORAGE ────────────*/
+/*──────────── UTILITÁRIOS, DB, STORAGE ─────────────────────────*/
 
 // Formata +55 XXXXXXXXXXX
 export function formatPhoneNumber(phone, countryCode = '55') {
@@ -82,7 +111,7 @@ export function formatPhoneNumber(phone, countryCode = '55') {
   return clean.startsWith(countryCode) ? `+${clean}` : `+${countryCode}${clean}`;
 }
 
-// CRUD de profile
+// Profiles
 export const getProfile = (id) =>
   supabase.from('profiles').select('*').eq('id', id).single();
 
@@ -92,7 +121,7 @@ export const updateProfile = (id, updates) =>
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('id', id);
 
-// Upload & URL
+// Storage
 export const uploadImage = (bucket, path, file) =>
   supabase.storage.from(bucket).upload(path, file, { upsert: true });
 
