@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { sendVerificationSMS, generateVerificationCode } from '@/lib/twilio/client';
-import { supabase } from '@/lib/supabase/client';
+import { sendVerificationSMS, generateVerificationCode, formatPhoneNumber } from '@/lib/twilio/client';
+import { storeVerificationCode } from '@/lib/supabase/client';
 
 export async function POST(request: Request) {
   try {
@@ -16,30 +16,31 @@ export async function POST(request: Request) {
     }
 
     // Formata o número de telefone
-    const formattedPhone = `+${countryCode}${phone.replace(/\D/g, '')}`;
+    const formattedPhone = formatPhoneNumber(phone, countryCode);
     
     // Gera código de verificação
     const verificationCode = await generateVerificationCode();
     
     // Armazena o código no Supabase para verificação posterior
-    const { error: storeError } = await supabase
-      .from('verification_codes')
-      .upsert({
-        phone: formattedPhone,
-        code: verificationCode,
-        created_at: new Date().toISOString(),
-        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutos
-      });
+    const { error: storeError } = await storeVerificationCode(formattedPhone, verificationCode);
       
     if (storeError) {
-      throw storeError;
+      console.error('Erro ao armazenar código de verificação:', storeError);
+      return NextResponse.json(
+        { error: 'Erro ao armazenar código de verificação. Tente novamente.' },
+        { status: 500 }
+      );
     }
     
     // Envia SMS com o código
     const { success, error } = await sendVerificationSMS(formattedPhone, verificationCode);
     
     if (!success) {
-      throw new Error(error);
+      console.error('Erro ao enviar SMS:', error);
+      return NextResponse.json(
+        { error: 'Erro ao enviar SMS. Verifique o número de telefone e tente novamente.' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({

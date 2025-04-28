@@ -1,94 +1,70 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase/client';
+import { createDriverWithPhone, formatPhoneNumber } from '@/lib/supabase/client';
+import { uploadImage } from '@/lib/supabase/client';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { phone, userData, password } = body;
+    const formData = await request.formData();
+    const phone = formData.get('phone') as string;
+    const countryCode = formData.get('countryCode') as string || '55';
+    const nome = formData.get('nome') as string;
+    const profissao = formData.get('profissao') as string;
+    const dataNascimento = formData.get('dataNascimento') as string;
+    const cpf = formData.get('cpf') as string;
+    const email = formData.get('email') as string || null;
+    const avatarIndex = parseInt(formData.get('avatarIndex') as string || '0');
+    const selfieFile = formData.get('selfie') as File || null;
 
     // Validação dos parâmetros
-    if (!phone || !userData) {
+    if (!phone || !nome || !profissao || !cpf) {
       return NextResponse.json(
         { error: 'Dados incompletos para cadastro' },
         { status: 400 }
       );
     }
 
-    // Verifica se o usuário já existe
-    const { data: existingUser, error: fetchError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('celular', phone)
-      .single();
+    // Formata o número de telefone
+    const formattedPhone = formatPhoneNumber(phone, countryCode);
+    
+    // Dados do motorista
+    const userData = {
+      nome,
+      profissao,
+      data_nascimento: dataNascimento,
+      cpf,
+      email,
+      avatarIndex,
+      tipo: 'motorista',
+    };
 
-    let userId;
-    
-    if (existingUser) {
-      // Atualiza o usuário existente
-      userId = existingUser.id;
-      
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({
-          ...userData,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId);
-        
-      if (updateError) {
-        throw updateError;
-      }
-    } else {
-      // Cria um novo usuário
-      const email = userData.email || `${phone.replace(/\D/g, '')}@pixter.temp`;
-      
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password: password || Math.random().toString(36).slice(-10), // Senha aleatória se não fornecida
-        phone,
-        options: {
-          data: {
-            tipo: 'motorista',
-            nome: userData.nome
-          }
-        }
-      });
-      
-      if (authError) {
-        throw authError;
-      }
-      
-      userId = authData.user?.id;
-      
-      // Cria o perfil do usuário
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: userId,
-          ...userData,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-        
-      if (profileError) {
-        throw profileError;
-      }
+    // Cria ou atualiza o motorista no Supabase
+    const { data, error } = await createDriverWithPhone(formattedPhone, userData);
+
+    if (error) {
+      console.error('Erro ao criar motorista:', error);
+      return NextResponse.json(
+        { error: error.message || 'Erro ao criar conta de motorista' },
+        { status: 500 }
+      );
     }
-    
-    // Gera uma sessão para o usuário
-    const { data: session, error: sessionError } = await supabase.auth.signInWithPassword({
-      email: userData.email || `${phone.replace(/\D/g, '')}@pixter.temp`,
-      password: password || Math.random().toString(36).slice(-10)
-    });
-    
-    if (sessionError) {
-      throw sessionError;
+
+    // Upload da selfie se fornecida
+    if (selfieFile && data?.user?.id) {
+      const userId = data.user.id;
+      const filePath = `motoristas/${userId}/selfie.jpg`;
+      
+      const { error: uploadError } = await uploadImage('avatars', filePath, selfieFile);
+      
+      if (uploadError) {
+        console.error('Erro ao fazer upload da selfie:', uploadError);
+        // Não falha o cadastro se o upload da selfie falhar
+      }
     }
 
     return NextResponse.json({
       success: true,
-      userId,
-      session
+      userId: data?.user?.id,
+      session: data?.session
     });
   } catch (error: any) {
     console.error('Erro ao completar cadastro:', error);
