@@ -1,23 +1,31 @@
 {
   "compilerOptions": {
+    /* ---------- Básico ---------- */
     "lib": ["dom", "dom.iterable", "esnext"],
+    "target": "esnext",
+    "module": "esnext",
+    "jsx": "preserve",
+
+    /* ---------- Qualidade / Build ---------- */
     "allowJs": true,
     "skipLibCheck": true,
     "strict": false,
     "noEmit": true,
     "incremental": true,
-    "module": "esnext",
-    "esModuleInterop": true,
+
+    /* ---------- Resolução ---------- */
     "moduleResolution": "node",
+    "esModuleInterop": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+
+    /* ---------- Alias ------------ */
     "baseUrl": ".",
-    "@/*": ["./src/*"],
     "paths": {
-    "isolatedModules": true
+      "@/*": ["./src/*"]          // agora está dentro de "paths"
     },
 
+    /* ---------- Plugins ---------- */
     "plugins": [
       { "name": "next" }
     ]
@@ -28,8 +36,8 @@
     ".next/types/**/*.ts",
     "**/*.ts",
     "**/*.tsx",
-    "**/*.d.ts",
-    "isolatedModules": true
+    "**/*.d.ts"                  // garante leitura dos arquivos de declaração
   ],
+
   "exclude": ["node_modules"]
 }
