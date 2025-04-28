@@ -18,10 +18,12 @@ export default function PaymentSuccess() {
     }
     
     // Obter o ID do pagamento da URL
-    const urlParams = new URLSearchParams(window.location.search)
-    const id = urlParams.get('payment_id')
-    if (id) {
-      setPaymentId(id)
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      const id = urlParams.get('payment_id')
+      if (id) {
+        setPaymentId(id)
+      }
     }
   }, [status, router])
   
@@ -72,6 +74,5 @@ export default function PaymentSuccess() {
         </div>
       </div>
     </main>
-  )
+  ) 
 }
-```
