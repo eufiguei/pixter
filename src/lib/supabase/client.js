@@ -51,54 +51,68 @@
    export const deleteVerificationCode = (phone) =>
      supabase.from('verification_codes').delete().eq('phone', phone);
    
-   /*────────── FLUXO MOTORISTA (telefone) ───────────────────────────────────*/
-   export const createDriverWithPhone = async (phone, userData) => {
-     const sanitized = phone.replace(/\D/g, '');
-     const email =
-       userData.email && userData.email.trim() !== ''
-         ? userData.email.trim()
-         : `${sanitized}@pixter-temp.com`; // fallback válido (.com)
-   
-     const password =
-       Math.random().toString(36).slice(-10) +
-       Math.random().toString(36).slice(-10);
-   
-     /* 1) Cria usuário via Admin API (sem e-mail) */
-     const { data: authData, error: authError } =
-       await supabaseAdmin.auth.admin.createUser({
-         email,
-         phone,
-         password,
-         email_confirm: true,
-         phone_confirm: true,
-         user_metadata: { tipo: 'motorista', phone }
-       });
-     if (authError) return { error: authError };
-   
-     const userId = authData.user?.id;
-     if (!userId) return { error: new Error('Falha ao criar usuário') };
-   
-     /* 2) Insere/atualiza perfil via Service-Role */
-     const { error: profileError } = await supabaseServer
-       .from('profiles')
-       .upsert({
-         id: userId,
-         celular: phone,
-         tipo: 'motorista',
-         nome: userData.nome,
-         ...userData,
-         created_at: new Date().toISOString(),
-         updated_at: new Date().toISOString()
-       });
-     if (profileError) return { error: profileError };
-   
-     /* 3) Login automático com client público (opcional) */
-     const { data: session, error: sessionError } =
-       await supabase.auth.signInWithPassword({ email, password });
-     if (sessionError) return { error: sessionError };
-   
-     return { data: { user: authData.user, session, password }, error: null };
-   };
+/*──────────────── DRIVER via TELEFONE ─────────────────*/
+export const createDriverWithPhone = async (phone, userData) => {
+  const sanitized = phone.replace(/\D/g, '');
+
+  const email =
+    userData.email && userData.email.trim() !== ''
+      ? userData.email.trim()
+      : `${sanitized}@pixter-temp.com`; // fallback válido .com
+
+  const password =
+    Math.random().toString(36).slice(-10) +
+    Math.random().toString(36).slice(-10);
+
+  /* 1) — verifica se já existe usuário por e-mail */
+  const { data: existing } = await supabaseAdmin.auth.admin.getUserByEmail(email);
+  if (existing?.id) {
+    // já cadastrado: retorna erro ou inicia login OTP
+    return { error: new Error('Usuário já existe. Faça login.') };
+  }
+
+  /* 2) — cria usuário via Admin API (não envia e-mail) */
+  const { data: authData, error: authError } =
+    await supabaseAdmin.auth.admin.createUser({
+      email,
+      phone,
+      password,
+      email_confirm: true,
+      phone_confirm: true,
+      user_metadata: { tipo: 'motorista', phone }
+    });
+  if (authError) return { error: authError };
+
+  const userId = authData.user?.id;
+  if (!userId) return { error: new Error('Falha ao criar usuário') };
+
+  /* 3) — upsert perfil */
+  const { error: profileError } = await supabaseServer
+    .from('profiles')
+    .upsert(
+      {
+        id: userId,
+        celular: phone,
+        tipo: 'motorista',
+        nome: userData.nome,
+        ...userData,
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: 'id' }        // evita duplicate key se já existir
+    );
+
+  if (profileError) {
+    console.error('PROFILE ERROR →', profileError.message); // <— log detalhado
+    return { error: profileError };
+  }
+
+  /* 4) — login automático (opcional) */
+  const { data: session, error: sessionError } =
+    await supabase.auth.signInWithPassword({ email, password });
+  if (sessionError) return { error: sessionError };
+
+  return { data: { user: authData.user, session, password }, error: null };
+};
    
    export const signInWithPhone = (phone) => {
      const email = `${phone.replace(/\D/g, '')}@pixter-temp.com`;
