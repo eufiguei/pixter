@@ -5,7 +5,7 @@ import { supabaseServer } from "@/lib/supabase/client"; // Use Service Role Key
 
 // Initialize Stripe (Use environment variables!)
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_YOUR_KEY", {
-  apiVersion: "2024-04-10",
+  apiVersion: "2022-11-15",
 });
 
 // Get the webhook secret from environment variables
