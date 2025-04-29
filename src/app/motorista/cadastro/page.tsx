@@ -375,4 +375,7 @@ return (
     </div>
   </main>
 );
+}         /* ← fecha a função */
+
+export default CadastroMotorista;   /* ← exportação */
 
