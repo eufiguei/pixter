@@ -36,7 +36,8 @@ export async function POST(request: Request) {
       avatarIndex,
       tipo: 'motorista',
     };
-
+    if (!email) delete userData.email; 
+  }
     // Cria ou atualiza o motorista no Supabase
     const { data, error } = await createDriverWithPhone(formattedPhone, userData);
 

@@ -56,8 +56,13 @@ export const deleteVerificationCode = (phone) =>
 
 /*——— cria motorista com telefone (usado em complete-registration) ———*/
 export const createDriverWithPhone = async (phone, userData) => {
-  const email = `${phone.replace(/\D/g, '')}@pixter.temp`;
-  const password =
+  export const createDriverWithPhone = async (phone, userData) => {
+     const email = `${phone.replace(/\D/g, '')}@pixter.temp`;      // antigo
+     const placeholder = `${phone.replace(/\D/g, '')}@pixter-temp.com`; // TLD válido
+     const email = userData.email && userData.email.trim() !== ''   // se usuário digitou
+      ? userData.email.trim()
+       : placeholder;
+    const password =
     Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10);
 
   // 1) cria usuário Auth
