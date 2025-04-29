@@ -1,74 +1,67 @@
+import { createClient } from '@supabase/supabase-js'
 
-// src/lib/supabase/client.ts
-import { createClient } from '@supabase/supabase-js';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
 
-const supabaseUrl        = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey    = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-export const supabaseServer = createClient(supabaseUrl, supabaseServiceKey ?? supabaseAnonKey);
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+// Email/password sign-up
+export async function signUpWithEmail(email: string, password: string, celular?: string, nome?: string, cpf?: string, tipo?: string) {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: { celular, nome, cpf, tipo },
+    },
+  })
 
-// OTP helpers
-export const storeVerificationCode = (phone: string, code: string, minutes = 10) =>
-  supabase.from('verification_codes').upsert({
-    phone,
-    code,
-    created_at: new Date().toISOString(),
-    expires_at: new Date(Date.now() + minutes * 60000).toISOString()
-  });
-
-export const verifyCode = (phone: string, code: string) =>
-  supabase.from('verification_codes').select('*').eq('phone', phone).eq('code', code)
-           .gt('expires_at', new Date().toISOString()).single();
-
-export const deleteVerificationCode = (phone: string) =>
-  supabase.from('verification_codes').delete().eq('phone', phone);
-
-// format phone
-export const formatPhoneNumber = (phone: string, cc = '55') => {
-  const n = phone.replace(/\D/g, '');
-  return n.startsWith(cc) ? '+' + n : '+' + cc + n;
-};
-
-// create driver with duplicate checks
-export const createDriverWithPhone = async (phone: string, userData: any) => {
-  const sanitized = phone.replace(/\D/g, '');
-  const emailProvided = userData.email?.trim() || null;
-
-  const dupPhone = await supabaseAdmin.from('auth.users').select('id').eq('phone', phone).maybeSingle();
-  if (dupPhone.data) return { error: new Error('phone_exists') };
-
-  if (emailProvided) {
-    const dupEmail = await supabaseAdmin.from('auth.users').select('id').eq('email', emailProvided).maybeSingle();
-    if (dupEmail.data) return { error: new Error('email_exists') };
+  if (error) {
+    console.error('Signup error:', error.message)
+    return { success: false, message: error.message }
   }
 
-  const email = emailProvided ?? `${sanitized}-${Date.now()}@pixter-temp.com`;
-  const password = Math.random().toString(36).slice(-10)+Math.random().toString(36).slice(-10);
+  if (data.user?.identities?.length === 0) {
+    return { success: false, message: 'Email already registered.' }
+  }
 
-  const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-    email, phone, password, email_confirm: true, phone_confirm: true,
-    user_metadata: { tipo: 'motorista', phone }
-  });
-  if (authErr) return { error: authErr };
+  return { success: true, message: 'Signup successful! Check your email for verification.' }
+}
 
-  const userId = authData.user?.id!;
-  const profilePayload = { id: userId, celular: phone, tipo: 'motorista', nome: userData.nome, ...userData,
-                           created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+// Phone OTP sign-in/signup
+export async function signInWithPhoneOtp(celular: string) {
+  const { data, error } = await supabase.auth.signInWithOtp({
+    phone: celular,
+    options: {
+      data: {
+        email: null,
+        nome: null,
+        cpf: null,
+        tipo: null,
+      },
+    },
+  })
 
-  const { error: prErr } = await supabaseServer.from('profiles').upsert(profilePayload);
-  if (prErr) return { error: prErr };
+  if (error) {
+    console.error('OTP error:', error.message)
+    return { success: false, message: error.message }
+  }
 
-  const { data: session, error: sessErr } = await supabase.auth.signInWithPassword({ email, password });
-  if (sessErr) return { error: sessErr };
+  return { success: true, message: 'OTP sent successfully.' }
+}
 
-  return { data: { user: authData.user, session }, error: null };
-};
+// Update user profile data later
+export async function updateProfile(userId: string, email?: string, nome?: string, cpf?: string, tipo?: string) {
+  const updates = { email, nome, cpf, tipo, updated_at: new Date().toISOString() }
 
-// sign-in via OTP
-export const signInWithPhone = (phone: string) => {
-  const email = `${phone.replace(/\D/g, '')}@pixter-temp.com`;
-  return supabase.auth.signInWithOtp({ email });
-};
+  const { error } = await supabase
+    .from('profiles')
+    .update(updates)
+    .eq('id', userId)
+
+  if (error) {
+    console.error('Profile update error:', error.message)
+    return { success: false, message: error.message }
+  }
+
+  return { success: true, message: 'Profile updated successfully.' }
+}
