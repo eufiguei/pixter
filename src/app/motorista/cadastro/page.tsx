@@ -186,8 +186,25 @@ export default function CadastroMotorista() {
             <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md">{success}</div>
           )}
 
-          <button
-            type="button"
-            onClick={enviarCodigoVerificacao}
-            disabled={loading || !phone}
-            className={`w-full bg-purple-600 text-white py-3 px-4 rounded-md font-medium transition ${
+         {/* BOTÃO: Enviar código de verificação */}
+<button
+  type="button"
+  onClick={enviarCodigoVerificacao}
+  disabled={loading || !phone}
+  className={`w-full bg-purple-600 text-white py-3 px-4 rounded-md font-medium transition ${
+    loading || !phone ? 'opacity-70 cursor-not-allowed' : 'hover:bg-purple-700'
+  }`}   /* ← fecha a crase aqui */
+>
+  {loading ? 'Enviando…' : 'Enviar código de verificação'}
+</button>
+{/* BOTÃO: Verificar */}
+<button
+  type="button"
+  onClick={verificarCodigo}
+  disabled={loading || !verificationCode}
+  className={`bg-blue-600 text-white px-4 py-2 rounded-md font-medium transition ${
+    loading || !verificationCode ? 'opacity-70 cursor-not-allowed' : 'hover:bg-blue-700'
+  }`}   /* ← fecha a crase aqui */
+>
+  {loading ? 'Verificando…' : 'Verificar'}
+</button>
