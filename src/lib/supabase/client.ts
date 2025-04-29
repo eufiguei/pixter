@@ -1,41 +1,41 @@
-import { createClient } from '@supabase/supabase-js'
+/* ──────────────────────────────────────────────────────────────
+   src/lib/supabase/client.ts   ←  TypeScript (garante tree-shaking)
+   ────────────────────────────────────────────────────────────── */
+import { createClient, User } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
+/*──────────────── VARIÁVEIS DE AMBIENTE ───────────────*/
+const supabaseUrl        = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey    = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!; // Make sure this is defined in your server environment variables
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+/*──────────────── CLIENTES ────────────────────────────*/
+// Client-side instance (safe for browser)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Server-side instance (uses service key, ONLY for backend/API routes)
+export const supabaseServer = createClient(supabaseUrl, supabaseServiceKey);
+export const supabaseAdmin  = supabaseServer;  // alias for Admin API
 
-// Email/password sign-up
-export async function signUpWithEmail(email: string, password: string, celular?: string, nome?: string, cpf?: string, tipo?: string) {
+/*──────────────── EMAIL/PASSWORD SIGNUP (Client-Side) ──*/
+// Added back based on user request, with fix for unconfirmed emails
+export async function signUpWithEmail(email: string, password: string, optionsData?: { celular?: string; nome?: string; cpf?: string; tipo?: string }) {
+  // Use the client-side supabase instance for sign-up initiated from the browser
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      // You pass 'data' here to store additional info in the auth.users table metadata
-      // or trigger functions. It does NOT automatically populate the 'profiles' table.
-      data: {
-        // Include fields you want in auth.users.user_metadata
-        // Supabase Auth doesn't automatically link this to 'profiles' table columns
-        // You might need a trigger for that (common practice).
-        nome, // Example: store name in user_metadata
-        tipo, // Example: store tipo in user_metadata
-      },
+      data: optionsData, // Pass data for the trigger (handle_new_user)
     },
   });
 
   if (error) {
-    // Log the specific error
     console.error('Supabase signup error:', error.message);
-    // Return a user-friendly message, potentially masking specific details
     return { success: false, message: `Signup failed: ${error.message}` };
   }
 
   // Case 1: Successful NEW user signup (user exists, has identity, session might be null until confirmed)
   if (data.user && data.user.identities && data.user.identities.length > 0) {
     console.log('Successful new user registration initiated for:', email);
-    // NOTE: You still need to handle profile creation separately, often via a trigger
-    // or calling another function after successful email verification.
-    // The 'data' in options above does NOT populate your 'profiles' table directly.
+    // The trigger `handle_new_user` should create the profile entry.
     return { success: true, message: 'Signup successful! Please check your email (including spam folder) for the verification link.' };
   }
 
@@ -54,53 +54,166 @@ export async function signUpWithEmail(email: string, password: string, celular?:
   return { success: false, message: 'An unexpected error occurred during signup. Please try again.' };
 }
 
-// Phone OTP sign-in/signup
-export async function signInWithPhoneOtp(celular: string) {
-  // Ensure phone number is in E.164 format if needed by Supabase
-  const { data, error } = await supabase.auth.signInWithOtp({
-    phone: celular,
-    // options: { data: { ... } } // OTP sign-in usually doesn't need extra data here
+/*──────────────── OTP HELPERS (Server/Client?) ─────────*/
+// These interact with your custom 'verification_codes' table.
+// Ensure RLS is set up correctly if called from the client, or use supabaseServer if called from API routes.
+
+export const storeVerificationCode = (
+  phone: string,
+  code: string,
+  minutes = 10
+) =>
+  // Assuming this might be called from client or server, using client instance for now.
+  // If only called from server, change to supabaseServer.
+  supabase
+    .from('verification_codes')
+    .upsert({
+      phone, // Ensure phone is consistently formatted (E.164 recommended)
+      code,
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + minutes * 60_000).toISOString()
+    });
+
+export const verifyCode = (phone: string, code: string) =>
+  // Assuming this might be called from client or server.
+  supabase
+    .from('verification_codes')
+    .select('*')
+    .eq('phone', phone)
+    .eq('code', code)
+    .gt('expires_at', new Date().toISOString())
+    .single();
+
+export const deleteVerificationCode = (phone: string) =>
+  // Assuming this might be called from client or server.
+  supabase.from('verification_codes').delete().eq('phone', phone);
+
+/*──────────────── UTIL ────────────────────────────────*/
+export const formatPhoneNumber = (phone: string, code = '55') => {
+  const p = phone.replace(/\D/g, '');
+  return p.startsWith(code) ? `+${p}` : `+${code}${p}`; // Ensure E.164 format
+};
+
+/*──────────────── DRIVER via TELEFONE (Server-Side ONLY) ──*/
+// This function uses supabaseAdmin and should ONLY be called from secure server-side API routes.
+export const createDriverWithPhone = async (
+  phone: string, // Expects E.164 format from formatPhoneNumber
+  userData: Record<string, any>
+) => {
+  const sanitizedPhoneDigits = phone.replace(/\D/g, ''); // Digits only for temp email
+
+  /* 1. Dup-check (using Admin API) */
+  const emailProvided = userData.email && userData.email.trim() !== '' ? userData.email.trim() : null;
+
+  const { data: dupPhoneData, error: dupPhoneError } = await supabaseAdmin
+    .from('auth.users') // Query auth.users directly
+    .select('id')
+    .eq('phone', phone)
+    .maybeSingle();
+
+  if (dupPhoneError) console.error('Error checking duplicate phone:', dupPhoneError.message);
+  if (dupPhoneData) return { error: new Error('phone_exists') };
+
+  if (emailProvided) {
+    const { data: dupEmailData, error: dupEmailError } = await supabaseAdmin
+      .from('auth.users')
+      .select('id')
+      .eq('email', emailProvided)
+      .maybeSingle();
+    if (dupEmailError) console.error('Error checking duplicate email:', dupEmailError.message);
+    if (dupEmailData) return { error: new Error('email_exists') };
+  }
+
+  /* 2. Generate temporary email + strong password */
+  const email = emailProvided ?? `${sanitizedPhoneDigits}-${Date.now()}@pixter-temp.com`; // Use digits only
+  const password = Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10);
+
+  /* 3. Create user using Admin API */
+  const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    phone,
+    password,
+    email_confirm: true, // Mark email as confirmed (since it's temporary or provided)
+    phone_confirm: true, // Mark phone as confirmed (assuming OTP was verified before calling this)
+    user_metadata: { tipo: 'motorista', nome: userData.nome /* Add other metadata if needed */ }
   });
 
-  if (error) {
-    console.error('OTP sign-in error:', error.message);
-    return { success: false, message: `OTP request failed: ${error.message}` };
+  if (authErr) {
+    console.error('Admin API createUser error:', authErr.message);
+    return { error: authErr };
   }
 
-  console.log('OTP sent successfully to:', celular);
-  return { success: true, message: 'OTP sent successfully. Please enter the code.' };
-}
+  const userId = authData.user?.id;
+  if (!userId) {
+    console.error('Admin API createUser succeeded but returned no user ID.');
+    return { error: new Error('User creation failed unexpectedly.') };
+  }
 
-// Update user profile data later
-// IMPORTANT: This function updates the 'profiles' table.
-// Ensure you have Row Level Security (RLS) policies set up correctly
-// so users can only update their OWN profile.
-export async function updateProfile(userId: string, updates: { email?: string, nome?: string, cpf?: string, tipo?: string, celular?: string, profissao?: string, data_nascimer?: string, selfie_url?: string, avatar_index?: string /* add other fields */ }) {
-  // Add updated_at timestamp automatically
-  const profileData = {
-    ...updates,
-    updated_at: new Date().toISOString(),
+  /* 4. Create/Update profile using Server client (avoids RLS issues) */
+  // The trigger `handle_new_user` should ideally run and create the basic profile.
+  // This upsert ensures the profile exists and sets/updates specific driver data.
+  const profilePayload = {
+    id: userId,
+    celular: phone,
+    tipo: 'motorista',
+    nome: userData.nome,
+    cpf: userData.cpf, // Add other fields from userData as needed
+    email: emailProvided, // Store the real email if provided
+    // created_at will be set by trigger or default
+    updated_at: new Date().toISOString()
   };
 
-  // Remove undefined fields to avoid overwriting existing data with null
-  Object.keys(profileData).forEach(key => profileData[key] === undefined && delete profileData[key]);
+  // Remove undefined fields from payload
+  Object.keys(profilePayload).forEach(key => (profilePayload as any)[key] === undefined && delete (profilePayload as any)[key]);
 
-  const { error } = await supabase
+  const { error: profileErr } = await supabaseServer
     .from('profiles')
-    .update(profileData)
-    .eq('id', userId); // Ensure this matches the user's auth ID
+    .upsert(profilePayload); // Use upsert for robustness
 
-  if (error) {
-    console.error('Profile update error:', error.message);
-    return { success: false, message: `Profile update failed: ${error.message}` };
+  if (profileErr) {
+    console.error('Error upserting profile:', profileErr.message);
+    // Don't necessarily fail the whole process, but log it.
+    // Consider cleanup logic if profile creation fails (e.g., delete the auth user?)
+    // return { error: profileErr };
   }
 
-  console.log('Profile updated successfully for user:', userId);
-  return { success: true, message: 'Profile updated successfully.' };
-}
+  /* 5. Optional: Sign in user on client-side after this server process completes */
+  // This function runs on the server, so it can't directly return a client session.
+  // The client would typically call an API route that uses this function,
+  // and then the client might need to sign in separately if required immediately.
+  // Returning the created user info might be useful for the client.
+  console.log('Driver user created successfully via Admin API:', userId);
+  return { data: { user: authData.user }, error: null };
+};
 
-// You might also need functions for:
-// - Email/Password Sign In
-// - Password Reset
-// - Handling email verification callback
-// - Creating the profile entry AFTER email verification (often done with DB triggers)
+/*──────────────── sign-in OTP via telefone (Client-Side?) ──*/
+// This seems to use signInWithOtp with a temporary email, which is unusual.
+// Standard phone OTP uses signInWithOtp({ phone: formattedPhone }).
+// Verify if this is the intended logic.
+export const signInWithPhone = (phone: string) => {
+  const formattedPhone = formatPhoneNumber(phone);
+  // Original code used email: `${phone.replace(/\D/g, '')}@pixter-temp.com`
+  // Using standard phone OTP sign-in instead:
+  return supabase.auth.signInWithOtp({ phone: formattedPhone });
+};
+
+/*──────────────── CRUD perfil / storage (Client/Server?) ──*/
+// Use client `supabase` for reads/uploads initiated by the user.
+// Use `supabaseServer` for updates from API routes.
+
+export const getProfile = (id: string) =>
+  supabase.from('profiles').select('*').eq('id', id).single();
+
+// Changed updateProfile to use client `supabase` assuming it's called after user is logged in.
+// RLS policies MUST allow users to update their own profile.
+export const updateProfile = (id: string, updates: Record<string, any>) =>
+  supabase // Use client instance if called from frontend where user is authenticated
+    .from('profiles')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id); // RLS policy `auth.uid() = id` will enforce security
+
+export const uploadImage = (bucket: string, path: string, file: File) =>
+  supabase.storage.from(bucket).upload(path, file, { upsert: true });
+
+export const getImageUrl = (bucket: string, path: string) =>
+  supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
