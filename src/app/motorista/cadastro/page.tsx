@@ -43,7 +43,18 @@ export default function CadastroMotorista() {
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
   
-  const avatars = Array.from({ length: 9 }, (_, i) => `/images/avatars/avatar_${i + 1}.png`)
+  // Caminhos dos avatares - usando URLs absolutas para garantir que funcionem em produção
+  const avatars = [
+    '/images/avatars/avatar_1.png',
+    '/images/avatars/avatar_2.png',
+    '/images/avatars/avatar_3.png',
+    '/images/avatars/avatar_4.png',
+    '/images/avatars/avatar_5.png',
+    '/images/avatars/avatar_6.png',
+    '/images/avatars/avatar_7.png',
+    '/images/avatars/avatar_8.png',
+    '/images/avatars/avatar_9.png'
+  ]
   
   // Contador regressivo para reenvio de código
   useEffect(() => {
@@ -168,8 +179,19 @@ export default function CadastroMotorista() {
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        videoRef.current.play()
-        setCameraAtiva(true)
+        
+        // Garantir que o vídeo seja exibido corretamente
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current.play()
+            .then(() => {
+              console.log('Vídeo iniciado com sucesso')
+              setCameraAtiva(true)
+            })
+            .catch(err => {
+              console.error('Erro ao iniciar vídeo:', err)
+              setError('Erro ao iniciar câmera. Tente novamente.')
+            })
+        }
       }
     } catch (err) {
       console.error('Erro ao acessar a câmera:', err)
@@ -566,7 +588,7 @@ export default function CadastroMotorista() {
                           autoPlay
                           playsInline
                           muted
-                          className="absolute inset-0 w-full h-full object-cover"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                         />
                       </div>
                       
@@ -615,11 +637,10 @@ export default function CadastroMotorista() {
                   
                   <div className="grid grid-cols-3 gap-4">
                     {avatars.map((avatar, index) => (
-                      <button
+                      <div
                         key={index}
-                        type="button"
                         onClick={() => handleAvatarSelect(index)}
-                        className={`relative rounded-full overflow-hidden border-4 ${
+                        className={`relative rounded-full overflow-hidden border-4 cursor-pointer ${
                           selectedAvatar === index ? 'border-purple-500' : 'border-transparent'
                         }`}
                       >
@@ -627,8 +648,12 @@ export default function CadastroMotorista() {
                           src={avatar}
                           alt={`Avatar ${index + 1}`}
                           className="w-full h-auto"
+                          onError={(e) => {
+                            console.error(`Erro ao carregar avatar ${index + 1}:`, e);
+                            e.target.src = '/images/avatar-placeholder.png'; // Imagem de fallback
+                          }}
                         />
-                      </button>
+                      </div>
                     ))}
                   </div>
                 </div>
