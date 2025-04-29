@@ -1,52 +1,89 @@
 /* ──────────────────────────────────────────────────────────────
-   src/lib/supabase/client.js
-   ———————————————————————————————————————————————————————— */
+   src/lib/supabase/client.ts   ←  TypeScript (garante tree-shaking)
+   ────────────────────────────────────────────────────────────── */
    import { createClient } from '@supabase/supabase-js';
 
-   /*────────── VARIÁVEIS DE AMBIENTE ──────────*/
-   const supabaseUrl        = process.env.NEXT_PUBLIC_SUPABASE_URL;
-   const supabaseAnonKey    = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+   /*──────────────── VARIÁVEIS DE AMBIENTE ───────────────*/
+   const supabaseUrl        = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+   const supabaseAnonKey    = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
    
-   /*────────── CLIENTES ───────────────────────*/
-   // Navegador (ANON)
-   export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+   /*──────────────── CLIENTES ────────────────────────────*/
+   export const supabase = createClient(supabaseUrl, supabaseAnonKey);          // navegador
+   export const supabaseServer = createClient(supabaseUrl, supabaseServiceKey); // API/server
+   export const supabaseAdmin  = supabaseServer;  // alias para Admin API
    
-   // Backend (Service-Role se existir)
-   export const supabaseServer = createClient(
-     supabaseUrl,
-     supabaseServiceKey ?? supabaseAnonKey
-   );
+   /*──────────────── OTP HELPERS ──────────────────────────*/
+   export const storeVerificationCode = (
+     phone: string,
+     code: string,
+     minutes = 10
+   ) =>
+     supabase
+       .from('verification_codes')
+       .upsert({
+         phone,
+         code,
+         created_at: new Date().toISOString(),
+         expires_at: new Date(Date.now() + minutes * 60_000).toISOString()
+       });
    
-   // Admin API (crear usuários sem limite de e-mail)
-   export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+   export const verifyCode = (phone: string, code: string) =>
+     supabase
+       .from('verification_codes')
+       .select('*')
+       .eq('phone', phone)
+       .eq('code', code)
+       .gt('expires_at', new Date().toISOString())
+       .single();
    
-   /*────────── DRIVER via TELEFONE ───────────*/
-   export const createDriverWithPhone = async (phone, userData) => {
+   export const deleteVerificationCode = (phone: string) =>
+     supabase.from('verification_codes').delete().eq('phone', phone);
+   
+   /*──────────────── UTIL ────────────────────────────────*/
+   export const formatPhoneNumber = (phone: string, code = '55') => {
+     const p = phone.replace(/\D/g, '');
+     return p.startsWith(code) ? `+${p}` : `+${code}${p}`;
+   };
+   
+   /*──────────────── DRIVER via TELEFONE ─────────────────*/
+   export const createDriverWithPhone = async (
+     phone: string,
+     userData: Record<string, any>
+   ) => {
      const sanitized = phone.replace(/\D/g, '');
    
-     /* ─ 0. Dup-check auth.users ───────────────────────── */
-     const findBy = (field, value) =>
-       supabaseAdmin.from('auth.users').select('id').eq(field, value).maybeSingle();
-   
+     /* 1. Dup-check */
      const emailProvided =
-       userData.email && userData.email.trim() !== '' ? userData.email.trim() : null;
+       userData.email && userData.email.trim() !== ''
+         ? userData.email.trim()
+         : null;
    
-     if ((await findBy('phone', phone)).data) {
-       return { error: new Error('phone_exists') }; // nº já cadastrado
-     }
-     if (emailProvided && (await findBy('email', emailProvided)).data) {
-       return { error: new Error('email_exists') }; // e-mail já usado
+     const dupPhone = await supabaseAdmin
+       .from('auth.users')
+       .select('id')
+       .eq('phone', phone)
+       .maybeSingle();
+   
+     if (dupPhone.data) return { error: new Error('phone_exists') };
+   
+     if (emailProvided) {
+       const dupEmail = await supabaseAdmin
+         .from('auth.users')
+         .select('id')
+         .eq('email', emailProvided)
+         .maybeSingle();
+       if (dupEmail.data) return { error: new Error('email_exists') };
      }
    
-     /* ─ 1. Define e-mail + senha ─────────────────────── */
+     /* 2. e-mail + senha */
      const email =
-       emailProvided ?? `${sanitized}-${Date.now()}@pixter-temp.com`; // único
+       emailProvided ?? `${sanitized}-${Date.now()}@pixter-temp.com`;
      const password =
        Math.random().toString(36).slice(-10) +
        Math.random().toString(36).slice(-10);
    
-     /* ─ 2. Cria usuário (Admin API) ──────────────────── */
+     /* 3. cria usuário (Admin API) */
      const { data: authData, error: authErr } =
        await supabaseAdmin.auth.admin.createUser({
          email,
@@ -58,26 +95,24 @@
        });
      if (authErr) return { error: authErr };
    
-     const userId = authData.user?.id;
-     if (!userId) return { error: new Error('Falha ao criar usuário') };
-   
-     /* ─ 3. Insere/atualiza perfil (Service-Role) ─────── */
+     const userId = authData.user?.id ?? '';
+     /* 4. perfil */
      const profilePayload = {
        id: userId,
        celular: phone,
        tipo: 'motorista',
        nome: userData.nome,
-       ...userData,                    // cpf, data_nascimento, avatar_index…
+       ...userData,
        created_at: new Date().toISOString(),
        updated_at: new Date().toISOString()
      };
    
-     const { error: profErr } = await supabaseServer
+     const { error: profileErr } = await supabaseServer
        .from('profiles')
        .upsert(profilePayload);
-     if (profErr) return { error: profErr };
+     if (profileErr) return { error: profileErr };
    
-     /* ─ 4. Login automático (opcional) ───────────────── */
+     /* 5. login opcional */
      const { data: session, error: sessErr } =
        await supabase.auth.signInWithPassword({ email, password });
      if (sessErr) return { error: sessErr };
@@ -85,30 +120,25 @@
      return { data: { user: authData.user, session }, error: null };
    };
    
-   /*────────── sign-in OTP por telefone ──────*/
-   export const signInWithPhone = (phone) => {
+   /*──────────────── sign-in OTP via telefone ────────────*/
+   export const signInWithPhone = (phone: string) => {
      const email = `${phone.replace(/\D/g, '')}@pixter-temp.com`;
      return supabase.auth.signInWithOtp({ email });
    };
    
-   /*────────── util + CRUD perfil/storage ─────*/
-   export const formatPhoneNumber = (phone, code = '55') => {
-     const p = phone.replace(/\D/g, '');
-     return p.startsWith(code) ? `+${p}` : `+${code}${p}`;
-   };
-   
-   export const getProfile = (id) =>
+   /*──────────────── CRUD perfil / storage ───────────────*/
+   export const getProfile = (id: string) =>
      supabase.from('profiles').select('*').eq('id', id).single();
    
-   export const updateProfile = (id, updates) =>
+   export const updateProfile = (id: string, updates: Record<string, any>) =>
      supabaseServer
        .from('profiles')
        .update({ ...updates, updated_at: new Date().toISOString() })
        .eq('id', id);
    
-   export const uploadImage = (bucket, path, file) =>
+   export const uploadImage = (bucket: string, path: string, file: File) =>
      supabase.storage.from(bucket).upload(path, file, { upsert: true });
    
-   export const getImageUrl = (bucket, path) =>
+   export const getImageUrl = (bucket: string, path: string) =>
      supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
    
