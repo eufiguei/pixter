@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 
 export default function CadastroMotorista() {
@@ -28,7 +27,7 @@ export default function CadastroMotorista() {
   
   // Estados para selfie e avatar
   const [selfieCapturada, setSelfieCapturada] = useState(false)
-  const [selfiePreview, setSelfiePreview] = useState(null)
+  const [selfiePreview, setSelfiePreview] = useState<string | null>(null)
   const [selectedAvatar, setSelectedAvatar] = useState(0)
   const [showAvatarSelection, setShowAvatarSelection] = useState(false)
   const [cameraAtiva, setCameraAtiva] = useState(false)
@@ -39,9 +38,9 @@ export default function CadastroMotorista() {
   const [success, setSuccess] = useState('')
   
   // Refs
-  const videoRef = useRef(null)
-  const canvasRef = useRef(null)
-  const streamRef = useRef(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   
   // Caminhos dos avatares - usando URLs absolutas para garantir que funcionem em produção
   const avatars = [
@@ -114,7 +113,7 @@ export default function CadastroMotorista() {
       setCountdown(60) // 60 segundos para reenvio
       setSuccess('Código enviado com sucesso! Verifique seu WhatsApp.')
       
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao enviar código:', err)
       setError(err.message || 'Falha ao enviar código de verificação')
     } finally {
@@ -155,7 +154,7 @@ export default function CadastroMotorista() {
       setStep('details')
       setSuccess('Telefone verificado com sucesso!')
       
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao verificar código:', err)
       setError(err.message || 'Falha ao verificar código')
     } finally {
@@ -171,6 +170,7 @@ export default function CadastroMotorista() {
         streamRef.current.getTracks().forEach(track => track.stop())
       }
       
+      console.log('Solicitando acesso à câmera...')
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { facingMode: "user" } 
       })
@@ -178,20 +178,26 @@ export default function CadastroMotorista() {
       streamRef.current = stream
       
       if (videoRef.current) {
+        console.log('Atribuindo stream ao elemento de vídeo...')
         videoRef.current.srcObject = stream
         
         // Garantir que o vídeo seja exibido corretamente
         videoRef.current.onloadedmetadata = () => {
-          videoRef.current.play()
-            .then(() => {
-              console.log('Vídeo iniciado com sucesso')
-              setCameraAtiva(true)
-            })
-            .catch(err => {
-              console.error('Erro ao iniciar vídeo:', err)
-              setError('Erro ao iniciar câmera. Tente novamente.')
-            })
+          if (videoRef.current) {
+            videoRef.current.play()
+              .then(() => {
+                console.log('Vídeo iniciado com sucesso')
+                setCameraAtiva(true)
+              })
+              .catch(err => {
+                console.error('Erro ao iniciar vídeo:', err)
+                setError('Erro ao iniciar câmera. Tente novamente.')
+              })
+          }
         }
+      } else {
+        console.error('Elemento de vídeo não encontrado')
+        setError('Erro ao iniciar câmera. Elemento de vídeo não encontrado.')
       }
     } catch (err) {
       console.error('Erro ao acessar a câmera:', err)
@@ -242,7 +248,7 @@ export default function CadastroMotorista() {
       
       // Mostrar seleção de avatar
       setShowAvatarSelection(true)
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao capturar selfie:', err)
       setError('Erro ao capturar selfie. Tente novamente.')
     }
@@ -255,18 +261,23 @@ export default function CadastroMotorista() {
     iniciarCamera()
   }
 
-  const handleAvatarSelect = (index) => {
+  const handleAvatarSelect = (index: number) => {
     setSelectedAvatar(index)
   }
   
   // Função para converter dataURL para Blob
-  const dataURLtoBlob = (dataURL) => {
+  const dataURLtoBlob = (dataURL: string) => {
     const arr = dataURL.split(',')
     if (arr.length < 2) {
       throw new Error('DataURL inválido')
     }
     
-    const mime = arr[0].match(/:(.*?);/)[1]
+    const mimeMatch = arr[0].match(/:(.*?);/)
+    if (!mimeMatch) {
+      throw new Error('Formato MIME não encontrado')
+    }
+    
+    const mime = mimeMatch[1]
     const bstr = atob(arr[1])
     let n = bstr.length
     const u8arr = new Uint8Array(n)
@@ -277,7 +288,7 @@ export default function CadastroMotorista() {
   }
 
   // Envio final do formulário
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
@@ -356,7 +367,7 @@ export default function CadastroMotorista() {
       
       // Redirecionar para o dashboard do motorista
       router.push('/motorista/dashboard')
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro no cadastro:', err)
       setError(err.message || 'Falha ao criar conta. Tente novamente.')
     } finally {
@@ -649,12 +660,10 @@ export default function CadastroMotorista() {
                           alt={`Avatar ${index + 1}`}
                           className="w-full h-auto"
                           onError={(e) => {
-  console.error(`Erro ao carregar avatar ${index + 1}:`, e);
-  // Converte o target para HTMLImageElement para acessar o src
-  const target = e.target as HTMLImageElement;
-  target.src = '/images/avatar-placeholder.png'; // Imagem de fallback
-}}
-
+                            console.error(`Erro ao carregar avatar ${index + 1}:`, e);
+                            const target = e.target as HTMLImageElement;
+                            target.src = '/images/avatar-placeholder.png'; // Imagem de fallback
+                          }}
                         />
                       </div>
                     ))}
