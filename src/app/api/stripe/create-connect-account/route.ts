@@ -1,100 +1,96 @@
-import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase/client';
-import stripe from '@/lib/stripe/server';
+// src/app/api/stripe/connect-account/route.ts
+import { NextResponse } from "next/server";
+import { Stripe } from "stripe";
+import { supabaseServer } from "@/lib/supabase/client";
+import { getServerSession } from "next-auth/next" // Assuming NextAuth.js for session
+// import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Adjust path if needed
 
-export async function POST(request: Request) {
+// Initialize Stripe (Use environment variables!)
+// Ensure you have STRIPE_SECRET_KEY in your .env.local
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_YOUR_KEY", {
+  apiVersion: "2024-04-10", // Use the latest API version
+});
+
+export async function GET(request: Request) {
   try {
     const { driverId } = await request.json();
     
     // Verificar autenticação
     const { data: authData } = await supabase.auth.getSession();
     if (!authData.session || authData.session.user.id !== driverId) {
-      return NextResponse.json(
+              console.error("CRITICAL: Need to implement actual user ID retrieval in /api/stripe/connect-account");
+				return NextResponse.json(
         { error: 'Não autorizado' },
         { status: 403 }
       );
     }
     
-    // Buscar dados do motorista
-    const { data: driver, error: driverError } = await supabase
-      .from('drivers')
-      .select('*')
-      .eq('id', driverId)
+   // 2. Fetch User Profile from Supabase
+    const { data: profile, error: profileError } = await supabaseServer
+      .from("profiles")
+      .select("stripe_account_id") // Select existing Stripe ID
+      .eq("id", userId)
       .single();
-      
-    if (driverError || !driver) {
-      return NextResponse.json(
-        { error: 'Motorista não encontrado' },
-        { status: 404 }
-      );
+
+    if (profileError || !profile) {
+      console.error("Error fetching profile or profile not found:", profileError?.message);
+      return NextResponse.json({ error: "Perfil não encontrado." }, { status: 404 });
     }
-    
-    // Verificar se já existe uma conta
-    if (driver.stripe_account_id) {
-      // Recuperar a conta existente
-      const account = await stripe.accounts.retrieve(driver.stripe_account_id);
-      
-      // Verificar se precisa completar onboarding
-      if (account.details_submitted) {
-        return NextResponse.json({
-          accountId: driver.stripe_account_id,
-          detailsSubmitted: true
-        });
-      }
-      
-      // Criar link para completar onboarding
-      const accountLink = await stripe.accountLinks.create({
-        account: driver.stripe_account_id,
-        refresh_url: `${process.env.NEXT_PUBLIC_URL}/motorista/stripe-refresh`,
-        return_url: `${process.env.NEXT_PUBLIC_URL}/motorista/stripe-success`,
-        type: 'account_onboarding',
+
+    let stripeAccountId = profile.stripe_account_id;
+
+    // 3. Create Stripe Account if it doesn\t exist
+    if (!stripeAccountId) {
+      console.log("Creating new Stripe Express account for user:", userId);
+      const account = await stripe.accounts.create({
+        type: "express",
+        // You can prefill email, country, etc., if available
+        // email: session.user.email,
+        // country: "BR", // Example
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        business_type: "individual", // Assuming individual drivers
       });
-      
-      return NextResponse.json({ url: accountLink.url });
-    }
-    
-    // Criar nova conta Stripe Connect
-    const account = await stripe.accounts.create({
-      type: 'express',
-      country: 'BR',
-      email: driver.email || undefined,
-      capabilities: {
-        card_payments: { requested: true },
-        transfers: { requested: true },
-      },
-      business_type: 'individual',
-      business_profile: {
-        mcc: '4121', // Táxis e limusines
-        url: process.env.NEXT_PUBLIC_URL,
-      },
-      metadata: {
-        driverId: driverId
+      stripeAccountId = account.id;
+
+      // 4. Save Stripe Account ID to Supabase Profile
+      const { error: updateError } = await supabaseServer
+        .from("profiles")
+        .update({ stripe_account_id: stripeAccountId })
+        .eq("id", userId);
+
+      if (updateError) {
+        console.error("Failed to save Stripe Account ID to profile:", updateError.message);
+        // Consider how to handle this - maybe delete the Stripe account?
+        return NextResponse.json({ error: "Falha ao salvar informações do Stripe." }, { status: 500 });
       }
-    });
-    
-    // Atualizar o registro do motorista
-    await supabase
-      .from('drivers')
-      .update({
-        stripe_account_id: account.id,
-        stripe_account_status: account.details_submitted ? 'submitted' : 'pending',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', driverId);
-    
-    // Criar link para onboarding
+      console.log("Stripe Account ID saved to profile:", stripeAccountId);
+    } else {
+      console.log("Using existing Stripe Account ID:", stripeAccountId);
+    }
+
+    // 5. Create Stripe Account Link
+    // Define your return and refresh URLs (must be configured in Stripe dashboard too)
+    const origin = request.headers.get("origin") || "http://localhost:3000"; // Get base URL
+    const returnUrl = `${origin}/motorista/stripe-success`; // Page shown after successful onboarding
+    const refreshUrl = `${origin}/motorista/stripe-refresh`; // Page shown if onboarding link expires or fails
+
     const accountLink = await stripe.accountLinks.create({
-      account: account.id,
-      refresh_url: `${process.env.NEXT_PUBLIC_URL}/motorista/stripe-refresh`,
-      return_url: `${process.env.NEXT_PUBLIC_URL}/motorista/stripe-success`,
-      type: 'account_onboarding',
+      account: stripeAccountId,
+      refresh_url: refreshUrl,
+      return_url: returnUrl,
+      type: "account_onboarding",
     });
-    
+
+    // 6. Return the Account Link URL
     return NextResponse.json({ url: accountLink.url });
-  } catch (error) {
-    console.error('Erro ao criar conta Stripe Connect:', error);
+
+  } catch (error: any) {
+    console.error("Stripe Connect account creation error:", error);
     return NextResponse.json(
-      { error: 'Erro ao criar conta Stripe Connect' },
+      { error: error.message || "Erro ao conectar com Stripe." },
       { status: 500 }
     );
   }
