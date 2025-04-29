@@ -1,40 +1,44 @@
 // src/app/api/stripe/connect-account/route.ts
 import { NextResponse } from "next/server";
 import { Stripe } from "stripe";
-import { supabaseServer } from "@/lib/supabase/client";
-import { getServerSession } from "next-auth/next" // Assuming NextAuth.js for session
-// import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Adjust path if needed
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
+import { supabaseServer } from "@/lib/supabase/client"; // Assuming this uses SERVICE_ROLE_KEY for server-side updates
 
 // Initialize Stripe (Use environment variables!)
-// Ensure you have STRIPE_SECRET_KEY in your .env.local
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_YOUR_KEY", {
-  apiVersion: "2024-04-10", // Use the latest API version
+  apiVersion: "2024-04-10",
 });
 
 export async function GET(request: Request) {
+  const supabaseAuth = createRouteHandlerClient({ cookies }); // For getting user session
+
   try {
-    const { driverId } = await request.json();
-    
-    // Verificar autenticação
-    const { data: authData } = await supabase.auth.getSession();
-    if (!authData.session || authData.session.user.id !== driverId) {
-              console.error("CRITICAL: Need to implement actual user ID retrieval in /api/stripe/connect-account");
-				return NextResponse.json(
-        { error: 'Não autorizado' },
-        { status: 403 }
-      );
+    // 1. Get Authenticated User ID using Supabase Auth Helpers
+    const { data: { session }, error: sessionError } = await supabaseAuth.auth.getSession();
+
+    if (sessionError || !session?.user) {
+      console.error("Authentication error:", sessionError?.message);
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
-    
-   // 2. Fetch User Profile from Supabase
+    const userId = session.user.id;
+
+    // 2. Fetch User Profile from Supabase using Service Role Client for potential updates
     const { data: profile, error: profileError } = await supabaseServer
       .from("profiles")
       .select("stripe_account_id") // Select existing Stripe ID
       .eq("id", userId)
       .single();
 
+    // Handle profile not found specifically
+    if (profileError && profileError.code === "PGRST116") { // PGRST116: Row not found
+        console.error("Profile not found for user:", userId);
+        return NextResponse.json({ error: "Perfil não encontrado." }, { status: 404 });
+    }
+    // Handle other profile fetch errors
     if (profileError || !profile) {
-      console.error("Error fetching profile or profile not found:", profileError?.message);
-      return NextResponse.json({ error: "Perfil não encontrado." }, { status: 404 });
+      console.error("Error fetching profile:", profileError?.message);
+      return NextResponse.json({ error: "Erro ao buscar perfil." }, { status: 500 });
     }
 
     let stripeAccountId = profile.stripe_account_id;
@@ -44,18 +48,19 @@ export async function GET(request: Request) {
       console.log("Creating new Stripe Express account for user:", userId);
       const account = await stripe.accounts.create({
         type: "express",
-        // You can prefill email, country, etc., if available
-        // email: session.user.email,
-        // country: "BR", // Example
+        email: session.user.email, // Prefill email from session
         capabilities: {
           card_payments: { requested: true },
           transfers: { requested: true },
         },
-        business_type: "individual", // Assuming individual drivers
+        business_type: "individual",
+        metadata: {
+          supabaseUserId: userId, // Store Supabase user ID in Stripe metadata
+        },
       });
       stripeAccountId = account.id;
 
-      // 4. Save Stripe Account ID to Supabase Profile
+      // 4. Save Stripe Account ID to Supabase Profile using Service Role Client
       const { error: updateError } = await supabaseServer
         .from("profiles")
         .update({ stripe_account_id: stripeAccountId })
@@ -63,7 +68,7 @@ export async function GET(request: Request) {
 
       if (updateError) {
         console.error("Failed to save Stripe Account ID to profile:", updateError.message);
-        // Consider how to handle this - maybe delete the Stripe account?
+        // Consider cleanup: maybe delete the Stripe account if saving fails?
         return NextResponse.json({ error: "Falha ao salvar informações do Stripe." }, { status: 500 });
       }
       console.log("Stripe Account ID saved to profile:", stripeAccountId);
@@ -72,10 +77,9 @@ export async function GET(request: Request) {
     }
 
     // 5. Create Stripe Account Link
-    // Define your return and refresh URLs (must be configured in Stripe dashboard too)
-    const origin = request.headers.get("origin") || "http://localhost:3000"; // Get base URL
-    const returnUrl = `${origin}/motorista/stripe-success`; // Page shown after successful onboarding
-    const refreshUrl = `${origin}/motorista/stripe-refresh`; // Page shown if onboarding link expires or fails
+    const origin = request.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const returnUrl = `${origin}/motorista/stripe-success`;
+    const refreshUrl = `${origin}/motorista/stripe-refresh`;
 
     const accountLink = await stripe.accountLinks.create({
       account: stripeAccountId,
@@ -88,7 +92,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ url: accountLink.url });
 
   } catch (error: any) {
-    console.error("Stripe Connect account creation error:", error);
+    console.error("Stripe Connect account process error:", error);
+    // Differentiate Stripe errors from other errors if possible
+    if (error.type === "StripeInvalidRequestError") {
+        return NextResponse.json({ error: `Stripe Error: ${error.message}` }, { status: 400 });
+    }
     return NextResponse.json(
       { error: error.message || "Erro ao conectar com Stripe." },
       { status: 500 }
