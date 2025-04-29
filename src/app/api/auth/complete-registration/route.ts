@@ -4,14 +4,11 @@ import {
   formatPhoneNumber
 } from '@/lib/supabase/client';
 
-export const runtime = 'edge';          // opcional, se estiver usando Edge
-
 export async function POST(req: Request) {
   try {
-    /* -------- 1. Lê o multipart -------- */
+    /* 1. lê multipart */
     const formData = await req.formData();
 
-    // Campos obrigatórios
     const phone          = formData.get('phone')          as string;
     const countryCode    = formData.get('countryCode')    as string;
     const nome           = formData.get('nome')           as string;
@@ -19,12 +16,9 @@ export async function POST(req: Request) {
     const profissao      = formData.get('profissao')      as string;
     const dataNascimento = formData.get('dataNascimento') as string;
     const avatarIndex    = formData.get('avatarIndex')    as string;
+    const email          = formData.get('email')          as string | null;
 
-    // Opcional
-    const email   = formData.get('email')  as string | null;
-    const selfie  = formData.get('selfie') as File   | null;
-
-    /* -------- 2. Sanitiza / formata -------- */
+    /* 2. monta userData */
     const formattedPhone = formatPhoneNumber(phone, countryCode);
 
     const userData: Record<string, any> = {
@@ -32,42 +26,28 @@ export async function POST(req: Request) {
       cpf,
       profissao,
       data_nascimento: dataNascimento,
-      avatar_index: Number(avatarIndex),
+      avatar_index: Number(avatarIndex)
     };
+    if (email && email.trim() !== '') userData.email = email.trim();
 
-    // só inclui email se realmente veio algo
-    if (email && email.trim() !== '') {
-      userData.email = email.trim();
-    }
-
-    /* -------- 3. Cria (ou atualiza) motorista -------- */
+    /* 3. cria motorista */
     const { data, error } = await createDriverWithPhone(formattedPhone, userData);
+
     if (error) {
-      console.error('Erro ao criar motorista:', error);
-      return NextResponse.json(
-        { error: 'Falha ao criar motorista' },
-        { status: 500 }
-      );
+      const code =
+        error.message === 'phone_exists' ? 409
+        : error.message === 'email_exists' ? 409
+        : 500;
+      return NextResponse.json({ error: error.message }, { status: code });
     }
 
-    /* -------- 4. (Opcional) faz upload da selfie -------- */
-    if (selfie && selfie.size > 0) {
-      // Ex.: supabase.storage.from('selfies').upload(...)
-      // não incluí o código porque depende do seu bucket
-    }
-
-    /* -------- 5. Sucesso -------- */
+    /* 4. sucesso */
     return NextResponse.json(
-      {
-        message: 'Cadastro concluído!',
-        userId : data?.user?.id,
-        session: data?.session
-      },
+      { userId: data.user.id, session: data.session },
       { status: 200 }
     );
-
   } catch (err: any) {
-    console.error('Erro ao completar cadastro:', err);
+    console.error('complete-registration error:', err);
     return NextResponse.json(
       { error: err.message || 'Erro interno' },
       { status: 500 }
