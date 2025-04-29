@@ -100,9 +100,8 @@ export default function CadastroMotorista () {
 
   /* ---------------------------- renderização ----------------------------- */
   const renderStepContent = () => {
-    // 👇— sua lógica de renderização completa permanece igual —👇
-    // para economizar espaço do snippet, não copio todo o switch, 
-    // mas ele continua exatamente como no arquivo anterior.
+    // TODO: implementar o switch completo – por enquanto devolve null para compilar
+    return null;
   }
 
   /* ------------------------------- return -------------------------------- */
