@@ -48,7 +48,10 @@ export const deleteVerificationCode = (phone) =>
 /*──────────────── DRIVER via TELEFONE ─────────────────*/
 export const createDriverWithPhone = async (phone, userData) => {
   const sanitized = phone.replace(/\D/g, '');
-  const email = `${sanitized}@pixter.temp`;
+  const email =
+   userData.email && userData.email.trim() !== ''
+      ? userData.email.trim()
+      : `${sanitized}@pixter-temp.com`;   // fallback válido
   const password = `${Math.random().toString(36).slice(-10)}${Math.random()
     .toString(36)
     .slice(-10)}`;

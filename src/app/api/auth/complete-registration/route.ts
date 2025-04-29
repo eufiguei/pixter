@@ -37,7 +37,7 @@ export async function POST(req: Request) {
 
     // só inclui email se realmente veio algo
     if (email && email.trim() !== '') {
-      userData.email = email;
+      userData.email = email.trim();
     }
 
     /* -------- 3. Cria (ou atualiza) motorista -------- */
