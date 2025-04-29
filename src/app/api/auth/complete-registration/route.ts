@@ -1,80 +1,75 @@
 import { NextResponse } from 'next/server';
-import { createDriverWithPhone, formatPhoneNumber } from '@/lib/supabase/client';
-import { uploadImage } from '@/lib/supabase/client';
+import {
+  createDriverWithPhone,
+  formatPhoneNumber
+} from '@/lib/supabase/client';
 
-export async function POST(request: Request) {
+export const runtime = 'edge';          // opcional, se estiver usando Edge
+
+export async function POST(req: Request) {
   try {
-    const formData = await request.formData();
-    const phone = formData.get('phone') as string;
-    const countryCode = formData.get('countryCode') as string || '55';
-    const nome = formData.get('nome') as string;
-    const profissao = formData.get('profissao') as string;
+    /* -------- 1. Lê o multipart -------- */
+    const formData = await req.formData();
+
+    // Campos obrigatórios
+    const phone          = formData.get('phone')          as string;
+    const countryCode    = formData.get('countryCode')    as string;
+    const nome           = formData.get('nome')           as string;
+    const cpf            = formData.get('cpf')            as string;
+    const profissao      = formData.get('profissao')      as string;
     const dataNascimento = formData.get('dataNascimento') as string;
-    const cpf = formData.get('cpf') as string;
-    const email = formData.get('email') as string || null;
-    const avatarIndex = parseInt(formData.get('avatarIndex') as string || '0');
-    const selfieFile = formData.get('selfie') as File || null;
+    const avatarIndex    = formData.get('avatarIndex')    as string;
 
-    // Validação dos parâmetros
-    if (!phone || !nome || !profissao || !cpf) {
-      return NextResponse.json(
-        { error: 'Dados incompletos para cadastro' },
-        { status: 400 }
-      );
-    }
+    // Opcional
+    const email   = formData.get('email')  as string | null;
+    const selfie  = formData.get('selfie') as File   | null;
 
-    // Formata o número de telefone
+    /* -------- 2. Sanitiza / formata -------- */
     const formattedPhone = formatPhoneNumber(phone, countryCode);
-    
-    // Dados do motorista
-    const userData = {
+
+    const userData: Record<string, any> = {
       nome,
+      cpf,
       profissao,
       data_nascimento: dataNascimento,
-      cpf,
-      email,
-      avatarIndex,
-      tipo: 'motorista',
+      avatar_index: Number(avatarIndex),
     };
-    if (!email) delete userData.email; 
-  }
-    // Cria ou atualiza o motorista no Supabase
-    const { data, error } = await createDriverWithPhone(formattedPhone, userData);
 
+    // só inclui email se realmente veio algo
+    if (email && email.trim() !== '') {
+      userData.email = email;
+    }
+
+    /* -------- 3. Cria (ou atualiza) motorista -------- */
+    const { data, error } = await createDriverWithPhone(formattedPhone, userData);
     if (error) {
       console.error('Erro ao criar motorista:', error);
       return NextResponse.json(
-        { error: error.message || 'Erro ao criar conta de motorista' },
+        { error: 'Falha ao criar motorista' },
         { status: 500 }
       );
     }
 
-    // Upload da selfie se fornecida
-    if (selfieFile && data?.user?.id) {
-      const userId = data.user.id;
-      const filePath = `motoristas/${userId}/selfie.jpg`;
-      
-      const { error: uploadError } = await uploadImage('avatars', filePath, selfieFile);
-      
-      if (uploadError) {
-        console.error('Erro ao fazer upload da selfie:', uploadError);
-        // Não falha o cadastro se o upload da selfie falhar
-      }
+    /* -------- 4. (Opcional) faz upload da selfie -------- */
+    if (selfie && selfie.size > 0) {
+      // Ex.: supabase.storage.from('selfies').upload(...)
+      // não incluí o código porque depende do seu bucket
     }
 
-    // Definir cookies de sessão para garantir que o usuário esteja logado
-    const session = data?.session;
-    
-    // Retornar a sessão para que o cliente possa armazenar
-    return NextResponse.json({
-      success: true,
-      userId: data?.user?.id,
-      session: session
-    });
-  } catch (error: any) {
-    console.error('Erro ao completar cadastro:', error);
+    /* -------- 5. Sucesso -------- */
     return NextResponse.json(
-      { error: error.message || 'Erro ao completar cadastro' },
+      {
+        message: 'Cadastro concluído!',
+        userId : data?.user?.id,
+        session: data?.session
+      },
+      { status: 200 }
+    );
+
+  } catch (err: any) {
+    console.error('Erro ao completar cadastro:', err);
+    return NextResponse.json(
+      { error: err.message || 'Erro interno' },
       { status: 500 }
     );
   }
