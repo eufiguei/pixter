@@ -266,106 +266,214 @@ const renderStepContent = () => {
         </div>
       );
 
-    /* ─────── 2) Detalhes + Selfie/Avatar ─────── */
-    case 'details':
-      return (
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <h2 className="text-2xl font-bold text-center">Complete seu cadastro</h2>
+   /* ─────── 2) Detalhes + Selfie/Avatar ─────── */
+case 'details':
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <h2 className="text-2xl font-bold text-center">Complete seu cadastro</h2>
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
-              {error}
-            </div>
-          )}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+          {error}
+        </div>
+      )}
 
-          {/* ---------- Dados pessoais ---------- */}
-          <div className="space-y-4">
-            {/* Nome */}
-            <Input
-              label="Nome completo"
-              required
-              value={nomeCompleto}
-              onChange={setNomeCompleto}
-            />
-
-            {/* Email */}
-            <Input
-              label="Email (opcional)"
-              type="email"
-              value={email}
-              onChange={setEmail}
-            />
-
-            {/* CPF */}
-            <Input
-              label="CPF"
-              required
-              placeholder="000.000.000-00"
-              value={cpf}
-              onChange={setCpf}
-            />
-
-            {/* Profissão */}
-            <Input
-              label="Profissão"
-              required
-              value={profissao}
-              onChange={setProfissao}
-            />
-
-            {/* Data de nascimento */}
-            <Input
-              label="Data de nascimento"
-              type="date"
-              required
-              value={dataNascimento}
-              onChange={setDataNascimento}
-            />
-          </div>
-
-          {/* ---------- Selfie + Avatar ---------- */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium">Selfie e Avatar</h3>
-
-            {!selfieCapturada ? (
-              <CameraStep
-                iniciarCamera={iniciarCamera}
-                capturarSelfie={capturarSelfie}
-                cameraAtiva={cameraAtiva}
-                videoRef={videoRef}
-                canvasRef={canvasRef}
-              />
-            ) : (
-              <SelfiePreview
-                selfiePreview={selfiePreview}
-                reiniciarCamera={reiniciarCamera}
-              />
-            )}
-
-            {showAvatarSelection && (
-              <AvatarGrid
-                avatars={avatars}
-                selected={selectedAvatar}
-                onSelect={handleAvatarSelect}
-              />
-            )}
-          </div>
-
-          {/* ---------- Termos ---------- */}
-          <TermsCheckbox aceita={aceitaTermos} onToggle={setAceitaTermos} />
-
-          <SubmitButton
-            loading={loading}
-            disabled={!aceitaTermos || !selfieCapturada}
+      {/* ---------- Dados pessoais ---------- */}
+      <div className="space-y-4">
+        {/* Nome completo */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Nome completo
+          </label>
+          <input
+            type="text"
+            value={nomeCompleto}
+            onChange={(e) => setNomeCompleto(e.target.value)}
+            required
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
-        </form>
-      );
+        </div>
 
-    /* fallback */
-    default:
-      return null;
-  }
-};
+        {/* Email */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Email (opcional)
+          </label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+        </div>
+
+        {/* CPF */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            CPF
+          </label>
+          <input
+            type="text"
+            value={cpf}
+            onChange={(e) => setCpf(e.target.value)}
+            required
+            placeholder="000.000.000-00"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+        </div>
+
+        {/* Profissão */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Profissão
+          </label>
+          <input
+            type="text"
+            value={profissao}
+            onChange={(e) => setProfissao(e.target.value)}
+            required
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+        </div>
+
+        {/* Data de nascimento */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Data de nascimento
+          </label>
+          <input
+            type="date"
+            value={dataNascimento}
+            onChange={(e) => setDataNascimento(e.target.value)}
+            required
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+        </div>
+      </div>
+
+      {/* ---------- Selfie e Avatar ---------- */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-medium">Selfie e Avatar</h3>
+
+        {!selfieCapturada ? (
+          <>
+            {!cameraAtiva ? (
+              <button
+                type="button"
+                onClick={iniciarCamera}
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md font-medium hover:bg-blue-700"
+              >
+                Iniciar câmera
+              </button>
+            ) : (
+              <>
+                <div className="relative w-full h-64 bg-gray-100 rounded-md overflow-hidden">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={capturarSelfie}
+                  className="w-full bg-green-600 text-white py-2 px-4 rounded-md font-medium hover:bg-green-700"
+                >
+                  Capturar selfie
+                </button>
+              </>
+            )}
+
+            <canvas ref={canvasRef} className="hidden" />
+          </>
+        ) : (
+          <>
+            <div className="flex justify-center">
+              <div className="relative w-48 h-48 bg-gray-100 rounded-full overflow-hidden">
+                {selfiePreview && (
+                  <img src={selfiePreview} alt="Selfie" className="absolute inset-0 w-full h-full object-cover" />
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={reiniciarCamera}
+              className="w-full bg-gray-600 text-white py-2 px-4 rounded-md font-medium hover:bg-gray-700"
+            >
+              Tirar nova selfie
+            </button>
+          </>
+        )}
+
+        {showAvatarSelection && (
+          <div className="space-y-4">
+            <h4 className="text-md font-medium">Escolha seu avatar</h4>
+            <p className="text-sm text-gray-600">Este avatar será exibido na sua página de pagamento</p>
+
+            <div className="grid grid-cols-3 gap-4">
+              {avatars.map((avatar, index) => (
+                <div
+                  key={index}
+                  onClick={() => handleAvatarSelect(index)}
+                  className={`relative rounded-full overflow-hidden border-4 cursor-pointer ${
+                    selectedAvatar === index ? 'border-purple-500' : 'border-transparent'
+                  }`}
+                >
+                  <img
+                    src={avatar}
+                    alt={`Avatar ${index + 1}`}
+                    className="w-full h-auto"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/images/avatar-placeholder.png';
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ---------- Termos ---------- */}
+      <div className="flex items-start">
+        <input
+          id="aceitaTermos"
+          type="checkbox"
+          checked={aceitaTermos}
+          onChange={(e) => setAceitaTermos(e.target.checked)}
+          className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded mt-1"
+          required
+        />
+        <label htmlFor="aceitaTermos" className="ml-2 block text-sm text-gray-700">
+          Aceito os{' '}
+          <Link href="/termos" className="text-purple-600 hover:text-purple-800">
+            Termos de Uso
+          </Link>{' '}
+          e a{' '}
+          <Link href="/privacidade" className="text-purple-600 hover:text-purple-800">
+            Política de Privacidade
+          </Link>
+        </label>
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading || !aceitaTermos || !selfieCapturada}
+        className={`w-full bg-purple-600 text-white py-3 px-4 rounded-md font-medium transition ${
+          loading || !aceitaTermos || !selfieCapturada
+            ? 'opacity-70 cursor-not-allowed'
+            : 'hover:bg-purple-700'
+        }`}
+      >
+        {loading ? 'Criando conta…' : 'Criar conta'}
+      </button>
+    </form>
+  );
+
 
 /* ---------------- JSX principal ----------------*/
 return (
