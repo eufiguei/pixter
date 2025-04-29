@@ -4,17 +4,6 @@ import './globals.css'
 import { AuthProvider } from '@/lib/auth/session';
 import NavBar from '@/components/NavBar';
 
-export default function RootLayout({ children }) {
-  return (
-    <html lang="pt-BR">
-      <body>
-        <NavBar />      {/* Logo P + Pixter + dropdown Entrar/Cadastrar */}
-        {children}
-      </body>
-    </html>
-  );
-}
-
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
@@ -34,4 +23,5 @@ export default function RootLayout({
       </body>
     </html>
   )
+
 }
