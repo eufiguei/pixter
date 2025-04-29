@@ -649,9 +649,12 @@ export default function CadastroMotorista() {
                           alt={`Avatar ${index + 1}`}
                           className="w-full h-auto"
                           onError={(e) => {
-                            console.error(`Erro ao carregar avatar ${index + 1}:`, e);
-                            e.target.src = '/images/avatar-placeholder.png'; // Imagem de fallback
-                          }}
+  console.error(`Erro ao carregar avatar ${index + 1}:`, e);
+  // Converte o target para HTMLImageElement para acessar o src
+  const target = e.target as HTMLImageElement;
+  target.src = '/images/avatar-placeholder.png'; // Imagem de fallback
+}}
+
                         />
                       </div>
                     ))}
