@@ -1,80 +1,36 @@
-'use client';
+// src/app/motorista/stripe-refresh/page.tsx
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase/client';
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
-export default function StripeRefresh() {
+export default function StripeRefreshPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
-  useEffect(() => {
-    async function refreshStripeLink() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!session) {
-          router.push('/motorista/login');
-          return;
-        }
-
-        const driverId = session.user.id;
-
-        const response = await fetch('/api/stripe/create-connect-account', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ driverId }),
-        });
-
-        const data = await response.json();
-        
-        if (!response.ok) {
-          throw new Error(data.error || 'Erro ao atualizar link do Stripe');
-        }
-        
-        // Redirecionar para o link do Stripe
-        if (data.url) {
-          window.location.href = data.url;
-        } else {
-          router.push('/motorista/dashboard');
-        }
-      } catch (error) {
-        console.error('Erro:', error);
-        setError('Falha ao atualizar link do Stripe');
-        setLoading(false);
-      }
-    }
-
-    refreshStripeLink();
-  }, [router]);
-
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 text-center">
-          <h2 className="text-2xl font-bold mb-4">Atualizando link do Stripe...</h2>
-          <p className="text-gray-600 mb-4">Por favor, aguarde enquanto redirecionamos você para o Stripe.</p>
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-        </div>
-      </main>
-    );
-  }
+  // Optional: Redirect back to dashboard automatically after a delay
+  // useEffect(() => {
+  //   const timer = setTimeout(() => {
+  //     router.push("/motorista/dashboard");
+  //   }, 5000); // 5 seconds delay
+  //   return () => clearTimeout(timer);
+  // }, [router]);
 
   return (
-    <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 text-center">
-        <h2 className="text-2xl font-bold mb-4 text-red-500">Erro</h2>
-        <p className="mb-6">{error}</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded"
-        >
-          Tentar novamente
-        </button>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="bg-white p-8 rounded-lg shadow-md text-center max-w-md">
+        <h1 className="text-2xl font-semibold text-orange-600 mb-4">
+          Link Expirado ou Inválido
+        </h1>
+        <p className="text-gray-700 mb-6">
+          O link para conectar sua conta Stripe expirou ou ocorreu um problema. Por favor, volte ao seu dashboard e tente conectar novamente.
+        </p>
+        <Link href="/motorista/dashboard">
+          <span className="inline-block bg-indigo-600 text-white py-2 px-4 rounded hover:bg-indigo-700 cursor-pointer">
+            Voltar para o Dashboard
+          </span>
+        </Link>
       </div>
-    </main>
+    </div>
   );
 }
