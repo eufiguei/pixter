@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
-export default function CadastroMotorista () {
+export default function CadastroMotorista() {
   const router = useRouter()
 
   /* ---------------------------- Estados de tela --------------------------- */
@@ -57,8 +57,7 @@ export default function CadastroMotorista () {
 
   /* -------------------------------- Camera ------------------------------- */
   const iniciarCamera = async () => {
-    // garante que o <video> existe no DOM
-    setCameraAtiva(true)
+    setCameraAtiva(true) // garante que o <video> será renderizado
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
       streamRef.current = stream
@@ -98,10 +97,30 @@ export default function CadastroMotorista () {
     iniciarCamera()
   }
 
+  const handleAvatarSelect = (i: number) => setSelectedAvatar(i)
+
   /* ---------------------------- renderização ----------------------------- */
   const renderStepContent = () => {
-    // TODO: implementar o switch completo – por enquanto devolve null para compilar
-    return null;
+    if (step === 'phone') {
+      return (
+        <div className="space-y-6">
+          <h2 className="text-2xl font-bold text-center">Cadastro de Motorista</h2>
+          <p className="text-center text-gray-600">Informe seu número de WhatsApp para começar</p>
+          {/* ... inputs de telefone & envio de código (mesmo bloco que funcionava) ... */}
+        </div>
+      )
+    }
+
+    if (step === 'details') {
+      return (
+        <form /* onSubmit={handleSubmit} */ className="space-y-6">
+          <h2 className="text-2xl font-bold text-center">Complete seu cadastro</h2>
+          {/* ... campos de detalhes, câmera, avatar ... */}
+        </form>
+      )
+    }
+
+    return null // verify step pode ser incluído depois
   }
 
   /* ------------------------------- return -------------------------------- */
