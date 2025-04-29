@@ -2,7 +2,7 @@
 import Stripe from 'stripe';
 export async function POST(req: Request) {
   const { session } = await req.json();         // sessão do usuário
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2024-04-10' });
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2022-11-15' });
 
   const portal = await stripe.billingPortal.sessions.create({
     customer: session.stripeCustomerId,
