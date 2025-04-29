@@ -472,8 +472,9 @@ case 'details':
         {loading ? 'Criando conta…' : 'Criar conta'}
       </button>
     </form>
-  );
-
+  );                 /* ← fecha o return do case 'details' */
+  }                  /* ← fecha a arrow-function renderStepContent */
+                     /*    (switch já está completo lá dentro) */
 
 /* ---------------- JSX principal ----------------*/
 return (
@@ -483,5 +484,6 @@ return (
     </div>
   </main>
 );
-}
+}                   /* ← fecha o componente CadastroMotorista */
+
 
