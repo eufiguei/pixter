@@ -5,7 +5,8 @@ import {
   supabase, // Use client instance for verifyOtp
   supabaseServer // Use server client for profile check
 } from "@/lib/supabase/client";
-import { AuthOtpResponse } from "@supabase/supabase-js";
+// Remove the problematic import
+// import { AuthOtpResponse } from "@supabase/supabase-js";
 
 export async function POST(request: Request) {
   try {
@@ -24,7 +25,8 @@ export async function POST(request: Request) {
     const formattedPhone = formatPhoneNumber(phone, countryCode);
 
     // 3. Verify OTP using Supabase Auth (Creates Session on Success)
-    const { data: otpData, error: otpError }: AuthOtpResponse = await supabase.auth.verifyOtp({
+    // Remove the explicit type annotation to let TypeScript infer the correct type
+    const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
       phone: formattedPhone,
       token: code,
       type: "sms", // or "whatsapp" if configured
