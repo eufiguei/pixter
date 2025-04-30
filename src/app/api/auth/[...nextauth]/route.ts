@@ -4,9 +4,9 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { supabaseServer as supabase } from "@/lib/supabase/server";
 
 /* ------------------------------------------------------------------
-   NextAuth options
+   NextAuth options - ADDED EXPORT HERE
 -------------------------------------------------------------------*/
-const authOptions: NextAuthOptions = {
+export const authOptions: NextAuthOptions = {
   providers: [
     /* -------- Google -------- */
     GoogleProvider({
