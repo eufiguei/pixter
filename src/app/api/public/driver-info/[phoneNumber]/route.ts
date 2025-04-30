@@ -23,7 +23,7 @@ export async function GET(
     // Fetch profile data - SELECT ONLY the fields needed publicly!
     const { data: profile, error: profileError } = await supabaseServer
       .from("profiles")
-      .select("id, nome, profissao, avatar_index, stripe_account_id") // Select public fields + stripe ID
+      .select("id, nome, profissao, avatar_url, stripe_account_id") // Select public fields + stripe ID + avatar_url
       .eq("celular", formattedPhone)
       .eq("tipo", "motorista")
       .maybeSingle();
@@ -46,7 +46,7 @@ export async function GET(
     const publicData = {
         nome: profile.nome,
         profissao: profile.profissao,
-        avatar_index: profile.avatar_index, // Assuming this relates to the avatar image
+        avatar_url: profile.avatar_url, // Return the avatar URL
         // DO NOT return stripe_account_id publicly
     };
 

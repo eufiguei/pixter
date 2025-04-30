@@ -52,19 +52,20 @@ const MinhaPaginaView = ({ profile, paymentUrl, qrCode, onConnectStripe }: {
     if (!profile.stripe_account_id) {
       return { connected: false, message: 'Conecte sua conta Stripe para ativar sua página.', showConnectButton: true, showDetails: false };
     }
-    // If ID exists, check the status field updated by webhook
-    switch (profile.stripe_account_status) {
-      case 'verified':
-        // Add check for charges_enabled if you store it separately
-        return { connected: true, message: 'Sua conta Stripe está ativa.', showConnectButton: false, showDetails: true };
-      case 'pending':
-        return { connected: true, message: 'Sua conta Stripe está com verificação pendente. Conclua o processo no Stripe.', showConnectButton: false, showDetails: false }; // Consider adding a button/link to Stripe or re-onboarding
-      case 'restricted':
-        return { connected: true, message: 'Sua conta Stripe está restrita. Verifique seu email ou acesse o Stripe para mais detalhes.', showConnectButton: false, showDetails: false }; // Consider adding a button/link to Stripe or re-onboarding
-      default:
-        // Status might be null or an unexpected value if webhook hasn't run or failed
-        return { connected: true, message: 'Verificando status da conta Stripe... Atualize a página em instantes ou tente conectar novamente se o problema persistir.', showConnectButton: true, showDetails: false }; // Show connect button as fallback
-    }
+        // If ID exists, show details regardless of status, but adjust message
+        const baseDetails = { connected: true, showConnectButton: false, showDetails: true };
+        switch (profile.stripe_account_status) {
+          case 'verified':
+            return { ...baseDetails, message: 'Sua conta Stripe está ativa.' };
+          case 'pending':
+            return { ...baseDetails, message: 'Sua conta Stripe está com verificação pendente. Conclua o processo no Stripe.' };
+          case 'restricted':
+            return { ...baseDetails, message: 'Sua conta Stripe está restrita. Verifique seu email ou acesse o Stripe para mais detalhes.' };
+          default:
+            // Status might be null or an unexpected value if webhook hasn't run or failed
+            // Still show the link/QR, but indicate status is checking.
+            return { ...baseDetails, message: 'Conta Stripe conectada. Status final será atualizado em breve.' };
+        }
   };
 
   const stripeStatus = getStripeStatusDisplay();

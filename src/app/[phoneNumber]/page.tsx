@@ -10,16 +10,9 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 // Make sure to set NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY in your .env.local
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
-// Avatar images - replace with your actual avatar images or use a dynamic approach
-const avatarImages = [
-  '/avatars/avatar1.png',
-  '/avatars/avatar2.png',
-  '/avatars/avatar3.png',
-  // Add more avatar options as needed
-];
-
-// Default avatar if none is set or if the specified one doesn't exist
-const defaultAvatar = '/avatars/default.png';
+// Default avatar - use a generic one if avatar_url is missing
+const defaultAvatar = 
+  "/images/avatars/avatar_1.png"; // Or a more generic placeholder path
 
 // Payment Form Component (Child component used within Elements)
 function PaymentForm({ amount, phoneNumber, clientSecret, onSuccess, onError }) {
@@ -178,13 +171,6 @@ export default function DriverPaymentPage({ params }) {
     // Error is already displayed in the PaymentForm component
   };
 
-  // Get avatar image based on avatar_index
-  const getAvatarImage = (avatarIndex) => {
-    if (avatarIndex !== null && avatarIndex !== undefined && avatarImages[avatarIndex]) {
-      return avatarImages[avatarIndex];
-    }
-    return defaultAvatar;
-  };
 
   if (loading && !driverInfo) {
     return (
@@ -241,11 +227,12 @@ export default function DriverPaymentPage({ params }) {
               <div className="flex flex-col items-center">
                 <div className="w-24 h-24 rounded-full overflow-hidden mb-4">
                   <Image
-                    src={getAvatarImage(driverInfo.avatar_index)}
-                    alt={driverInfo.nome}
+                    src={driverInfo.avatar_url || defaultAvatar} // Use avatar_url directly, fallback to default
+                    alt={driverInfo.nome || 'Avatar'}
                     width={96}
                     height={96}
                     className="object-cover"
+                    onError={(e) => { e.currentTarget.src = defaultAvatar; }} // Fallback on image load error
                   />
                 </div>
                 <h1 className="text-2xl font-bold text-gray-900">{driverInfo.nome}</h1>
@@ -304,11 +291,37 @@ export default function DriverPaymentPage({ params }) {
               )}
               
               {paymentSuccess && (
-                <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-md">
-                  <h3 className="text-lg font-medium text-green-800">Pagamento realizado com sucesso!</h3>
-                  <p className="text-green-700 mt-1">
-                    Seu pagamento de R${amount} foi processado com sucesso.
+                <div className="mt-6 p-6 bg-white rounded-lg shadow-md text-center">
+                  {/* Success Icon */}
+                  <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                    <svg className="h-6 w-6 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Pagamento concluído</h3>
+                  <p className="text-sm text-gray-600 mb-6">
+                    O seu pagamento de R${amount} foi realizado com sucesso.
                   </p>
+                  
+                  {/* Signup/Login Prompt */}
+                  <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
+                    <h4 className="text-lg font-semibold text-gray-800 mb-2">Cadastre-se para pagamentos mais rápidos</h4>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Crie uma conta para pagamentos mais rápidos e histórico de pagamentos.
+                    </p>
+                    <div className="space-y-3">
+                      <Link href="/cadastro"> {/* Assuming /cadastro is client signup */}
+                        <span className="block w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-md shadow-sm cursor-pointer">
+                          Criar conta
+                        </span>
+                      </Link>
+                      <Link href="/login"> {/* Assuming /login is client login */}
+                        <span className="block w-full py-2 px-4 bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-md shadow-sm border border-gray-300 cursor-pointer">
+                          Entrar
+                        </span>
+                      </Link>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
