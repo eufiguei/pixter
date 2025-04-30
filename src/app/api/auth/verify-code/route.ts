@@ -1,15 +1,16 @@
-// src/app/api/auth/verify-code/route.ts (Corrected)
+// src/app/api/auth/verify-code/route.ts (Corrected - No Database Type)
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers"; // Import cookies
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"; // Import Supabase client for route handlers
 import { verifyCode, deleteVerificationCode, formatPhoneNumber } from "@/lib/supabase/client";
-import type { Database } from "@/types/supabase"; // Import your database types if you have them
+// Removed: import type { Database } from "@/types/supabase";
 import type { PhoneOtpType } from "@supabase/supabase-js";
 
 export async function POST(request: Request) {
   const cookieStore = cookies(); // Get cookie store
   // Create Supabase client capable of handling cookies
-  const supabaseAuth = createRouteHandlerClient<Database>({ cookies: () => cookieStore });
+  // Removed <Database> type annotation to avoid error if types are not generated
+  const supabaseAuth = createRouteHandlerClient({ cookies: () => cookieStore });
 
   try {
     const body = await request.json();
@@ -38,7 +39,6 @@ export async function POST(request: Request) {
     }
 
     // 2. If custom verification passes, perform Supabase OTP verification to establish session
-    //    Use 'sms' or 'phone_change' depending on your Supabase setup. 'sms' is common for login.
     const otpType: PhoneOtpType = "sms"; // Or "phone_change" if applicable
     const { data: sessionData, error: sessionError } = await supabaseAuth.auth.verifyOtp({
       phone: formattedPhone,
@@ -48,7 +48,6 @@ export async function POST(request: Request) {
 
     if (sessionError) {
       console.error(`Supabase verifyOtp error for ${formattedPhone}:`, sessionError);
-      // Provide a more generic error to the user, but log the specific Supabase error
       return NextResponse.json(
         { error: "Falha ao verificar o código com o sistema de autenticação." },
         { status: 500 } // Or 401 if it's an invalid code according to Supabase
@@ -57,7 +56,6 @@ export async function POST(request: Request) {
 
     if (!sessionData || !sessionData.session) {
       console.error(`Supabase verifyOtp succeeded for ${formattedPhone} but returned no session.`);
-      // This case is less likely if no error occurred, but handle it defensively
       return NextResponse.json(
         { error: "Não foi possível estabelecer a sessão. Tente novamente." },
         { status: 500 }
