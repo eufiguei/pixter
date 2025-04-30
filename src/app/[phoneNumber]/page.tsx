@@ -83,7 +83,7 @@ function PaymentForm({ amount, phoneNumber, clientSecret, onSuccess, onError }) 
         disabled={!stripe || isProcessing}
         className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-md shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {isProcessing ? 'Processando...' : `Pagar com Pix, Apple Pay ou Cartão`}
+        {isProcessing ? 'Processando...' : `Pagar`}
       </button>
       
       <p className="text-center text-xs text-gray-500 mt-2">
