@@ -1,10 +1,8 @@
-// src/app/api/stripe/connect-account/route.ts (Corrected for NextAuth.js)
+// src/app/api/stripe/connect-account/route.ts (Corrected for NextAuth.js - Final Import Fix)
 import { NextResponse } from "next/server";
 import { Stripe } from "stripe";
-// Removed Supabase Auth Helpers: import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-// Removed: import { cookies } from "next/headers";
 import { getServerSession } from "next-auth/next"; // Import getServerSession
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Import your authOptions
+import { authOptions } from "@/lib/auth/options"; // Import authOptions from the new location
 import { supabaseServer } from "@/lib/supabase/client"; // Use the server client (service role) for DB operations
 
 // Initialize Stripe (Use environment variables!)
