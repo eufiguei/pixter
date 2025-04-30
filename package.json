@@ -19,7 +19,8 @@
   "react-dom": "18.2.0",
   "stripe": "^12.0.0",
   "twilio": "^4.11.0",
-  "next-auth": "^4.22.1"
+  "next-auth": "^4.22.1",
+  "react-currency-input-field": "^3.10.0"
 },
   "devDependencies": {
     "@types/node": "20.8.10",
