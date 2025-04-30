@@ -64,41 +64,41 @@ export async function POST(request: Request) {
 
 async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
   const { id, amount, metadata, currency, status } = paymentIntent;
-  const supabaseUserId = metadata?.driverProfileId; // Get Supabase user ID from metadata
+  // CORREÇÃO: Use a chave correta definida durante a criação do pagamento
+  const driverId = metadata?.driverId; // <<< Mude de driverProfileId para driverId
 
-  if (!supabaseUserId) {
-    console.error("Missing driverProfileId in PaymentIntent metadata:", id);
-    // Optionally, still record the payment without linking it, or handle error
-    return; // Stop processing if we can't link it to a driver
+  if (!driverId) {
+    console.error("Missing driverId in PaymentIntent metadata:", id);
+    return; // Pare o processamento se não pudermos vinculá-lo a um motorista
   }
 
   try {
-    // Upsert into historico_pagamentos (create if not exists, update if exists)
-    // Assumes stripe_payment_id is unique
+    // Upsert no histórico de pagamentos (crie se não existir, atualize se existir)
+    // Assume que stripe_payment_id é único
     const { error: upsertError } = await supabaseServer
-      .from("pagamentos")
+      .from("pagamentos") // Certifique-se que a tabela é "pagamentos"
       .upsert({
         stripe_payment_id: id,
-        motorista_id: supabaseUserId,
-        valor: amount / 100, // Convert cents to base currency unit
+        motorista_id: driverId, // <<< Use a variável driverId corrigida
+        valor: amount / 100, // Converta centavos para a unidade monetária base
         moeda: currency,
         status: status,
-        // created_at is handled by default value or trigger
-        // updated_at can be set here if needed
-      }, { onConflict: "stripe_payment_id" }); // Specify conflict column
+        // created_at é tratado pelo valor padrão ou gatilho
+        // updated_at pode ser definido aqui se necessário
+      }, { onConflict: "stripe_payment_id" }); // Especifique a coluna de conflito
 
     if (upsertError) {
-      console.error("Error upserting payment history:", upsertError.message);
-      // Decide how to handle: retry? log? notify admin?
+      console.error("Erro ao fazer upsert no histórico de pagamentos:", upsertError.message);
     } else {
-      console.log("Payment history recorded/updated for:", id);
-      // Optionally: Trigger notification to the driver here
+      console.log("Histórico de pagamentos registrado/atualizado para:", id);
+      // Opcionalmente: Acione a notificação para o motorista aqui
     }
 
   } catch (error) {
-    console.error("Exception in handlePaymentIntentSucceeded:", error);
+    console.error("Exceção em handlePaymentIntentSucceeded:", error);
   }
 }
+
 
 async function handleAccountUpdated(account: Stripe.Account) {
   const { id, metadata, charges_enabled, details_submitted, payouts_enabled } = account;

@@ -7,13 +7,68 @@ import { useRouter } from 'next/navigation'
 
 // Define types for profile and payments (replace with your actual types)
 type Profile = {
-  id: string;
-  nome: string;
-  email: string;
-  celular: string;
-  profissao: string;
-  conta_bancaria?: string; // Assuming this might be the Stripe account ID later
-  // Add other profile fields as needed
+  // ... outros campos
+  stripe_account_id?: string;
+  stripe_account_status?: 'pending' | 'verified' | 'restricted' | null; // Ou use flags individuais
+  // Adicione flags individuais se preferir: stripe_account_charges_enabled?: boolean; etc.
+};
+
+const MinhaPaginaView = ({ profile, paymentUrl, qrCode, onConnectStripe }: {
+  profile: Profile | null;
+  paymentUrl: string;
+  qrCode: string;
+  onConnectStripe: () => void;
+}) => {
+  // ... (estado de cópia, etc.)
+
+  if (!profile) return <p>Carregando...</p>;
+
+  // Lógica de Status Aprimorada
+  const getStripeStatusDisplay = () => {
+    if (!profile.stripe_account_id) {
+      return { connected: false, message: 'Conecte sua conta Stripe para ativar sua página.', showConnectButton: true, showDetails: false };
+    }
+    switch (profile.stripe_account_status) {
+      case 'verified':
+        return { connected: true, message: 'Sua conta Stripe está ativa.', showConnectButton: false, showDetails: true };
+      case 'pending':
+        return { connected: true, message: 'Sua conta Stripe está com verificação pendente. Conclua o processo no Stripe.', showConnectButton: false, showDetails: false }; // Ou talvez um botão para reabrir onboarding?
+      case 'restricted':
+        return { connected: true, message: 'Sua conta Stripe está restrita. Verifique seu email ou acesse o Stripe para mais detalhes.', showConnectButton: false, showDetails: false }; // Ou botão para reabrir onboarding?
+      default:
+        return { connected: false, message: 'Status da conta Stripe desconhecido. Tente conectar novamente.', showConnectButton: true, showDetails: false };
+    }
+  };
+
+  const stripeStatus = getStripeStatusDisplay();
+
+  return (
+    <div className="bg-white p-6 rounded-lg shadow-md">
+      <h2 className="text-xl font-semibold mb-4">Minha Página de Pagamento</h2>
+      <p className="text-gray-700 mb-4">{stripeStatus.message}</p>
+
+      {stripeStatus.showConnectButton && (
+        <div className="text-center">
+          <button
+            onClick={onConnectStripe}
+            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            Conectar com Stripe
+          </button>
+        </div>
+      )}
+
+      {stripeStatus.showDetails && (
+        <div className="space-y-4">
+          <p className="text-gray-700">Sua página pública para receber pagamentos:</p>
+          {/* ... (código do link e botão de copiar) ... */}
+          {qrCode ? (
+             {/* ... (código do QR Code) ... */}
+          ) : <p className="text-gray-500">Gerando QR Code...</p>}
+        </div>
+      )}
+    </div>
+  );
 };
 
 type Payment = {
