@@ -1,15 +1,14 @@
-// src/app/api/auth/verify-code/route.ts (Corrected - No Database Type)
+// src/app/api/auth/verify-code/route.ts (Corrected - No Database Type, No PhoneOtpType)
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers"; // Import cookies
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"; // Import Supabase client for route handlers
 import { verifyCode, deleteVerificationCode, formatPhoneNumber } from "@/lib/supabase/client";
 // Removed: import type { Database } from "@/types/supabase";
-import type { PhoneOtpType } from "@supabase/supabase-js";
+// Removed: import type { PhoneOtpType } from "@supabase/supabase-js";
 
 export async function POST(request: Request) {
   const cookieStore = cookies(); // Get cookie store
   // Create Supabase client capable of handling cookies
-  // Removed <Database> type annotation to avoid error if types are not generated
   const supabaseAuth = createRouteHandlerClient({ cookies: () => cookieStore });
 
   try {
@@ -39,7 +38,8 @@ export async function POST(request: Request) {
     }
 
     // 2. If custom verification passes, perform Supabase OTP verification to establish session
-    const otpType: PhoneOtpType = "sms"; // Or "phone_change" if applicable
+    //    Specify the type directly as a string literal.
+    const otpType = "sms"; // Use 'sms' for login, or 'phone_change' if applicable
     const { data: sessionData, error: sessionError } = await supabaseAuth.auth.verifyOtp({
       phone: formattedPhone,
       token: code,
