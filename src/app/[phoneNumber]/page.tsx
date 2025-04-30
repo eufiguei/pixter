@@ -12,7 +12,7 @@ import CurrencyInput from 'react-currency-input-field';
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
 // Default avatar - use a generic one if avatar_url is missing
-const defaultAvatar = 
+const defaultAvatar =
   "/images/avatars/avatar_1.png"; // Or a more generic placeholder path
 
 // Payment Form Component (Child component used within Elements)
@@ -38,7 +38,7 @@ function PaymentForm({ amount, phoneNumber, clientSecret, onSuccess, onError }) 
         elements,
         confirmParams: {
           // Make sure to change this to your payment completion page
-          return_url: `${window.location.origin}/payment-success`, 
+          return_url: `${window.location.origin}/payment-success`,
         },
         redirect: 'if_required', // Only redirect for 3D Secure or similar
       });
@@ -75,17 +75,17 @@ function PaymentForm({ amount, phoneNumber, clientSecret, onSuccess, onError }) 
           {paymentError}
         </div>
       )}
-      
+
       <PaymentElement />
-      
+
       <button
         type="submit"
         disabled={!stripe || isProcessing}
         className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-md shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {isProcessing ? 'Processando...' : `Pagar`}
+        {isProcessing ? 'Processando...' : `Pagar com Pix, Apple Pay ou Cartão`}
       </button>
-      
+
       <p className="text-center text-xs text-gray-500 mt-2">
         Pagamento processado com segurança via Stripe
       </p>
@@ -136,10 +136,10 @@ export default function DriverPaymentPage({ params }) {
   const handleCreatePayment = async () => {
     // Use the raw string amount for parsing
     const numericAmount = parseFloat(String(amount || '').replace(/[^\d,-]/g, '').replace(",", "."));
-    
+
     if (isNaN(numericAmount) || numericAmount < 1) { // Check if >= 1 BRL
       // Don't set error here, just ensure no clientSecret
-      setClientSecret(''); 
+      setClientSecret('');
       return; // Exit if amount is invalid
     }
 
@@ -154,7 +154,7 @@ export default function DriverPaymentPage({ params }) {
         },
         body: JSON.stringify({
           // Send amount in cents to Stripe
-          amount: Math.round(numericAmount * 100), 
+          amount: Math.round(numericAmount * 100),
           driverPhoneNumber: phoneNumber,
         }),
       });
@@ -220,7 +220,7 @@ export default function DriverPaymentPage({ params }) {
     setPaymentSuccess(true);
     setPaymentDetails(paymentIntent);
     // Optionally clear amount or disable input
-    // setAmount(""); 
+    // setAmount("");
   };
 
   const handlePaymentError = (error) => {
@@ -232,7 +232,7 @@ export default function DriverPaymentPage({ params }) {
   // Initial loading state (only for driver info)
   if (loading && !driverInfo && !error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="min-h-screen flex items-center justify-center bg-white"> {/* Changed background */}
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Carregando informações...</p>
@@ -244,7 +244,7 @@ export default function DriverPaymentPage({ params }) {
   // Error state if driver info failed to load
   if (error && !driverInfo) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="min-h-screen flex items-center justify-center bg-white"> {/* Changed background */}
         <div className="bg-white p-8 rounded-lg shadow-md text-center max-w-md">
           <h1 className="text-2xl font-semibold text-red-600 mb-4">Erro</h1>
           <p className="text-gray-700 mb-6">{error}</p>
@@ -259,9 +259,9 @@ export default function DriverPaymentPage({ params }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col"> {/* Changed background */}
       {/* Header */}
-      <header className="bg-white shadow-sm">
+      <header className="bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <Link href="/">
             <span className="text-xl font-bold text-gray-800 cursor-pointer">Pixter</span>
@@ -279,11 +279,11 @@ export default function DriverPaymentPage({ params }) {
 
       {/* Main Content */}
       <main className="flex-grow flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-md overflow-hidden max-w-md w-full">
+        <div className="bg-white rounded-lg shadow-md overflow-hidden max-w-md w-full min-h-[600px]"> {/* Added min-height */}
           {driverInfo && (
-            <div className="p-6">
-              {/* Driver Info */} 
-              <div className="flex flex-col items-center text-center">
+            <div className="p-10"> {/* Increased padding from p-6 to p-10 */}
+              {/* Driver Info */}
+              <div className="flex flex-col items-center text-center pt-8 pb-4"> {/* Added padding top/bottom */}
                 <div className="w-24 h-24 rounded-full overflow-hidden mb-4 relative">
                   <Image
                     src={driverInfo.avatar_url || defaultAvatar} // Use avatar_url directly, fallback to default
@@ -300,7 +300,7 @@ export default function DriverPaymentPage({ params }) {
                   <p className="text-gray-600">{driverInfo.profissao}</p>
                 )}
                 {/* Format phone number: Remove non-digits, strip leading 55 if present, format as (XX) XXXXX-XXXX */}
-                <p className="text-gray-600 mt-1">
+                <p className="text-gray-600 mt-1 mb-8"> {/* Added margin bottom */}
                   {(() => {
                     const digits = String(phoneNumber || "").replace(/\D/g, ""); // Ensure phoneNumber is treated as string
                     const localDigits = digits.startsWith("55") && digits.length === 13 ? digits.substring(2) : digits;
@@ -313,11 +313,11 @@ export default function DriverPaymentPage({ params }) {
                 </p>
               </div>
 
-              {/* Payment Section - Render based on paymentSuccess state */} 
+              {/* Payment Section - Render based on paymentSuccess state */}
               {!paymentSuccess ? (
-                <> 
-                  {/* Amount Input Section */} 
-                  <div className="mt-8">
+                <>
+                  {/* Amount Input Section */}
+                  <div> {/* Removed mt-8 */}
                     <h2 className="text-center text-3xl font-semibold text-gray-800 mb-6">Qual valor pago?</h2> {/* Increased size and margin */}
                     <label htmlFor="amount" className="sr-only"> {/* Visually hidden label */}
                       Digite o valor (R$)
@@ -339,19 +339,19 @@ export default function DriverPaymentPage({ params }) {
                         type="tel" // Use tel for better numeric keyboard compatibility with masking libraries
                       />
                     </div>
-                    
-                    {/* Optional Tip Suggestion */} 
+
+                    {/* Optional Tip Suggestion */}
                     {/* <p className="text-sm text-gray-500 mt-2">
                       Adicione R$1 ou R$2 para pagar mais rápido e evitar espera
-                    </p> */} 
-                    
-                    {/* Display general errors or payment setup errors */} 
+                    </p> */}
+
+                    {/* Display general errors or payment setup errors */}
                     {error && (
                       <p className="mt-2 text-sm text-red-600 text-center">{error}</p>
                     )}
                   </div>
 
-                  {/* Stripe Elements Section (Conditionally rendered) */} 
+                  {/* Stripe Elements Section (Conditionally rendered) */}
                   {clientSecret ? (
                     <div className="mt-6">
                       <Elements stripe={stripePromise} options={{ clientSecret }}>
@@ -382,11 +382,11 @@ export default function DriverPaymentPage({ params }) {
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-2">Pagamento concluído</h3>
                   <p className="text-sm text-gray-600 mb-6">
-                    {/* Display formatted amount from payment details if available */} 
+                    {/* Display formatted amount from payment details if available */}
                     O seu pagamento{paymentDetails?.amount ? ` de R$ ${(paymentDetails.amount / 100) .toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''} foi realizado com sucesso.
                   </p>
-                  
-                  {/* Signup/Login Prompt */} 
+
+                  {/* Signup/Login Prompt */}
                   <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
                     <h4 className="text-lg font-semibold text-gray-800 mb-2">Cadastre-se para pagamentos mais rápidos</h4>
                     <p className="text-sm text-gray-600 mb-4">
@@ -412,8 +412,8 @@ export default function DriverPaymentPage({ params }) {
         </div>
       </main>
 
-      {/* Footer */} 
-      <footer className="bg-white border-t border-gray-200 py-4 mt-auto">
+      {/* Footer */}
+      <footer className="bg-white py-4 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <p className="text-center text-sm text-gray-500">
             &copy; {new Date().getFullYear()} Pixter. Todos os direitos reservados.
