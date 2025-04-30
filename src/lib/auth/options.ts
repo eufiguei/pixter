@@ -39,7 +39,7 @@ export const authOptions: NextAuthOptions = {
 
         const { data: profile } = await supabaseServer
           .from("profiles")
-          .select("*, avatar_url: profiles_avatar_url_fkey(avatar_url)")
+          .select("*")
           .eq("id", data.user.id)
           .single();
 
@@ -97,7 +97,7 @@ export const authOptions: NextAuthOptions = {
         const userId = verifyData.user.id;
         const { data: profileData, error: profileError } = await supabaseServer // Use server client for profile access
           .from("profiles")
-          .select("*, avatar_url: profiles_avatar_url_fkey(avatar_url)")
+          .select("*")
           .eq("id", userId)
           .single();
 
