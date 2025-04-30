@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react'; // Added useRef
 import Image from 'next/image';
 import Link from 'next/link';
 import { loadStripe } from '@stripe/stripe-js';
@@ -103,6 +103,7 @@ export default function DriverPaymentPage({ params }) {
   const [clientSecret, setClientSecret] = useState('');
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [paymentDetails, setPaymentDetails] = useState(null);
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Ref to store timeout ID
 
   // Fetch driver info
   useEffect(() => {
@@ -176,40 +177,50 @@ export default function DriverPaymentPage({ params }) {
 
   // Automatically create payment intent when amount is valid (debounced)
   useEffect(() => {
-    const debounce = (func, delay) => {
-      let timeoutId;
-      return (...args) => {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-          func.apply(this, args);
-        }, delay);
-      };
-    };
-
-    const debouncedCreateIntent = debounce(handleCreatePayment, 500); // 500ms debounce
-
-    // Trigger intent creation if amount is potentially valid (>= R$ 1,00)
-    const numericAmount = parseFloat(String(amount || '').replace(/[^\d,-]/g, '').replace(",", "."));
-    if (!isNaN(numericAmount) && numericAmount >= 1) {
-      debouncedCreateIntent();
-    } else {
-      // If amount becomes invalid or empty, clear the client secret immediately
-      setClientSecret('');
-      setError(''); // Clear any previous payment setup errors
+    // Clear any existing timeout when amount changes
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
     }
 
-    // Cleanup function for debounce
+    const handleDebouncedCreate = async () => {
+      // Trigger intent creation if amount is potentially valid (>= R$ 1,00)
+      const numericAmount = parseFloat(String(amount || "").replace(/[^\d,-]/g, "").replace(",", "."));
+      if (!isNaN(numericAmount) && numericAmount >= 1) {
+        await handleCreatePayment(); // Call the async function to create intent
+      } else {
+        // If amount becomes invalid or empty, clear the client secret immediately
+        setClientSecret("");
+        setError(""); // Clear any previous payment setup errors
+      }
+    };
+
+    // Set a new timeout only if amount is potentially valid
+    const numericAmountCheck = parseFloat(String(amount || "").replace(/[^\d,-]/g, "").replace(",", "."));
+    if (!isNaN(numericAmountCheck) && numericAmountCheck >= 1) {
+        debounceTimeoutRef.current = setTimeout(() => {
+          handleDebouncedCreate();
+        }, 500); // 500ms debounce
+    } else {
+        // If amount is invalid/empty, ensure clientSecret is cleared immediately
+        setClientSecret("");
+        setError("");
+    }
+
+    // Cleanup function: clear the timeout when the component unmounts or amount changes
     return () => {
-      clearTimeout(debouncedCreateIntent);
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [amount]); // Rerun only when amount changes
 
+  // Function to handle successful payment (moved definition up)
   const handlePaymentSuccess = (paymentIntent) => {
     setPaymentSuccess(true);
     setPaymentDetails(paymentIntent);
     // Optionally clear amount or disable input
-    // setAmount(''); 
+    // setAmount(""); 
   };
 
   const handlePaymentError = (error) => {
@@ -412,4 +423,3 @@ export default function DriverPaymentPage({ params }) {
     </div>
   );
 }
-
