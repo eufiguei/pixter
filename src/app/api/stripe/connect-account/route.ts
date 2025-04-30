@@ -1,29 +1,32 @@
-// src/app/api/stripe/connect-account/route.ts
+// src/app/api/stripe/connect-account/route.ts (Corrected for NextAuth.js)
 import { NextResponse } from "next/server";
 import { Stripe } from "stripe";
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
-import { supabaseServer } from "@/lib/supabase/client"; // Assuming this uses SERVICE_ROLE_KEY for server-side updates
+// Removed Supabase Auth Helpers: import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+// Removed: import { cookies } from "next/headers";
+import { getServerSession } from "next-auth/next"; // Import getServerSession
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Import your authOptions
+import { supabaseServer } from "@/lib/supabase/client"; // Use the server client (service role) for DB operations
 
 // Initialize Stripe (Use environment variables!)
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_YOUR_KEY", {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { // Added non-null assertion assuming it's set
   apiVersion: "2022-11-15",
 });
 
 export async function GET(request: Request) {
-  const supabaseAuth = createRouteHandlerClient({ cookies }); // For getting user session
+  // 1. Get Authenticated User ID using NextAuth.js getServerSession
+  const session = await getServerSession(authOptions);
+
+  // Check if session exists and has the user ID (added in your NextAuth callbacks)
+  if (!session || !session.user || !session.user.id) {
+    console.error("NextAuth Authentication error: No session or user ID found.");
+    // Return the same error message the frontend expects
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+  const userId = session.user.id;
+  const userEmail = session.user.email; // Get email from NextAuth session if needed
 
   try {
-    // 1. Get Authenticated User ID using Supabase Auth Helpers
-    const { data: { session }, error: sessionError } = await supabaseAuth.auth.getSession();
-
-    if (sessionError || !session?.user) {
-      console.error("Authentication error:", sessionError?.message);
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
-    const userId = session.user.id;
-
-    // 2. Fetch User Profile from Supabase using Service Role Client for potential updates
+    // 2. Fetch User Profile from Supabase using Service Role Client
     const { data: profile, error: profileError } = await supabaseServer
       .from("profiles")
       .select("stripe_account_id") // Select existing Stripe ID
@@ -32,30 +35,35 @@ export async function GET(request: Request) {
 
     // Handle profile not found specifically
     if (profileError && profileError.code === "PGRST116") { // PGRST116: Row not found
-        console.error("Profile not found for user:", userId);
-        return NextResponse.json({ error: "Perfil não encontrado." }, { status: 404 });
+      console.error("Profile not found for user:", userId);
+      return NextResponse.json({ error: "Perfil não encontrado." }, { status: 404 });
     }
     // Handle other profile fetch errors
-    if (profileError || !profile) {
-      console.error("Error fetching profile:", profileError?.message);
+    if (profileError) { // Removed !profile check as single() returns null which is handled by PGRST116
+      console.error("Error fetching profile:", profileError.message);
       return NextResponse.json({ error: "Erro ao buscar perfil." }, { status: 500 });
     }
 
-    let stripeAccountId = profile.stripe_account_id;
+    let stripeAccountId = profile?.stripe_account_id; // Use optional chaining as profile might be null if not found
 
-    // 3. Create Stripe Account if it doesn\t exist
+    // 3. Create Stripe Account if it doesn't exist
     if (!stripeAccountId) {
+      if (!userEmail) {
+        // Cannot create Stripe account without an email
+        console.error("Cannot create Stripe account: User email not found in NextAuth session for user:", userId);
+        return NextResponse.json({ error: "Email do usuário não encontrado para criar conta Stripe." }, { status: 400 });
+      }
       console.log("Creating new Stripe Express account for user:", userId);
       const account = await stripe.accounts.create({
         type: "express",
-        email: session.user.email, // Prefill email from session
+        email: userEmail, // Prefill email from NextAuth session
         capabilities: {
           card_payments: { requested: true },
           transfers: { requested: true },
         },
         business_type: "individual",
         metadata: {
-          supabaseUserId: userId, // Store Supabase user ID in Stripe metadata
+          supabaseUserId: userId, // Store Supabase/NextAuth user ID in Stripe metadata
         },
       });
       stripeAccountId = account.id;
@@ -94,8 +102,8 @@ export async function GET(request: Request) {
   } catch (error: any) {
     console.error("Stripe Connect account process error:", error);
     // Differentiate Stripe errors from other errors if possible
-    if (error.type === "StripeInvalidRequestError") {
-        return NextResponse.json({ error: `Stripe Error: ${error.message}` }, { status: 400 });
+    if (error.type?.startsWith("Stripe")) { // Check if it looks like a Stripe error
+      return NextResponse.json({ error: `Stripe Error: ${error.message}` }, { status: 400 });
     }
     return NextResponse.json(
       { error: error.message || "Erro ao conectar com Stripe." },
