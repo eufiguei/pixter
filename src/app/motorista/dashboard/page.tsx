@@ -5,38 +5,65 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
-// Define types for profile and payments (replace with your actual types)
+// Define types for profile and payments (ensure Profile includes all needed fields)
 type Profile = {
-  // ... outros campos
-  stripe_account_id?: string;
-  stripe_account_status?: 'pending' | 'verified' | 'restricted' | null; // Ou use flags individuais
-  // Adicione flags individuais se preferir: stripe_account_charges_enabled?: boolean; etc.
+  id: string;
+  nome?: string; // Made optional as it might not be immediately available
+  email?: string; // Made optional
+  celular: string; // Assuming celular is essential
+  profissao?: string; // Made optional
+  conta_bancaria?: string; // This seems to be used as the Stripe Account ID indicator in older code
+  stripe_account_id?: string | null;
+  stripe_account_status?: 'pending' | 'verified' | 'restricted' | null;
+  // Add other profile fields as needed (e.g., from Supabase)
+  // stripe_account_charges_enabled?: boolean;
+  // stripe_account_payouts_enabled?: boolean;
+  // stripe_account_details_submitted?: boolean;
 };
 
+type Payment = {
+  id: string;
+  amount: number;
+  created_at: string;
+  // Add other payment fields as needed
+};
+
+// --- Componente MinhaPaginaView (Versão Corrigida e Aprimorada) ---
 const MinhaPaginaView = ({ profile, paymentUrl, qrCode, onConnectStripe }: {
   profile: Profile | null;
   paymentUrl: string;
   qrCode: string;
   onConnectStripe: () => void;
 }) => {
-  // ... (estado de cópia, etc.)
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(paymentUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds
+    });
+  };
 
   if (!profile) return <p>Carregando...</p>;
 
   // Lógica de Status Aprimorada
   const getStripeStatusDisplay = () => {
+    // Check for stripe_account_id first
     if (!profile.stripe_account_id) {
       return { connected: false, message: 'Conecte sua conta Stripe para ativar sua página.', showConnectButton: true, showDetails: false };
     }
+    // If ID exists, check the status field updated by webhook
     switch (profile.stripe_account_status) {
       case 'verified':
+        // Add check for charges_enabled if you store it separately
         return { connected: true, message: 'Sua conta Stripe está ativa.', showConnectButton: false, showDetails: true };
       case 'pending':
-        return { connected: true, message: 'Sua conta Stripe está com verificação pendente. Conclua o processo no Stripe.', showConnectButton: false, showDetails: false }; // Ou talvez um botão para reabrir onboarding?
+        return { connected: true, message: 'Sua conta Stripe está com verificação pendente. Conclua o processo no Stripe.', showConnectButton: false, showDetails: false }; // Consider adding a button/link to Stripe or re-onboarding
       case 'restricted':
-        return { connected: true, message: 'Sua conta Stripe está restrita. Verifique seu email ou acesse o Stripe para mais detalhes.', showConnectButton: false, showDetails: false }; // Ou botão para reabrir onboarding?
+        return { connected: true, message: 'Sua conta Stripe está restrita. Verifique seu email ou acesse o Stripe para mais detalhes.', showConnectButton: false, showDetails: false }; // Consider adding a button/link to Stripe or re-onboarding
       default:
-        return { connected: false, message: 'Status da conta Stripe desconhecido. Tente conectar novamente.', showConnectButton: true, showDetails: false };
+        // Status might be null or an unexpected value if webhook hasn't run or failed
+        return { connected: true, message: 'Verificando status da conta Stripe... Atualize a página em instantes ou tente conectar novamente se o problema persistir.', showConnectButton: true, showDetails: false }; // Show connect button as fallback
     }
   };
 
@@ -53,7 +80,7 @@ const MinhaPaginaView = ({ profile, paymentUrl, qrCode, onConnectStripe }: {
             onClick={onConnectStripe}
             className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
-            Conectar com Stripe
+            {profile.stripe_account_id ? 'Reconectar / Atualizar Stripe' : 'Conectar com Stripe'}
           </button>
         </div>
       )}
@@ -61,9 +88,24 @@ const MinhaPaginaView = ({ profile, paymentUrl, qrCode, onConnectStripe }: {
       {stripeStatus.showDetails && (
         <div className="space-y-4">
           <p className="text-gray-700">Sua página pública para receber pagamentos:</p>
-          {/* ... (código do link e botão de copiar) ... */}
+          {paymentUrl ? (
+            <div className="flex items-center space-x-2 bg-gray-100 p-2 rounded">
+              <Link href={paymentUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline truncate flex-grow">
+                {paymentUrl}
+              </Link>
+              <button
+                onClick={handleCopy}
+                className="text-sm py-1 px-2 rounded bg-gray-200 hover:bg-gray-300"
+              >
+                {copied ? 'Copiado!' : 'Copiar'}
+              </button>
+            </div>
+          ) : <p className="text-gray-500">Gerando link...</p>}
           {qrCode ? (
-             {/* ... (código do QR Code) ... */}
+            <div>
+              <p className="text-gray-700 mt-4">QR Code:</p>
+              <img src={qrCode} alt="QR Code Pagamento" className="mt-2 border" />
+            </div>
           ) : <p className="text-gray-500">Gerando QR Code...</p>}
         </div>
       )}
@@ -71,14 +113,7 @@ const MinhaPaginaView = ({ profile, paymentUrl, qrCode, onConnectStripe }: {
   );
 };
 
-type Payment = {
-  id: string;
-  amount: number;
-  created_at: string;
-  // Add other payment fields as needed
-};
-
-// Placeholder components for different views
+// --- Componente PagamentosRecebidosView (Sem alterações) ---
 const PagamentosRecebidosView = ({ payments }: { payments: Payment[] }) => (
   <div className="bg-white p-6 rounded-lg shadow-md">
     <h2 className="text-xl font-semibold mb-4">Pagamentos Recebidos</h2>
@@ -89,7 +124,7 @@ const PagamentosRecebidosView = ({ payments }: { payments: Payment[] }) => (
         {payments.map((payment) => (
           <li key={payment.id} className="border-b py-2">
             {/* Display payment details here */}
-            Amount: {payment.amount}, Date: {new Date(payment.created_at).toLocaleDateString()}
+            Valor: {payment.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}, Data: {new Date(payment.created_at).toLocaleDateString('pt-BR')}
           </li>
         ))}
       </ul>
@@ -97,6 +132,7 @@ const PagamentosRecebidosView = ({ payments }: { payments: Payment[] }) => (
   </div>
 );
 
+// --- Componente MeusDadosView (Verificar tipo Profile) ---
 const MeusDadosView = ({ profile, onUpdate }: { profile: Profile | null, onUpdate: (updates: Partial<Profile>) => Promise<void> }) => {
   // Basic form state - ideally use a form library like react-hook-form
   const [nome, setNome] = useState(profile?.nome || '');
@@ -117,6 +153,7 @@ const MeusDadosView = ({ profile, onUpdate }: { profile: Profile | null, onUpdat
     setIsLoading(true);
     setError('');
     try {
+      // Only update fields that are being edited
       await onUpdate({ nome, profissao });
       setIsEditing(false);
     } catch (err: any) {
@@ -144,12 +181,12 @@ const MeusDadosView = ({ profile, onUpdate }: { profile: Profile | null, onUpdat
               disabled={isLoading}
             />
           ) : (
-            <p className="text-gray-900">{profile.nome}</p>
+            <p className="text-gray-900">{profile.nome || '-'}</p>
           )}
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Email</label>
-          <p className="text-gray-900">{profile.email}</p>
+          <p className="text-gray-900">{profile.email || '-'}</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">WhatsApp</label>
@@ -166,13 +203,18 @@ const MeusDadosView = ({ profile, onUpdate }: { profile: Profile | null, onUpdat
               disabled={isLoading}
             />
           ) : (
-            <p className="text-gray-900">{profile.profissao}</p>
+            <p className="text-gray-900">{profile.profissao || '-'}</p>
           )}
         </div>
-        {/* Display Conta Bancária/Pix - Update logic might be different */}
+        {/* Display Stripe Status - Using the field from the improved logic */}
         <div>
-          <label className="block text-sm font-medium text-gray-700">Conta Bancária/Pix</label>
-          <p className="text-gray-600">{profile.conta_bancaria ? 'Cadastrada (Stripe)' : 'Não cadastrada'}</p>
+          <label className="block text-sm font-medium text-gray-700">Status Conta Stripe</label>
+          <p className="text-gray-600">
+            {!profile.stripe_account_id ? 'Não conectada' :
+             (profile.stripe_account_status === 'verified' ? 'Verificada' :
+             (profile.stripe_account_status === 'pending' ? 'Pendente' :
+             (profile.stripe_account_status === 'restricted' ? 'Restrita' : 'Verificando...')))}
+          </p>
         </div>
       </div>
       <div className="mt-6">
@@ -206,68 +248,7 @@ const MeusDadosView = ({ profile, onUpdate }: { profile: Profile | null, onUpdat
   );
 };
 
-const MinhaPaginaView = ({ profile, paymentUrl, qrCode, onConnectStripe }: {
-  profile: Profile | null;
-  paymentUrl: string;
-  qrCode: string;
-  onConnectStripe: () => void;
-}) => {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(paymentUrl).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds
-    });
-  };
-
-  if (!profile) return <p>Carregando...</p>;
-
-  // Check if Stripe is connected (e.g., based on a field in the profile)
-  const isStripeConnected = !!profile.conta_bancaria; // Example check
-
-  return (
-    <div className="bg-white p-6 rounded-lg shadow-md">
-      <h2 className="text-xl font-semibold mb-4">Minha Página de Pagamento</h2>
-      {isStripeConnected ? (
-        <div className="space-y-4">
-          <p className="text-gray-700">Sua página pública para receber pagamentos:</p>
-          {paymentUrl ? (
-            <div className="flex items-center space-x-2 bg-gray-100 p-2 rounded">
-              <Link href={paymentUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline truncate flex-grow">
-                {paymentUrl}
-              </Link>
-              <button
-                onClick={handleCopy}
-                className="text-sm py-1 px-2 rounded bg-gray-200 hover:bg-gray-300"
-              >
-                {copied ? 'Copiado!' : 'Copiar'}
-              </button>
-            </div>
-          ) : <p className="text-gray-500">Gerando link...</p>}
-          {qrCode ? (
-            <div>
-              <p className="text-gray-700 mt-4">QR Code:</p>
-              <img src={qrCode} alt="QR Code Pagamento" className="mt-2 border" />
-            </div>
-          ) : <p className="text-gray-500">Gerando QR Code...</p>}
-        </div>
-      ) : (
-        <div className="text-center">
-          <p className="text-gray-700 mb-4">Conecte sua conta Stripe para ativar sua página de pagamento e começar a receber.</p>
-          <button
-            onClick={onConnectStripe}
-            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            Conectar com Stripe
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Main Dashboard Component
+// --- Main Dashboard Component (MotoristaPage) ---
 export default function MotoristaPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -286,14 +267,14 @@ export default function MotoristaPage() {
       setLoading(true);
       setError('');
       try {
-        // Buscar perfil do motorista
+        // Buscar perfil do motorista (ensure API returns stripe_account_status)
         const profileRes = await fetch('/api/motorista/profile');
         if (!profileRes.ok) {
           if (profileRes.status === 401) {
-            router.push('/motorista/login');
+            router.push('/motorista/login'); // Redirect to login if not authenticated
             return;
           }
-          throw new Error('Erro ao carregar perfil');
+          throw new Error(`Erro ao carregar perfil (${profileRes.status})`);
         }
         const profileData: Profile = await profileRes.json();
         setProfile(profileData);
@@ -301,7 +282,6 @@ export default function MotoristaPage() {
         // Only fetch other data if profile loaded
         if (profileData) {
           // Set payment URL based on profile (e.g., phone number)
-          // Ensure phone number is formatted correctly for a URL
           const formattedPhoneForUrl = profileData.celular.replace(/\D/g, ''); // Remove non-digits
           setPaymentUrl(`${window.location.origin}/${formattedPhoneForUrl}`); // Use origin for base URL
 
@@ -311,31 +291,39 @@ export default function MotoristaPage() {
             const paymentsData = await paymentsRes.json();
             setPayments(paymentsData.payments || []);
           } else {
-            console.error('Erro ao carregar pagamentos');
-            // Don't throw, just show empty list
+            console.error('Erro ao carregar pagamentos:', paymentsRes.statusText);
+            // Don't throw, just show empty list or a message
           }
 
-          // Fetch QR code if Stripe is connected
-          if (profileData.conta_bancaria) { // Example check for Stripe connection
-            const qrRes = await fetch(`/api/stripe/driver-qr-code?driverId=${profileData.id}`);
-            if (qrRes.ok) {
-              const qrData = await qrRes.json();
-              setQrCode(qrData.qrCode); // Assuming API returns { qrCode: 'data:image/png;base64,...' }
-            } else {
-              console.error('Erro ao buscar QR code');
+          // Fetch QR code only if Stripe account is likely active (e.g., verified)
+          // Adjust this condition based on your exact needs and profile data
+          if (profileData.stripe_account_id && profileData.stripe_account_status === 'verified') {
+            try {
+              const qrRes = await fetch(`/api/stripe/driver-qr-code?driverId=${profileData.id}`);
+              if (qrRes.ok) {
+                const qrData = await qrRes.json();
+                setQrCode(qrData.qrCode); // Assuming API returns { qrCode: 'data:image/png;base64,...' }
+              } else {
+                console.error('Erro ao buscar QR code:', qrRes.statusText);
+              }
+            } catch (qrError) {
+              console.error('Falha ao buscar QR code:', qrError);
             }
           }
         }
 
       } catch (err: any) {
-        console.error('Erro ao carregar dados:', err);
-        setError('Não foi possível carregar seus dados. Tente novamente mais tarde.');
+        console.error('Erro ao carregar dados do dashboard:', err);
+        setError(err.message || 'Não foi possível carregar seus dados. Tente novamente mais tarde.');
+        // If profile fetch failed, profile might be null
+        if (!profile) setProfile(null); // Ensure profile is null on error if it failed fetch
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
+    // Add dependency array - re-run if router changes
   }, [router]);
 
   // Function to handle profile updates
@@ -349,8 +337,12 @@ export default function MotoristaPage() {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Falha ao atualizar perfil.');
+      let errorMsg = 'Falha ao atualizar perfil.';
+      try {
+        const errorData = await response.json();
+        errorMsg = errorData.error || errorMsg;
+      } catch (e) { /* Ignore parsing error */ }
+      throw new Error(errorMsg);
     }
 
     const updatedProfile = await response.json();
@@ -359,12 +351,17 @@ export default function MotoristaPage() {
 
   // Function to initiate Stripe Connect onboarding
   const handleConnectStripe = async () => {
-    // Redirect user to backend endpoint that creates Stripe Connect onboarding link
     setLoading(true); // Show loading indicator
+    setError('');
     try {
         const response = await fetch('/api/stripe/connect-account');
         if (!response.ok) {
-            throw new Error('Falha ao iniciar conexão com Stripe.');
+            let errorMsg = 'Falha ao iniciar conexão com Stripe.';
+            try {
+              const errorData = await response.json();
+              errorMsg = errorData.error || errorMsg;
+            } catch(e) { /* Ignore */ }
+            throw new Error(errorMsg);
         }
         const { url } = await response.json();
         if (url) {
@@ -373,50 +370,62 @@ export default function MotoristaPage() {
             throw new Error('URL de conexão Stripe não recebida.');
         }
     } catch (err: any) {
+        console.error("Erro handleConnectStripe:", err);
         setError(err.message || 'Erro ao conectar com Stripe.');
         setLoading(false);
     }
     // No need to setLoading(false) on success, as page redirects
   };
 
+  // --- Render Logic ---
+
   if (loading && !profile) {
-    return <div className="p-6">Carregando dashboard...</div>; // Initial loading state
+    // Show loading only on initial load when profile is not yet fetched
+    return <div className="p-6 text-center">Carregando dashboard...</div>;
   }
 
-  if (error) {
+  if (error && !profile) {
+    // If profile fetch failed completely, show error and maybe a retry button
     return <div className="p-6 text-red-500">Erro: {error}</div>;
   }
 
   if (!profile) {
-    // This case might happen if fetch fails without throwing an error caught above
-    return <div className="p-6">Não foi possível carregar o perfil.</div>;
+    // This case might happen if fetch fails but error state wasn't set properly, or auth failed
+    // Router should have redirected in useEffect if 401, so this might indicate another issue
+    return <div className="p-6">Não foi possível carregar o perfil. Verifique se está logado.</div>;
   }
 
+  // Profile is loaded, render the dashboard structure
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Header - Assuming this is in a layout component, but adding simple nav buttons here for demo */}
+      {/* Header */}
       <header className="bg-white shadow-sm">
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <span className="text-xl font-bold text-gray-800">PIXTER</span>
           <div className="flex space-x-4">
-            {/* Example buttons to control activeView - replace with your actual header links */}
             <button onClick={() => setActiveView('overview')} className={`px-3 py-2 rounded-md text-sm font-medium ${activeView === 'overview' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-700 hover:bg-gray-50'}`}>Visão Geral</button>
             <button onClick={() => setActiveView('payments')} className={`px-3 py-2 rounded-md text-sm font-medium ${activeView === 'payments' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-700 hover:bg-gray-50'}`}>Pagamentos</button>
             <button onClick={() => setActiveView('profile')} className={`px-3 py-2 rounded-md text-sm font-medium ${activeView === 'profile' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-700 hover:bg-gray-50'}`}>Meus Dados</button>
             <button onClick={() => setActiveView('paymentPage')} className={`px-3 py-2 rounded-md text-sm font-medium ${activeView === 'paymentPage' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-700 hover:bg-gray-50'}`}>Minha Página</button>
-            {/* Add Sair button logic here */}
-            <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">Sair</button>
+            {/* Add Logout button logic here - e.g., call /api/auth/logout and redirect */}
+            <button onClick={async () => { await fetch('/api/auth/logout'); router.push('/motorista/login'); }} className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">Sair</button>
           </div>
         </nav>
       </header>
 
+      {/* Main Content Area */}
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-6">Olá, {profile.nome}!</h1>
+        {/* Show loading indicator covering content if loading state is true but profile exists (e.g., during actions) */}
+        {loading && profile && <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-50"><p>Processando...</p></div>}
+        {/* Show general error message if error state is set */}
+        {error && <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">Erro: {error}</div>}
+
+        <h1 className="text-2xl font-semibold text-gray-900 mb-6">Olá, {profile.nome || 'Motorista'}!</h1>
 
         {/* Conditional Rendering based on activeView */}
         {activeView === 'overview' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Show overview cards - these link to the detailed views */}
+            {/* Overview Cards */}
             <div onClick={() => setActiveView('payments')} className="cursor-pointer bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
               <h2 className="text-xl font-semibold mb-2">Pagamentos Recebidos</h2>
               <p className="text-gray-600">{payments.length === 0 ? 'Você ainda não recebeu nenhum pagamento.' : `${payments.length} pagamentos recebidos.`}</p>
@@ -427,7 +436,7 @@ export default function MotoristaPage() {
             </div>
             <div onClick={() => setActiveView('paymentPage')} className="cursor-pointer bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
               <h2 className="text-xl font-semibold mb-2">Minha Página de Pagamento</h2>
-              <p className="text-gray-600">Gerenciar sua página pública.</p>
+              <p className="text-gray-600">Gerenciar sua página pública e conexão Stripe.</p>
             </div>
           </div>
         )}
