@@ -61,10 +61,11 @@ export async function GET(request: Request) {
 
     const userId = session.user.id;
 
-    // 2. Get driver's Stripe Connect ID from their profile using Supabase client
+    // 2. Get driver's Stripe Account ID from their profile using Supabase client
+    // Use 'stripe_account_id' as the column name
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('stripe_connect_id')
+      .select('stripe_account_id') // Corrected column name
       .eq('id', userId)
       .eq('tipo', 'motorista') // Redundant check, but safe
       .single();
@@ -74,12 +75,12 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Erro ao buscar perfil do motorista.' }, { status: 500 });
     }
 
-    if (!profile?.stripe_connect_id) {
-      console.warn(`Stripe Connect ID not found for driver ${userId}`);
+    if (!profile?.stripe_account_id) { // Corrected property name
+      console.warn(`Stripe Account ID not found for driver ${userId}`);
       return NextResponse.json({ error: 'Conta Stripe não encontrada ou não conectada.' }, { status: 404 });
     }
 
-    const stripeConnectAccountId = profile.stripe_connect_id;
+    const stripeAccountId = profile.stripe_account_id; // Corrected variable name
 
     // 3. Fetch payments (PaymentIntents) from Stripe for the connected account
     const params: Stripe.PaymentIntentListParams = {
@@ -105,7 +106,7 @@ export async function GET(request: Request) {
 
     // Fetch Payment Intents made ON the connected account
     const paymentIntents = await stripe.paymentIntents.list(params, {
-      stripeAccount: stripeConnectAccountId,
+      stripeAccount: stripeAccountId, // Use the correct variable
     });
 
     // 4. Format the payments data
