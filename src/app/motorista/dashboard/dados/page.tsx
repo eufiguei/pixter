@@ -1,4 +1,3 @@
-
 // src/app/motorista/dashboard/dados/page.tsx
 
 'use client'
@@ -77,8 +76,16 @@ export default function MeusDadosPage() {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Falha ao atualizar perfil.');
       }
-      const updatedProfile = await response.json();
-      setProfile(updatedProfile);
+      // Assuming the PUT request returns the updated profile or success message
+      const result = await response.json();
+      if (result.success && result.profile) {
+          setProfile(result.profile); // Update profile state with returned data
+      } else {
+          // Re-fetch profile if PUT doesn't return full updated data
+          const profileRes = await fetch('/api/motorista/profile');
+          const profileData: Profile = await profileRes.json();
+          setProfile(profileData);
+      }
       setIsEditing(false);
     } catch (err: any) {
       setError(err.message || 'Falha ao atualizar perfil.');
@@ -106,7 +113,8 @@ export default function MeusDadosPage() {
     setLoadingStripeLink(true);
     setError('');
     try {
-      const res = await fetch('/api/stripe/create-login-link');
+      // Assuming the API route is correctly set up at /api/stripe/create-login-link
+      const res = await fetch('/api/stripe/create-login-link'); 
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || 'Falha ao obter link do Stripe.');
@@ -155,10 +163,11 @@ export default function MeusDadosPage() {
       <h1 className="text-2xl font-semibold mb-6">Meus Dados</h1>
       {error && <p className="text-red-500 mb-4">{error}</p>}
       
-      {/* Avatar Upload Section (Task 2.4) */}
+      {/* Avatar Upload Section (Task 2.4) - Added userId prop */}
       <div className="mb-6 flex flex-col items-center">
          <AvatarUpload 
-           currentAvatarUrl={profile.avatar_url}
+           userId={profile.id} // Pass the user ID from the profile
+           currentAvatarUrl={profile.avatar_url || undefined} // Pass undefined if null
            onUpdate={handleAvatarUpdate} 
          />
       </div>
