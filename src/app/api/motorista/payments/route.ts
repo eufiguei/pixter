@@ -5,7 +5,7 @@ import Stripe from 'stripe'; // Import Stripe namespace for types
 
 // Initialize Stripe client here, assuming STRIPE_SECRET_KEY is set in environment variables
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2023-10-16', // Use a recent stable API version
+  apiVersion: '2022-11-15', // Use a recent stable API version
 });
 
 // Helper function to format amount (cents to BRL string)
