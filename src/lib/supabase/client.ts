@@ -1,43 +1,26 @@
-/* 
-   src/lib/supabase/client.ts   
-   This file now primarily exports server-side clients and helper functions.
-   Client-side components should use `createClientComponentClient` from `@supabase/auth-helpers-nextjs`.
-   */
+/* ──────────────────────────────────────────────────────────────
+   src/lib/supabase/client.ts   ←  TypeScript (garante tree-shaking)
+   ────────────────────────────────────────────────────────────── */
 import { createClient, User } from '@supabase/supabase-js';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'; // Import for potential use in helpers
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'; // Import Auth Helper
 
-/* */
+/*──────────────── VARIÁVEIS DE AMBIENTE ───────────────*/
 const supabaseUrl        = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey    = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!; // Make sure this is defined in your server environment variables
 
-/* */
-// REMOVED conflicting manual client-side instance:
+/*──────────────── CLIENTES ────────────────────────────*/
+// Client-side instance (safe for browser) - REMOVED to use Auth Helpers
 // export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
 // Server-side instance (uses service key, ONLY for backend/API routes)
-// Ensure URL and Service Key are available in the server environment
 export const supabaseServer = createClient(supabaseUrl, supabaseServiceKey);
 export const supabaseAdmin  = supabaseServer;  // alias for Admin API
 
-// Helper function to get client-side instance (using Auth Helpers)
-// Components should ideally create their own instance, but this can be a utility
-export const getSupabaseClientComponentClient = () => {
-    // Ensure this is only called client-side
-    if (typeof window === 'undefined') {
-        throw new Error('Attempted to call getSupabaseClientComponentClient on the server.');
-    }
-    // Note: This creates a new instance each time it's called.
-    // For performance, components can create and memoize their own instance.
-    return createClientComponentClient();
-}
-
-
-/* */
-// Modified signUpWithEmail to use Auth Helpers client
+/*──────────────── EMAIL/PASSWORD SIGNUP (Client-Side) ──*/
+// Added back based on user request, with fix for unconfirmed emails
 export async function signUpWithEmail(email: string, password: string, optionsData?: { celular?: string; nome?: string; cpf?: string; tipo?: string }) {
-  // Use the Auth Helpers client-side instance
-  const supabase = createClientComponentClient(); // Create instance here
+  const supabase = createClientComponentClient(); // Use Auth Helper client
+  // Use the client-side supabase instance for sign-up initiated from the browser
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -73,14 +56,16 @@ export async function signUpWithEmail(email: string, password: string, optionsDa
   return { success: false, message: 'An unexpected error occurred during signup. Please try again.' };
 }
 
-/* */
-// Modified OTP helpers to use Auth Helpers client
-export const storeVerificationCode = (
+/*──────────────── OTP HELPERS (Client-Side) ─────────*/
+// These interact with your custom 'verification_codes' table.
+// Assumes called from client-side; RLS must be set up correctly.
+
+export const storeVerificationCode = async (
   phone: string,
   code: string,
   minutes = 10
 ) => {
-  const supabase = createClientComponentClient(); // Create instance here
+  const supabase = createClientComponentClient(); // Use Auth Helper client
   return supabase
     .from('verification_codes')
     .upsert({
@@ -89,10 +74,10 @@ export const storeVerificationCode = (
       created_at: new Date().toISOString(),
       expires_at: new Date(Date.now() + minutes * 60_000).toISOString()
     });
-}
+};
 
-export const verifyCode = (phone: string, code: string) => {
-  const supabase = createClientComponentClient(); // Create instance here
+export const verifyCode = async (phone: string, code: string) => {
+  const supabase = createClientComponentClient(); // Use Auth Helper client
   return supabase
     .from('verification_codes')
     .select('*')
@@ -100,21 +85,21 @@ export const verifyCode = (phone: string, code: string) => {
     .eq('code', code)
     .gt('expires_at', new Date().toISOString())
     .single();
-}
+};
 
-export const deleteVerificationCode = (phone: string) => {
-  const supabase = createClientComponentClient(); // Create instance here
+export const deleteVerificationCode = async (phone: string) => {
+  const supabase = createClientComponentClient(); // Use Auth Helper client
   return supabase.from('verification_codes').delete().eq('phone', phone);
-}
+};
 
-/* */
+/*──────────────── UTIL ────────────────────────────────*/
 export const formatPhoneNumber = (phone: string, code = '55') => {
   const p = phone.replace(/\D/g, '');
   return p.startsWith(code) ? `+${p}` : `+${code}${p}`; // Ensure E.164 format
 };
 
-/* */
-// createDriverWithPhone uses supabaseAdmin, no changes needed here
+/*──────────────── DRIVER via TELEFONE (Server-Side ONLY) ──*/
+// This function uses supabaseAdmin and should ONLY be called from secure server-side API routes.
 export const createDriverWithPhone = async (
   phone: string, // Expects E.164 format from formatPhoneNumber
   userData: Record<string, any>
@@ -205,37 +190,41 @@ export const createDriverWithPhone = async (
   return { data: { user: authData.user }, error: null };
 };
 
-/* */
-// Modified signInWithPhone to use Auth Helpers client
+/*──────────────── sign-in OTP via telefone (Client-Side) ──*/
+// Uses standard phone OTP sign-in.
 export const signInWithPhone = (phone: string) => {
-  const supabase = createClientComponentClient(); // Create instance here
+  const supabase = createClientComponentClient(); // Use Auth Helper client
   const formattedPhone = formatPhoneNumber(phone);
-  // Using standard phone OTP sign-in instead:
   return supabase.auth.signInWithOtp({ phone: formattedPhone });
 };
 
-/* */
-// Modified CRUD helpers to use Auth Helpers client
+/*──────────────── CRUD perfil / storage (Client-Side) ──*/
+// Use client instance assuming called from frontend where user is authenticated.
+// RLS policies MUST allow users to perform these actions on their own data.
+
 export const getProfile = (id: string) => {
-  const supabase = createClientComponentClient(); // Create instance here
-  return supabase.from('profiles').select('*').eq('id', id).single();
-}
+  const supabase = createClientComponentClient(); // Use Auth Helper client
+  return supabase.from("profiles").select("*").eq("id", id).single();
+};
 
 export const updateProfile = (id: string, updates: Record<string, any>) => {
-  const supabase = createClientComponentClient(); // Create instance here
-  return supabase // Use client instance if called from frontend where user is authenticated
+  const supabase = createClientComponentClient(); // Use Auth Helper client
+  return supabase
     .from('profiles')
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('id', id); // RLS policy `auth.uid() = id` will enforce security
-}
+};
 
 export const uploadImage = (bucket: string, path: string, file: File) => {
-  const supabase = createClientComponentClient(); // Create instance here
+  const supabase = createClientComponentClient(); // Use Auth Helper client
   return supabase.storage.from(bucket).upload(path, file, { upsert: true });
-}
+};
 
 export const getImageUrl = (bucket: string, path: string) => {
-  const supabase = createClientComponentClient(); // Create instance here
-  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
-}
+  const supabase = createClientComponentClient(); // Use Auth Helper client
+  // Note: getPublicUrl does not require the user to be authenticated if the bucket is public.
+  // If the bucket is private, you'd need different logic (e.g., createSignedUrl).
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  return data.publicUrl;
+};
 

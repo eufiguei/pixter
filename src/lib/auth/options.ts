@@ -2,8 +2,8 @@
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { supabaseServer } from "@/lib/supabase/client"; // Import server client
-import { formatPhoneNumber } from "@/lib/supabase/client"; // Import phone formatter
+// Import only server/admin clients and helpers needed server-side
+import { supabaseServer, supabaseAdmin, formatPhoneNumber } from "@/lib/supabase/client";
 
 /* ------------------------------------------------------------------
    NextAuth options - Defined and Exported Here
@@ -27,7 +27,7 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        // Use server client for sign-in to bypass RLS if needed, though client might work too
+        // Use server client for sign-in
         const { data, error } = await supabaseServer.auth.signInWithPassword({
           email: credentials.email,
           password: credentials.password,
@@ -37,6 +37,7 @@ export const authOptions: NextAuthOptions = {
           throw new Error(error?.message || "Email ou senha inválidos."); // Throw error for feedback
         }
 
+        // Fetch profile using server client
         const { data: profile } = await supabaseServer
           .from("profiles")
           .select("*")
@@ -49,12 +50,13 @@ export const authOptions: NextAuthOptions = {
             // throw new Error("Perfil não encontrado.");
         }
 
+        // Return user object for NextAuth session
         return {
           id: data.user.id,
           email: data.user.email,
           name: profile?.nome || data.user.email?.split("@")[0],
           image: profile?.avatar_url || null,
-          tipo: profile?.tipo || "cliente",
+          tipo: profile?.tipo || "cliente", // Default to client if not found
         };
       },
     }),
@@ -74,16 +76,17 @@ export const authOptions: NextAuthOptions = {
         const countryCode = credentials.countryCode || "55";
         const formattedPhone = formatPhoneNumber(credentials.phone, countryCode);
 
-        // 1. Verify OTP using Supabase Auth verifyOtp
-        // Use the server client instance (supabaseServer) for OTP verification
-        const { data: verifyData, error: verifyError } = await supabaseServer.auth.verifyOtp({
+        // 1. Verify OTP using Supabase Admin Auth verifyOtp
+        // This runs server-side, use admin client
+        const { data: verifyData, error: verifyError } = await supabaseAdmin.auth.admin.verifyOtp({
           phone: formattedPhone,
           token: credentials.code,
           type: "sms", // or "whatsapp" depending on what send-verification used
         });
 
+        // Note: admin.verifyOtp returns { user: User | null } directly
         if (verifyError || !verifyData.user) {
-          console.error(`Supabase verifyOtp error for ${formattedPhone}:`, verifyError?.message);
+          console.error(`Supabase Admin verifyOtp error for ${formattedPhone}:`, verifyError?.message);
           // Map common errors
           let errorMessage = "Código inválido ou expirado";
           if (verifyError?.message.includes("expired")) {
@@ -113,13 +116,12 @@ export const authOptions: NextAuthOptions = {
         }
 
         // 3. Return the user object for NextAuth session creation
-        // Supabase verifyOtp already confirmed the user exists in auth.users
         return {
           id: userId,
           email: verifyData.user.email, // May be null
           name: profileData?.nome || null,
           image: profileData?.avatar_url || null,
-          tipo: profileData?.tipo || "cliente",
+          tipo: profileData?.tipo || "cliente", // Default to client if not found
         };
       },
     }),
@@ -154,15 +156,15 @@ export const authOptions: NextAuthOptions = {
                     nome: user.name,
                     email: user.email,
                     avatar_url: user.image,
-                    tipo: 'cliente'
+                    tipo: 'cliente' // Default Google sign-ups to 'cliente'
                 });
             if (insertError) {
                 console.error("Error creating profile for Google user:", insertError.message);
                 return false;
             }
-            (user as any).tipo = 'cliente';
+            (user as any).tipo = 'cliente'; // Assign type for JWT callback
         } else {
-             (user as any).tipo = existingProfile.tipo ?? 'cliente';
+             (user as any).tipo = existingProfile.tipo ?? 'cliente'; // Assign existing type for JWT callback
         }
       }
       // For credential providers (Email/Pass, Phone/OTP), the 'tipo' should be set in the authorize function
@@ -171,6 +173,7 @@ export const authOptions: NextAuthOptions = {
     },
 
     async jwt({ token, user }) {
+      // Persist the user ID and type from the user object to the token
       if (user) {
         token.id = user.id;
         token.tipo = (user as any).tipo;
@@ -179,6 +182,7 @@ export const authOptions: NextAuthOptions = {
     },
 
     async session({ session, token }) {
+      // Add the user ID and type from the token to the session object
       if (session.user) {
         session.user.id = token.id as string;
         session.user.tipo = token.tipo as string;
@@ -188,10 +192,12 @@ export const authOptions: NextAuthOptions = {
   },
 
   pages: {
-    signIn: "/login",
-    newUser: "/cadastro",
+    signIn: "/login", // Custom login page
+    // error: '/auth/error', // Custom error page
+    // verifyRequest: '/auth/verify-request', // Custom email verification page
+    newUser: "/cadastro", // Redirect new users (e.g., after Google signup) here if needed
   },
 
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt" }, // Use JSON Web Tokens for session management
 };
 

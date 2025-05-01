@@ -1,218 +1,176 @@
 // src/components/NavBar.tsx
-"use client";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useSession, signOut } from "next-auth/react"; // Use actual session
-import { useState, useEffect } from "react";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"; // Import Auth Helpers client
+'use client';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import type { Session, User } from '@supabase/supabase-js';
+
+// Define a type for the user with the 'tipo' property
+interface UserWithTipo extends User {
+  user_metadata: {
+    tipo?: 'cliente' | 'motorista';
+    [key: string]: any;
+  };
+}
+
+// Define a type for the session with the extended user type
+interface SessionWithTipo extends Omit<Session, 'user'> {
+  user: UserWithTipo | null;
+}
 
 export default function NavBar() {
   const pathname = usePathname();
-  const { data: session, status } = useSession(); // Use actual session
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const router = useRouter();
+  const supabase = createClientComponentClient();
+  const [session, setSession] = useState<SessionWithTipo | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Fetch user role from profile if session exists but doesn't contain role
-  // Adjust this based on how role is stored (session or profile table)
   useEffect(() => {
-    async function fetchRole() {
-      const supabase = createClientComponentClient(); // Initialize client here
-      if (session?.user?.id && !session.user.tipo) { // Check if tipo is missing
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("tipo")
-          .eq("id", session.user.id)
-          .single();
-        if (data) {
-          setUserRole(data.tipo);
-        }
-      }
-    }
-    if (status === "authenticated") {
-        // Prioritize role from session if available
-        if (session.user.tipo) {
-            setUserRole(session.user.tipo);
+    const getSessionData = async () => {
+      setLoading(true);
+      const { data: { session }, error } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error('Error getting session:', error);
+        setSession(null);
+      } else if (session) {
+        // Check if user type ('tipo') is already in user_metadata
+        if (!session.user?.user_metadata?.tipo) {
+          // If not, fetch it from the profiles table
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('tipo')
+            .eq('id', session.user.id)
+            .single();
+
+          if (profileError) {
+            console.error('Error fetching profile type:', profileError);
+            // Keep the session but without the type
+            setSession(session as SessionWithTipo);
+          } else if (profile) {
+            // Add the type to the user metadata in the session state
+            const updatedUser = {
+              ...session.user,
+              user_metadata: {
+                ...session.user.user_metadata,
+                tipo: profile.tipo,
+              },
+            } as UserWithTipo;
+            setSession({ ...session, user: updatedUser });
+          } else {
+             // Profile not found, maybe still being created?
+             console.warn('Profile not found for user:', session.user.id);
+             setSession(session as SessionWithTipo);
+          }
         } else {
-            fetchRole();
+          // Type already exists in session
+          setSession(session as SessionWithTipo);
         }
-    } else {
-        setUserRole(null); // Clear role if not authenticated
-    }
-  }, [session, status]);
+      } else {
+        setSession(null);
+      }
+      setLoading(false);
+    };
 
-  const isLoading = status === "loading";
-  const isAuthenticated = status === "authenticated";
-  const role = session?.user?.tipo || userRole;
+    getSessionData();
 
-  const isPublicPaymentPage =
-    pathname?.includes("/pagamento/") &&
-    !pathname?.includes("/pagamento/sucesso") &&
-    !pathname?.includes("/pagamento/cancelado");
-  const isHomePage = pathname === "/";
-  const isDriverDashboard = pathname?.startsWith("/motorista/dashboard");
-  const isClientDashboard = pathname?.startsWith("/cliente/dashboard");
+    // Listen for auth changes
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth event:', event);
+      // Refetch session data on sign-in/sign-out to get updated profile info if needed
+      getSessionData();
+    });
 
-  const getLogoLink = () => {
-    if (isAuthenticated) {
-      if (role === "driver") return "/motorista/dashboard";
-      if (role === "client") return "/cliente/dashboard";
-    }
-    return "/"; // Default to homepage if not logged in or role unknown
-  };
+    // Cleanup listener on component unmount
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
+  }, [supabase]); // Re-run if supabase client changes (shouldn't happen often)
 
   const handleSignOut = async () => {
-    await signOut({ callbackUrl: "/" }); // Redirect to homepage after sign out
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('Error signing out:', error);
+    } else {
+      setSession(null); // Clear session state immediately
+      router.push('/'); // Redirect to home page after sign out
+      router.refresh(); // Refresh server components
+    }
   };
 
+  const isPublicPaymentPage = pathname?.includes('/pagamento/') && !pathname?.includes('/pagamento/sucesso') && !pathname?.includes('/pagamento/cancelado');
+  const isHomePage = pathname === '/';
+  const isDriverDashboard = pathname?.startsWith('/motorista/dashboard');
+  const isClientDashboard = pathname?.startsWith('/cliente/dashboard');
+
   const renderLinks = () => {
-    if (isLoading) {
-      return <div className="h-6 w-20 animate-pulse bg-gray-200 rounded"></div>; // Loading placeholder
+    if (loading) {
+      return <div className="text-sm font-medium">Carregando...</div>; // Show loading state
     }
 
-    let links: { href: string; label: string; onClick?: () => void }[] = [];
-
-    if (isAuthenticated) {
-      // --- Logged-in user ---
-      if (role === "driver") {
-        links = [
-          { href: "/motorista/dashboard", label: "Visão Geral" },
-          { href: "/motorista/dashboard/pagamentos", label: "Meus Pagamentos" },
-          { href: "/motorista/dashboard/dados", label: "Meus Dados" },
-          {
-            href: "/motorista/dashboard/pagina-pagamento",
-            label: "Minha Página Pagamento",
-          },
-          { href: "#", label: "Sair", onClick: handleSignOut },
-        ];
-      } else if (role === "client") {
-        links = [
-          { href: "/cliente/dashboard/historico", label: "Histórico" }, // New Client Routes
-          {
-            href: "/cliente/dashboard/metodos-pagamento",
-            label: "Métodos Pagamento",
-          },
-          { href: "/cliente/dashboard/perfil", label: "Meu Perfil" },
-          { href: "#", label: "Sair", onClick: handleSignOut },
-        ];
+    if (session && session.user) {
+      const userType = session.user.user_metadata?.tipo;
+      // Logged-in user
+      if (userType === 'motorista') {
+        // Logged-in Driver
+        return (
+          <nav className="flex items-center space-x-4">
+            <Link href="/motorista/dashboard" className={`text-sm font-medium ${pathname === '/motorista/dashboard' ? 'text-purple-600' : 'hover:text-purple-600'}`}>Visão Geral</Link>
+            <Link href="/motorista/dashboard/dados" className={`text-sm font-medium ${pathname === '/motorista/dashboard/dados' ? 'text-purple-600' : 'hover:text-purple-600'}`}>Meus Dados</Link>
+            <Link href="/motorista/dashboard/pagina-pagamento" className={`text-sm font-medium ${pathname === '/motorista/dashboard/pagina-pagamento' ? 'text-purple-600' : 'hover:text-purple-600'}`}>Minha Página Pagamento</Link>
+            <button onClick={handleSignOut} className="text-sm font-medium hover:text-purple-600">Sair</button>
+          </nav>
+        );
+      } else if (userType === 'cliente') {
+        // Logged-in Client
+        return (
+          <nav className="flex items-center space-x-4">
+            <Link href="/cliente/dashboard" className={`text-sm font-medium ${pathname === '/cliente/dashboard' ? 'text-purple-600' : 'hover:text-purple-600'}`}>Dashboard</Link>
+            {/* Add other client links here */}
+            <button onClick={handleSignOut} className="text-sm font-medium hover:text-purple-600">Sair</button>
+          </nav>
+        );
       } else {
-        // Role unknown or other type - default to basic logged-in state
-        links = [{ href: "#", label: "Sair", onClick: handleSignOut }];
+        // Logged-in user, but type is unknown/missing (show generic links or just logout)
+         console.warn('User logged in but type (tipo) is missing:', session.user.id);
+         return (
+           <nav className="flex items-center space-x-4">
+             <span className="text-sm font-medium text-gray-500">{session.user.email}</span>
+             <button onClick={handleSignOut} className="text-sm font-medium hover:text-purple-600">Sair</button>
+           </nav>
+         );
       }
     } else {
-      // --- Logged-out user ---
+      // Logged-out user
       if (isPublicPaymentPage) {
-        links = [
-          { href: "/login", label: "Entrar" },
-          { href: "/cadastro", label: "Criar Conta" },
-        ];
+        return (
+          <nav className="flex items-center space-x-4">
+            <Link href="/login" className="text-sm font-medium hover:text-purple-600">Entrar</Link>
+            <Link href="/cadastro" className="text-sm font-medium hover:text-purple-600">Criar Conta</Link>
+          </nav>
+        );
       } else {
-        // Homepage, login, signup, success pages etc.
-        links = [
-          { href: "/login", label: "Entrar" },
-          { href: "/cadastro", label: "Criar Conta" },
-          { href: "/motorista/login", label: "Motoristas" },
-        ];
+         // Default for home and other public pages (e.g., login, signup)
+         return (
+          <nav className="flex items-center space-x-4">
+            <Link href="/login" className="text-sm font-medium hover:text-purple-600">Entrar</Link>
+            <Link href="/cadastro" className="text-sm font-medium hover:text-purple-600">Criar Conta</Link>
+            <Link href="/motorista/login" className="text-sm font-medium hover:text-purple-600">Motoristas</Link>
+          </nav>
+        );
       }
     }
-
-    return (
-      <>
-        {/* Desktop Menu */}
-        <nav className="hidden md:flex items-center space-x-4">
-          {links.map((link) => (
-            <Link
-              key={link.label}
-              href={link.href}
-              onClick={link.onClick}
-              className={`text-sm font-medium transition-colors duration-150 ${pathname === link.href
-                  ? "text-purple-600"
-                  : "text-gray-700 hover:text-purple-600"
-                }`}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
-
-        {/* Mobile Menu Button */}
-        <div className="md:hidden">
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="text-gray-700 hover:text-purple-600 focus:outline-none"
-            aria-label="Toggle menu"
-          >
-            <svg
-              className="h-6 w-6"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              {isMobileMenuOpen ? (
-                <path d="M6 18L18 6M6 6l12 12" /> // Close icon
-              ) : (
-                <path d="M4 6h16M4 12h16M4 18h16" /> // Hamburger icon
-              )}
-            </svg>
-          </button>
-        </div>
-
-        {/* Mobile Menu Dropdown */}
-        {isMobileMenuOpen && (
-          <div className="absolute top-full left-0 right-0 bg-white shadow-lg md:hidden z-40">
-            <nav className="flex flex-col px-4 py-2 space-y-1">
-              {links.map((link) => (
-                <Link
-                  key={link.label}
-                  href={link.href}
-                  onClick={() => {
-                    if (link.onClick) link.onClick();
-                    setIsMobileMenuOpen(false); // Close menu on click
-                  }}
-                  className={`block px-3 py-2 rounded-md text-base font-medium transition-colors duration-150 ${pathname === link.href
-                      ? "text-purple-600 bg-purple-50"
-                      : "text-gray-700 hover:text-purple-600 hover:bg-gray-50"
-                    }`}
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </nav>
-          </div>
-        )}
-      </>
-    );
   };
 
   return (
-    // Added sticky, top-0, z-50 and adjusted padding
-    <header className="sticky top-0 z-50 flex items-center justify-between px-4 sm:px-6 py-3 bg-white shadow-md">
-      <Link href={getLogoLink()} className="flex items-center space-x-2">
-        {/* Consistent Logo */}
-        <svg
-          width="32"
-          height="32"
-          viewBox="0 0 24 24"
-          fill="#7c3aed"
-          className="flex-shrink-0"
-        >
+    <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 bg-white shadow-md">
+      <Link href="/" className="flex items-center space-x-2">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="#7c3aed">
           <rect width="24" height="24" rx="4" />
-          <text
-            x="12"
-            y="17"
-            fontSize="13"
-            textAnchor="middle"
-            fill="white"
-            fontWeight="bold"
-          >
-            P
-          </text>
+          <text x="12" y="17" fontSize="13" textAnchor="middle" fill="white" fontWeight="bold">P</text>
         </svg>
-        <span className="font-bold text-xl sm:text-2xl hidden sm:inline">
-          Pixter
-        </span>
+        <span className="font-bold text-2xl">Pixter</span>
       </Link>
 
       {renderLinks()}

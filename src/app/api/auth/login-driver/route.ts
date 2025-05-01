@@ -1,14 +1,17 @@
-// src/app/api/auth/login-driver/route.ts (Updated for Supabase Built-in OTP & Session)
+// src/app/api/auth/login-driver/route.ts (Updated for Supabase Built-in OTP & Auth Helpers)
 import { NextResponse } from "next/server";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
-import { formatPhoneNumber } from "@/lib/supabase/client"; // Keep phone formatter
-// Remove the problematic import
-// import { AuthOtpResponse } from "@supabase/supabase-js";
+import {
+  formatPhoneNumber,
+  supabaseAdmin // Use admin client for profile check for robustness
+} from "@/lib/supabase/client";
 
 export async function POST(request: Request) {
+  const cookieStore = cookies();
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+
   try {
-    const supabase = createRouteHandlerClient({ cookies }); // Initialize client here
     const body = await request.json();
     const { phone, code, countryCode = "55" } = body;
 
@@ -24,7 +27,6 @@ export async function POST(request: Request) {
     const formattedPhone = formatPhoneNumber(phone, countryCode);
 
     // 3. Verify OTP using Supabase Auth (Creates Session on Success)
-    // Remove the explicit type annotation to let TypeScript infer the correct type
     const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
       phone: formattedPhone,
       token: code,
@@ -56,7 +58,8 @@ export async function POST(request: Request) {
     // 4. Verification successful, user is logged in. Now check if they are a motorista.
     const userId = otpData.user.id;
 
-    const { data: profileData, error: profileError } = await supabase // Use the same client instance
+    // Use supabaseAdmin for a reliable check, bypassing RLS if needed
+    const { data: profileData, error: profileError } = await supabaseAdmin
       .from("profiles")
       .select("tipo") // Only select the type
       .eq("id", userId)
@@ -64,8 +67,8 @@ export async function POST(request: Request) {
 
     if (profileError) {
         console.error("Error fetching profile for user:", userId, profileError.message);
-        // Log out the user if profile check fails?
-        // await supabase.auth.signOut(); // Consider this for security
+        // Log out the user if profile check fails
+        await supabase.auth.signOut(); // Use the route handler client to sign out
         return NextResponse.json(
             { error: "Erro ao buscar perfil do motorista." },
             { status: 500 }
@@ -75,7 +78,7 @@ export async function POST(request: Request) {
     if (!profileData || profileData.tipo?.toLowerCase() !== "motorista") {
         console.log("User is not a motorista or profile missing. Type:", profileData?.tipo);
         // Log out the user as they shouldn't access the driver section
-        await supabase.auth.signOut(); // Sign out the session created by verifyOtp
+        await supabase.auth.signOut(); // Use the route handler client to sign out
         return NextResponse.json(
             { error: "Acesso não autorizado. Este usuário não é um motorista." },
             { status: 403 } // Forbidden
@@ -84,14 +87,14 @@ export async function POST(request: Request) {
 
     // 5. Success: Code verified, session created, user is a motorista
     console.log("Motorista login successful for user:", userId);
-    // The session is already handled by Supabase client-side after verifyOtp succeeds.
+    // The session is automatically handled by the Auth Helpers middleware and client.
     // Return success and potentially user info (but not the session object itself from here).
     return NextResponse.json({
       success: true,
       message: "Login realizado com sucesso!",
       userId: userId,
       // You might return minimal user details if needed by the frontend immediately
-      // user: { id: otpData.user.id, email: otpData.user.email, phone: otpData.user.phone }
+      // user: { id: otpData.user.id, email: otpData.user.email, phone: otpData.user.phone, tipo: 'motorista' }
     });
 
   } catch (error: any) {
@@ -102,3 +105,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

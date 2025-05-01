@@ -1,12 +1,14 @@
-// src/app/api/auth/send-verification/route.ts (Updated for Supabase Built-in OTP)
+// src/app/api/auth/send-verification/route.ts (Updated for Supabase Built-in OTP & Auth Helpers)
 import { NextResponse } from "next/server";
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
-import { formatPhoneNumber } from "@/lib/supabase/client"; // Keep phone formatter
+import { formatPhoneNumber } from "@/lib/supabase/client"; // Keep formatPhoneNumber helper
 
 export async function POST(request: Request) {
+  const cookieStore = cookies();
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+
   try {
-    const supabase = createRouteHandlerClient({ cookies }); // Initialize client here
     const body = await request.json();
     const { phone, countryCode = "55" } = body;
 
@@ -21,7 +23,7 @@ export async function POST(request: Request) {
     // 2. Format Phone Number
     const formattedPhone = formatPhoneNumber(phone, countryCode);
 
-    // 3. Use Supabase Auth to send OTP
+    // 3. Use Supabase Auth to send OTP via Route Handler Client
     // This tells Supabase to handle code generation and sending via its configured provider (e.g., Twilio)
     const { data, error } = await supabase.auth.signInWithOtp({
       phone: formattedPhone,
@@ -50,3 +52,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

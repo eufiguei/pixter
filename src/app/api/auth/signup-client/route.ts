@@ -1,184 +1,98 @@
-// src/app/api/auth/signup-client/route.ts
-import { NextResponse } from "next/server";
-import { headers } from "next/headers"; // Import headers to get IP
-import { supabaseServer as supabase } from "@/lib/supabase/server"; // Use server client for DB operations
+import { NextResponse } from 'next/server';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
 export async function POST(request: Request) {
+  const cookieStore = cookies();
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+
   try {
     const body = await request.json();
-    const { name, email, password, celular } = body; // Assuming celular might be passed
+    const { name, email, password, celular, cpf } = body; // Include optional fields
 
-    // Validação dos parâmetros
+    // Validation
     if (!name || !email || !password) {
       return NextResponse.json(
-        { error: "Nome, email e senha são obrigatórios" },
+        { error: 'Nome, email e senha são obrigatórios' },
         { status: 400 }
       );
     }
 
-    // 1. Get Client IP Address
-    const headersList = headers();
-    const ip_address = (headersList.get("x-forwarded-for") ?? "127.0.0.1").split(",")[0].trim();
+    // Prepare data for Supabase trigger (handle_new_user)
+    const profileData = {
+      nome: name,
+      tipo: 'cliente',
+      email: email, // Include email in profile data if needed
+      celular: celular, // Include optional fields
+      cpf: cpf
+    };
+    // Remove undefined fields
+    Object.keys(profileData).forEach(key => (profileData as any)[key] === undefined && delete (profileData as any)[key]);
 
-    // 2. Create user in Supabase Auth
-    // Use the *server* client here for security if preferred, or stick to client if RLS is robust
-    // Using server client for consistency with DB operations below
+
+    // Sign up the user using Auth Helpers
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: {
-          name,
-          tipo: "cliente",
-          celular: celular || null, // Include celular if provided
-        },
-      },
+        // Pass profile data to be used by the handle_new_user trigger in Supabase
+        data: profileData,
+        // Optional: Specify email redirect URL for confirmation link
+        // emailRedirectTo: `${request.url.origin}/auth/callback`,
+      }
     });
 
     if (authError) {
-      console.error("Erro ao criar usuário:", authError);
-      // Handle specific errors like "User already registered"
-      if (authError.message.includes("User already registered")) {
-         // Attempt to resend confirmation email as the user might be unconfirmed
-         const { error: resendError } = await supabase.auth.resend({ type: "signup", email });
+      console.error('Supabase signup error:', authError);
 
+      // Handle specific error: User already registered
+      if (authError.message.includes('User already registered')) {
+         // Attempt to resend the confirmation email
+         const { error: resendError } = await supabase.auth.resend({ type: 'signup', email });
          if (resendError) {
-            // If resend fails (e.g., user is already confirmed or other issue), return the generic "already registered" error.
-            console.error("Resend failed (user might already be confirmed):", resendError);
-            return NextResponse.json({ error: "Email já registrado." }, { status: 409 });
+            console.error('Error resending confirmation email:', resendError);
+            // Return the original error if resend fails
+            return NextResponse.json({ error: `Usuário já registrado. Falha ao reenviar email de confirmação: ${resendError.message}` }, { status: 400 });
          } else {
-            // If resend succeeds, inform the user to check their email.
-            return NextResponse.json(
-              { error: "Email já registrado, mas não confirmado. Verifique seu email (incluindo spam) para o link de confirmação.", needsConfirmation: true },
-              { status: 409 } // Conflict
-            );
+            // Inform user that email exists and confirmation was resent
+            return NextResponse.json({ success: false, message: 'Este email já está registrado. Um novo email de confirmação foi enviado (verifique sua caixa de spam).' }, { status: 200 }); // Use 200 OK but indicate action needed
          }
       }
+
+      // Return generic error for other signup issues
       return NextResponse.json(
-        { error: authError.message || "Erro ao criar usuário" },
+        { error: 'Erro ao criar usuário. Verifique os dados fornecidos.' },
         { status: 400 }
       );
     }
 
-    const userId = authData.user?.id;
-
-    if (!userId) {
-        // This case might happen if email confirmation is required and the user object isn't fully populated yet.
-        // The previous error handling for "User already registered" might cover this.
-        // If email confirmation is enabled, the user needs to confirm before profile creation/login.
-        console.log("Signup initiated, user needs to confirm email.");
-        return NextResponse.json({
-            success: true,
-            message: "Cadastro iniciado! Verifique seu email (incluindo spam) para confirmar.",
-            needsConfirmation: true
-        });
-        // Original code proceeded to create profile even without confirmed user, which might be undesirable.
-        // return NextResponse.json(
-        //   { error: "Falha ao obter ID do usuário após cadastro." },
-        //   { status: 500 }
-        // );
+    // Check if user object exists (successful signup initiation)
+    if (!authData.user) {
+        console.error('Supabase signup succeeded but returned no user object.');
+        return NextResponse.json(
+            { error: 'Falha inesperada ao iniciar o cadastro.' },
+            { status: 500 }
+        );
     }
 
-    // --- Profile Creation (Moved after confirmation or handled by trigger) ---
-    // It's generally better to handle profile creation via a database trigger (`handle_new_user`)
-    // listening to `auth.users` insertions. This ensures the profile exists even if this API call fails.
-    // If not using a trigger, uncomment and adapt the profile creation logic here.
-    /*
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .insert({
-        id: userId,
-        nome: name,
-        email,
-        celular: celular || null,
-        tipo: "cliente",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
+    // IMPORTANT: Profile creation is handled by the `handle_new_user` trigger in Supabase.
+    // Do NOT manually insert profile here.
+    // Do NOT sign in the user here; they must confirm their email first.
 
-    if (profileError) {
-      console.error("Erro ao criar perfil:", profileError);
-      // Consider cleanup: delete the auth user if profile creation fails?
-      // await supabase.auth.admin.deleteUser(userId);
-      return NextResponse.json(
-        { error: profileError.message || "Erro ao criar perfil" },
-        { status: 500 }
-      );
-    }
-    */
-
-    // 3. Check for recent temporary payments from this IP
-    let associatedChargeId: string | null = null;
-    try {
-        const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-        const { data: tempPayments, error: tempPaymentError } = await supabase
-            .from("temporary_payments")
-            .select("id, charge_id")
-            .eq("ip_address", ip_address)
-            .gte("created_at", fifteenMinutesAgo)
-            .order("created_at", { ascending: false })
-            .limit(1);
-
-        if (tempPaymentError) {
-            console.error("Error checking temporary payments:", tempPaymentError);
-            // Continue signup even if this check fails
-        } else if (tempPayments && tempPayments.length > 0) {
-            associatedChargeId = tempPayments[0].charge_id;
-            const tempPaymentId = tempPayments[0].id;
-            console.log(`Found recent payment ${associatedChargeId} for IP ${ip_address}. Associating with user ${userId}.`);
-
-            // 4. Associate payment with user (Example: update profile)
-            // Adjust this based on your actual schema (e.g., add to a payments array or related table)
-            const { error: updateProfileError } = await supabase
-                .from("profiles")
-                .update({ last_associated_charge_id: associatedChargeId }) // Example field
-                .eq("id", userId);
-
-            if (updateProfileError) {
-                console.error("Error associating charge ID with profile:", updateProfileError);
-            } else {
-                // 5. Delete the temporary payment entry after successful association
-                const { error: deleteError } = await supabase
-                    .from("temporary_payments")
-                    .delete()
-                    .eq("id", tempPaymentId);
-                if (deleteError) {
-                    console.error("Error deleting temporary payment entry:", deleteError);
-                }
-            }
-        }
-    } catch (e) {
-        console.error("Exception during temporary payment check:", e);
-    }
-
-    // --- Login (Removed - Supabase handles session after successful signUp confirmation) ---
-    // If email confirmation is required, the user logs in *after* clicking the confirmation link.
-    // If auto-confirmation is enabled, Supabase might return a session directly in the signUp response.
-    /*
-    const { data: sessionData, error: sessionError } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-
-    if (sessionError) {
-      console.error("Erro ao fazer login pós-cadastro:", sessionError);
-      // Don't fail the whole signup, maybe just return success without session
-    }
-    */
-
-    // Return success, indicating user needs to check email if confirmation is enabled
+    console.log('Client signup initiated successfully for:', email);
     return NextResponse.json({
       success: true,
-      message: "Cadastro iniciado! Verifique seu email (incluindo spam) para confirmar.",
-      userId: userId,
-      associatedChargeId: associatedChargeId, // Optionally inform client
-      needsConfirmation: true // Adjust based on your Supabase email settings
+      message: 'Cadastro iniciado! Verifique seu email (incluindo pasta de spam) para confirmar sua conta.',
+      // Do not return session data here
     });
 
   } catch (error: any) {
-    console.error("Erro geral no signup-client:", error);
+    console.error('Erro geral no signup-client:', error);
+    if (error instanceof SyntaxError) { // Handle invalid JSON
+        return NextResponse.json({ error: 'JSON inválido no corpo da requisição' }, { status: 400 });
+    }
     return NextResponse.json(
-      { error: error.message || "Erro interno no servidor" },
+      { error: error.message || 'Erro interno no servidor ao criar usuário' },
       { status: 500 }
     );
   }
