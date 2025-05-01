@@ -40,15 +40,15 @@ export async function GET(request: Request) {
   const endDate = searchParams.get('endDate'); // For Task 2.8
 
   try {
-    // 1. Verify authentication
-    const { data: { session }, error: sessionError } = await supabaseAuth.auth.getSession();
+    // 1. Verify authentication using getUser()
+    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
 
-    if (sessionError || !session) {
-      console.error('Authentication error:', sessionError);
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    if (userError || !user) {
+      console.error("Authentication error (getUser):", userError);
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    const userId = session.user.id;
+    const userId = user.id;
 
     // 2. Get driver's Stripe Account ID from their profile
     const { data: profile, error: profileError } = await supabase

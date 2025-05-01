@@ -22,9 +22,10 @@ export default function PaginaPagamento() {
   return (
     <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
+        {/* Removed duplicate header elements */}
+        {/* <h2 className="text-2xl font-bold mb-2">PayQuick</h2> */}
+        
         <div className="flex flex-col items-center mb-6">
-          <h2 className="text-2xl font-bold mb-2">PayQuick</h2>
-          
           {/* Avatar do motorista estilo Ghibli */}
           <div className="w-32 h-32 bg-gray-200 rounded-full overflow-hidden mb-4">
             <div className="w-full h-full flex items-center justify-center">

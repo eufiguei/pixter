@@ -48,5 +48,5 @@ This list outlines the tasks required to implement the requested changes for the
 
 **Skipped Tasks:**
 
-- **Post-Payment Flow (Task 3.5):** Implementation requires further clarification on how to temporarily store payment/receipt info linked to a phone number before account creation (e.g., storage duration, mechanism, security).
+- [X] **Post-Payment Flow (Task 3.5):** Implemented temporary storage (15 min) of Charge ID linked to client IP address after payment, with logic to associate it upon signup.
 - **Client Google Login (Task 3.6):** Fixing the "Access Denied" error likely requires checking OAuth credentials and redirect URIs in the Google Cloud Console and Supabase authentication settings, which I cannot access.
