@@ -1,10 +1,12 @@
-
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'; // Use auth helpers for server-side auth
 import { cookies } from 'next/headers'; // Import cookies
-import stripe from '@/lib/stripe/server'; // Import server-side Stripe instance
-import { supabaseServer as supabase } from '@/lib/supabase/server';
 import Stripe from 'stripe'; // Import Stripe namespace for types
+
+// Initialize Stripe client here, assuming STRIPE_SECRET_KEY is set in environment variables
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2023-10-16', // Use a recent stable API version
+});
 
 // Helper function to format amount (cents to BRL string)
 function formatAmountForDisplay(amount: number, currency: string): string {
@@ -34,57 +36,50 @@ function getPaymentMethodDetails(charge: any): string {
 }
 
 export async function GET(request: Request) {
-  const supabaseAuth = createRouteHandlerClient({ cookies }); // Use auth helpers
+  const cookieStore = cookies();
+  // Correctly instantiate the client with the cookies function
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
   const { searchParams } = new URL(request.url);
   const startDate = searchParams.get('startDate'); // For Task 2.8
   const endDate = searchParams.get('endDate'); // For Task 2.8
 
   try {
-    // 1. Verify authentication
-    const { data: { session }, error: sessionError } = await supabaseAuth.auth.getSession();
+    // 1. Verify authentication using the correctly instantiated client
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
     if (sessionError || !session) {
-      console.error('Authentication error:', sessionError);
+      // Log the specific error if available
+      console.error('Authentication error in /api/motorista/payments:', sessionError?.message || 'No active session');
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
     const userId = session.user.id;
 
-    // 2. Get driver's Stripe Account ID from their profile
+    // 2. Get driver's Stripe Account ID from their profile using the same supabase client
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('stripe_account_id')
+      .select('stripe_connect_id') // Changed from stripe_account_id based on previous fixes
       .eq('id', userId)
+      .eq('tipo', 'motorista') // Ensure it's a driver profile
       .single();
 
-    if (profileError || !profile?.stripe_account_id) {
-      console.error('Error fetching profile or Stripe account ID:', profileError);
+    if (profileError) {
+        console.error('Error fetching driver profile:', profileError);
+        return NextResponse.json({ error: 'Erro ao buscar perfil do motorista.' }, { status: 500 });
+    }
+    
+    if (!profile?.stripe_connect_id) {
+      console.warn(`Stripe Connect ID not found for driver ${userId}`);
       return NextResponse.json({ error: 'Conta Stripe não encontrada ou não conectada.' }, { status: 404 });
     }
 
-    const stripeAccountId = profile.stripe_account_id;
+    const stripeConnectAccountId = profile.stripe_connect_id;
 
-    // 3. Fetch payments (Charges or PaymentIntents) from Stripe for the connected account
-    // We'll fetch Charges associated with transfers to the connected account.
-    // Alternatively, list PaymentIntents with transfer_data.destination = stripeAccountId
-
-    // Option A: List Balance Transactions (often reliable for payouts/fees)
-    // const balanceTransactions = await stripe.balanceTransactions.list(
-    //   { limit: 100 }, // Add date filters later
-    //   { stripeAccount: stripeAccountId } // Perform request as the connected account
-    // ); 
-    // Filter for type 'charge' or 'payment', expand source object (Charge/PaymentIntent)
-
-    // Option B: List Charges directly (might miss some scenarios depending on integration)
-    // Need to know how charges are associated. Let's assume they are direct charges
-    // or destination charges where we can filter. Listing transfers might be better.
-
-    // Option C: List Payment Intents (Modern approach)
+    // 3. Fetch payments (PaymentIntents) from Stripe for the connected account
     const params: Stripe.PaymentIntentListParams = {
       limit: 100, // Adjust limit as needed
       expand: ['data.latest_charge'], // Expand charge object to get details
-      // Filter by destination account (requires specific integration setup)
-      // transfer_group: '...', // If using transfer_group
+      // We will fetch PaymentIntents created *on* the connected account
     };
 
     // Add date filtering (Task 2.8)
@@ -106,7 +101,7 @@ export async function GET(request: Request) {
 
     // Fetch Payment Intents made ON the connected account
     const paymentIntents = await stripe.paymentIntents.list(params, {
-      stripeAccount: stripeAccountId, // Make the request AS the connected account
+      stripeAccount: stripeConnectAccountId, // Make the request AS the connected account
     });
 
     // 4. Format the payments data for the frontend
@@ -130,7 +125,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ payments: formattedPayments });
 
   } catch (error: any) {
-    console.error('Error fetching Stripe payments:', error);
+    console.error('Error fetching Stripe payments for driver:', error);
+    // Check for specific Stripe errors (e.g., invalid account)
+    if (error.type === 'StripeInvalidRequestError' && error.message.includes('No such account')) {
+        return NextResponse.json({ error: 'Conta Stripe inválida ou não encontrada.' }, { status: 404 });
+    }
     return NextResponse.json(
       { error: error.message || 'Erro interno ao buscar pagamentos do Stripe' },
       { status: 500 }
