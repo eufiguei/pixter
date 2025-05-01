@@ -3,7 +3,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { supabase } from "@/lib/supabase/client"; // Use client-side Supabase
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import Image from "next/image";
 
 interface AvatarUploadProps {
@@ -23,6 +23,7 @@ export default function AvatarUpload({ currentAvatarUrl, onUpdate }: AvatarUploa
   };
 
   const uploadAvatar = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const supabase = createClientComponentClient(); // Initialize client here
     setError(null);
     setUploading(true);
 

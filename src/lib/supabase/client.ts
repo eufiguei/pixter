@@ -11,16 +11,6 @@ const supabaseUrl        = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey    = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!; // Make sure this is defined in your server environment variables
 
-// Add console logs for debugging environment variables on the client-side
-// Keeping these temporarily for verification
-if (typeof window !== "undefined") { // Only log in the browser
-  console.log("Supabase Client Env Check - URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
-  console.log("Supabase Client Env Check - Anon Key:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    console.error("CRITICAL: Supabase URL or Anon Key is missing in client-side environment variables!");
-  }
-}
-
 /* */
 // REMOVED conflicting manual client-side instance:
 // export const supabase = createClient(supabaseUrl, supabaseAnonKey);

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react"; // Use actual session
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase/client"; // Import Supabase client if needed for profile
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"; // Import Auth Helpers client
 
 export default function NavBar() {
   const pathname = usePathname();
@@ -16,6 +16,7 @@ export default function NavBar() {
   // Adjust this based on how role is stored (session or profile table)
   useEffect(() => {
     async function fetchRole() {
+      const supabase = createClientComponentClient(); // Initialize client here
       if (session?.user?.id && !session.user.tipo) { // Check if tipo is missing
         const { data, error } = await supabase
           .from("profiles")
