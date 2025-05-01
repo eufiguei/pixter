@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase/client';
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
 
 export async function POST(request: Request) {
   try {
+    const supabase = createRouteHandlerClient({ cookies }); // Initialize client here
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const userId = formData.get('userId') as string;

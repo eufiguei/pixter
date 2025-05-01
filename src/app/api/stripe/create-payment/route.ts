@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase/client';
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
 import stripe from '@/lib/stripe/server';
 
 export async function POST(request: Request) {
   try {
+    const supabase = createRouteHandlerClient({ cookies }); // Initialize client here
     const { driverId, userId, amount, tipAmount = 0 } = await request.json();
     
     // Buscar dados do motorista

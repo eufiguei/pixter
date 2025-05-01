@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase/client';
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
 import Stripe from 'stripe';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
@@ -8,6 +9,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 
 export async function GET(request: Request) {
   try {
+    const supabase = createRouteHandlerClient({ cookies }); // Initialize client here
     // Verificar autenticação
     const { data: { session } } = await supabase.auth.getSession();
     

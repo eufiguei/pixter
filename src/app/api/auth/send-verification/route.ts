@@ -1,12 +1,12 @@
 // src/app/api/auth/send-verification/route.ts (Updated for Supabase Built-in OTP)
 import { NextResponse } from "next/server";
-import {
-  formatPhoneNumber,
-  supabase // Use client instance, safe for this operation
-} from "@/lib/supabase/client";
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
+import { formatPhoneNumber } from "@/lib/supabase/client"; // Keep phone formatter
 
 export async function POST(request: Request) {
   try {
+    const supabase = createRouteHandlerClient({ cookies }); // Initialize client here
     const body = await request.json();
     const { phone, countryCode = "55" } = body;
 
