@@ -11,7 +11,8 @@ interface Payment {
   payment_method_details: object | null;
   status: string;
   created_at: string;
-  driver_profile: { nome: string | null } | null;
+  // Adjust driver_profile to expect an array from the join
+  driver_profile: Array<{ nome: string | null }> | null;
 }
 
 export async function GET(request: Request) {
@@ -40,7 +41,6 @@ export async function GET(request: Request) {
 
     // Fetch payments for the user using the route handler client
     // Included driver's name via join
-    // Removed the comment from the select string
     const { data: payments, error } = await supabase
       .from('pagamentos') // Ensure this table name is correct
       .select(`
@@ -65,7 +65,8 @@ export async function GET(request: Request) {
     }
 
     // Ensure payments is treated as an array of Payment objects
-    const typedPayments = payments as Payment[];
+    // Use 'unknown' first for safer type assertion as suggested by the error
+    const typedPayments = payments as unknown as Payment[];
 
     // Format the data for the response
     const formattedPayments = typedPayments.map(payment => ({
@@ -76,7 +77,8 @@ export async function GET(request: Request) {
       payment_method_details: payment.payment_method_details, // e.g., { brand: 'visa', last4: '4242' }
       status: payment.status,
       created_at: payment.created_at,
-      driver_name: payment.driver_profile?.nome || 'N/A' // Extract driver name
+      // Access the first element of the driver_profile array
+      driver_name: payment.driver_profile && payment.driver_profile.length > 0 ? payment.driver_profile[0]?.nome || 'N/A' : 'N/A'
     }));
 
     return NextResponse.json({ payments: formattedPayments });
