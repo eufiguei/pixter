@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { supabaseServer } from '@/lib/supabase/client'; // Use full-access server client
 import Stripe from 'stripe';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth/options";
@@ -34,8 +33,6 @@ function getPaymentMethodDetails(charge: any): string {
 }
 
 export async function GET(request: Request) {
-  const cookieStore = cookies();
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
   const { searchParams } = new URL(request.url);
   const startDate = searchParams.get('startDate');
   const endDate = searchParams.get('endDate');
@@ -48,9 +45,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    console.log("SESSION DATA:", session);
-
-    // Validate 'tipo'
     if (session.user.tipo !== 'motorista') {
       console.warn(`Access denied for user ID ${session.user.id}, tipo: ${session.user.tipo}`);
       return NextResponse.json({ error: 'Acesso negado para este tipo de usuário.' }, { status: 403 });
@@ -58,21 +52,17 @@ export async function GET(request: Request) {
 
     const userId = session.user.id;
 
-    // Fetch profile from Supabase
-    const { data: profile, error: profileError } = await supabase
+    // Use supabaseServer to bypass RLS and ensure consistent access
+    const { data: profile, error: profileError } = await supabaseServer
       .from('profiles')
       .select('stripe_account_id')
       .eq('id', userId)
       .eq('tipo', 'motorista')
       .single();
 
-    if (profileError) {
-      if (profileError.code === 'PGRST116') {
-        console.warn(`Driver profile not found for user ID: ${userId}`);
-        return NextResponse.json({ error: 'Perfil de motorista não encontrado.' }, { status: 404 });
-      }
-      console.error('Error fetching profile:', profileError);
-      return NextResponse.json({ error: 'Erro ao buscar perfil.' }, { status: 500 });
+    if (profileError || !profile) {
+      console.warn(`Driver profile not found for user ID: ${userId}`, profileError?.message);
+      return NextResponse.json({ error: 'Perfil de motorista não encontrado.' }, { status: 404 });
     }
 
     if (!profile?.stripe_account_id) {
