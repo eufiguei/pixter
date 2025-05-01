@@ -153,7 +153,7 @@ export default function DriverDashboardPage() {
       <div className="p-4 md:p-8 space-y-8">
         {/* Greeting */}
         <h1 className="text-3xl font-bold text-gray-800">
-          Olá, {profile?.nome || "Motorista"}!
+          Olá, {profile?.nome || "motorista"}!
         </h1>
 
         {/* Pagamentos Recebidos Section */}
