@@ -1,110 +1,128 @@
-'use client';
+// src/components/AvatarUpload.tsx
 
-import { useState } from 'react';
-import Image from 'next/image';
+"use client";
+
+import { useState, useCallback } from "react";
+import { supabase } from "@/lib/supabase/client"; // Use client-side Supabase
+import Image from "next/image";
 
 interface AvatarUploadProps {
-  driverId: string;
-  currentAvatarUrl?: string;
-  onAvatarChange: (url: string) => void;
+  currentAvatarUrl: string | null | undefined;
+  onUpdate: (newAvatarUrl: string) => void; // Callback to update parent state
 }
 
-export default function AvatarUpload({ 
-  driverId, 
-  currentAvatarUrl, 
-  onAvatarChange 
-}: AvatarUploadProps) {
-  const [isUploading, setIsUploading] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState(currentAvatarUrl || '');
-  const [error, setError] = useState('');
+export default function AvatarUpload({ currentAvatarUrl, onUpdate }: AvatarUploadProps) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(currentAvatarUrl || null);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validar tipo de arquivo
-    if (!file.type.startsWith('image/')) {
-      setError('Por favor, selecione uma imagem válida.');
-      return;
-    }
-
-    // Validar tamanho do arquivo (máximo 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('A imagem deve ter no máximo 5MB.');
-      return;
-    }
-
-    setError('');
-    setIsUploading(true);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('driverId', driverId);
-
-      const response = await fetch('/api/upload/avatar', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Erro ao fazer upload do avatar');
-      }
-
-      setAvatarUrl(result.avatarUrl);
-      onAvatarChange(result.avatarUrl);
-    } catch (error) {
-      console.error('Erro no upload:', error);
-      setError('Falha ao fazer upload da imagem. Tente novamente.');
-    } finally {
-      setIsUploading(false);
-    }
+  // Function to trigger file input click
+  const triggerFileInput = () => {
+    const fileInput = document.getElementById("avatarInput") as HTMLInputElement;
+    fileInput?.click();
   };
 
+  const uploadAvatar = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    setError(null);
+    setUploading(true);
+
+    try {
+      const files = event.target.files;
+      if (!files || files.length === 0) {
+        throw new Error("Você precisa selecionar uma imagem para fazer upload.");
+      }
+
+      const file = files[0];
+      const fileExt = file.name.split(".").pop();
+      const filePath = `${Math.random()}.${fileExt}`; // Simple unique path
+
+      // Get user ID for folder structure (optional but good practice)
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || "public";
+      const fullPath = `${userId}/${filePath}`;
+
+      // Upload file to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from("avatars") // Bucket name
+        .upload(fullPath, file);
+
+      if (uploadError) {
+        console.error("Upload Error:", uploadError);
+        throw new Error(`Falha no upload: ${uploadError.message}`);
+      }
+
+      // Get public URL for the uploaded file
+      const { data: urlData } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(fullPath);
+
+      if (!urlData?.publicUrl) {
+          throw new Error("Não foi possível obter a URL pública do avatar.");
+      }
+      
+      const newUrl = urlData.publicUrl;
+      setAvatarUrl(newUrl); // Update local preview
+
+      // Update the user's profile in the database
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ avatar_url: newUrl })
+        .eq("id", userId);
+
+      if (updateError) {
+        // Optionally try to delete the uploaded file if DB update fails
+        await supabase.storage.from("avatars").remove([fullPath]);
+        console.error("Profile Update Error:", updateError);
+        throw new Error(`Falha ao atualizar perfil: ${updateError.message}`);
+      }
+
+      // Call the onUpdate callback to inform the parent component
+      onUpdate(newUrl);
+
+    } catch (error: any) {
+      setError(error.message || "Ocorreu um erro desconhecido.");
+    } finally {
+      setUploading(false);
+    }
+  }, [onUpdate]);
+
   return (
-    <div className="flex flex-col items-center">
-      <div className="relative w-32 h-32 mb-4 rounded-full overflow-hidden border-2 border-gray-300">
+    <div className="flex flex-col items-center space-y-4">
+      <div className="relative w-32 h-32 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
         {avatarUrl ? (
           <Image
             src={avatarUrl}
-            alt="Avatar do motorista"
-            fill
-            style={{ objectFit: 'cover' }}
+            alt="Avatar"
+            layout="fill"
+            objectFit="cover"
+            onError={() => setAvatarUrl(null)} // Handle broken image links
           />
         ) : (
-          <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-500">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-16 w-16"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-              />
-            </svg>
-          </div>
-        ) }
+          <span className="text-gray-500">Sem foto</span>
+        )}
+        {/* Overlay for upload button */} 
+        <button
+          onClick={triggerFileInput}
+          disabled={uploading}
+          className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-40 flex items-center justify-center text-white opacity-0 hover:opacity-100 transition-opacity duration-200 cursor-pointer rounded-full"
+          aria-label="Mudar avatar"
+        >
+          {uploading ? "Enviando..." : "Mudar"}
+        </button>
       </div>
 
-      <label className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded cursor-pointer transition-colors">
-        {isUploading ? 'Enviando...' : 'Escolher Avatar'}
-        <input
-          type="file"
-          className="hidden"
-          accept="image/*"
-          onChange={handleFileChange}
-          disabled={isUploading}
-        />
-      </label>
+      {/* Hidden file input */} 
+      <input
+        type="file"
+        id="avatarInput"
+        accept="image/*"
+        onChange={uploadAvatar}
+        disabled={uploading}
+        style={{ display: "none" }}
+      />
 
-      {error && <p className="text-red-500 mt-2 text-sm">{error}</p>}
+      {error && <p className="text-red-500 text-sm">Erro: {error}</p>}
     </div>
   );
 }
+

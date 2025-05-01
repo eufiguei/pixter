@@ -6,7 +6,8 @@ import Image from 'next/image'
 export default function Home() {
   return (
     <main className="min-h-screen">
-      {/* Header */}
+      {/* Header Removed - Handled by Root Layout NavBar */}
+      {/* 
       <header className="bg-white py-4 shadow-sm">
         <div className="container mx-auto px-4 flex justify-between items-center">
           <div className="flex items-center">
@@ -23,6 +24,7 @@ export default function Home() {
           </nav>
         </div>
       </header>
+      */}
 
       {/* Hero Section */}
       <section className="py-16 md:py-24 bg-white">

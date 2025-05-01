@@ -43,7 +43,9 @@ export default function PaginaPagamento() {
             <input
               id="valor"
               name="valor"
-              type="number"
+              type="text"
+              inputMode="decimal"
+              pattern="[0-9]+([,\.][0-9]+)?"
               step="0.01"
               required
               value={valor}
@@ -102,7 +104,7 @@ export default function PaginaPagamento() {
               !valor || processando ? 'opacity-70 cursor-not-allowed' : 'hover:bg-blue-800'
             }`}
           >
-            {processando ? 'Processando...' : 'Pay with Pix, Apple Pay, or Card'}
+            {processando ? 'Processando...' : 'Pagar'}
           </button>
         </form>
         

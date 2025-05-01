@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { signIn } from "next-auth/react"; // Import signIn
+import OtpInput from '@/components/OtpInput'; import { signIn } from "next-auth/react"; // Re-add signIn import
 
 export default function MotoristaLogin() {
   const router = useRouter()
@@ -174,9 +174,12 @@ export default function MotoristaLogin() {
           ) : (
             <div className="space-y-4">
               <div>
-                <label htmlFor="codigo" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="codigo" className="block text-sm font-medium text-gray-700 mb-2 text-center">
                   Código de verificação
                 </label>
+                {/* Replace standard input with OtpInput component */}
+                <OtpInput length={6} onChange={setVerificationCode} />
+                {/* Old input removed:
                 <input
                   id="codigo"
                   name="codigo"
@@ -187,6 +190,7 @@ export default function MotoristaLogin() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="Digite o código recebido"
                 />
+                */}
               </div>
 
               <button
