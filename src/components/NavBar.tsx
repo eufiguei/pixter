@@ -16,7 +16,7 @@ export default function NavBar() {
   // Adjust this based on how role is stored (session or profile table)
   useEffect(() => {
     async function fetchRole() {
-      if (session?.user?.id && !session.user.role) { // Check if role is missing
+      if (session?.user?.id && !session.user.tipo) { // Check if tipo is missing
         const { data, error } = await supabase
           .from("profiles")
           .select("tipo")
@@ -29,8 +29,8 @@ export default function NavBar() {
     }
     if (status === "authenticated") {
         // Prioritize role from session if available
-        if (session.user.role) {
-            setUserRole(session.user.role);
+        if (session.user.tipo) {
+            setUserRole(session.user.tipo);
         } else {
             fetchRole();
         }
@@ -41,7 +41,7 @@ export default function NavBar() {
 
   const isLoading = status === "loading";
   const isAuthenticated = status === "authenticated";
-  const role = session?.user?.role || userRole;
+  const role = session?.user?.tipo || userRole;
 
   const isPublicPaymentPage =
     pathname?.includes("/pagamento/") &&
