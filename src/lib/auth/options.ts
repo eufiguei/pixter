@@ -2,7 +2,7 @@
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { supabase, supabaseServer } from "@/lib/supabase/client"; // Import both client and server
+import { supabaseServer } from "@/lib/supabase/client"; // Import server client
 import { formatPhoneNumber } from "@/lib/supabase/client"; // Import phone formatter
 
 /* ------------------------------------------------------------------
@@ -75,8 +75,8 @@ export const authOptions: NextAuthOptions = {
         const formattedPhone = formatPhoneNumber(credentials.phone, countryCode);
 
         // 1. Verify OTP using Supabase Auth verifyOtp
-        // Use the standard client instance (supabase) as it handles session context
-        const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+        // Use the server client instance (supabaseServer) for OTP verification
+        const { data: verifyData, error: verifyError } = await supabaseServer.auth.verifyOtp({
           phone: formattedPhone,
           token: credentials.code,
           type: "sms", // or "whatsapp" depending on what send-verification used

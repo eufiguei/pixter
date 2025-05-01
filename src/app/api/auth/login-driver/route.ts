@@ -1,15 +1,14 @@
 // src/app/api/auth/login-driver/route.ts (Updated for Supabase Built-in OTP & Session)
 import { NextResponse } from "next/server";
-import {
-  formatPhoneNumber,
-  supabase, // Use client instance for verifyOtp
-  supabaseServer // Use server client for profile check
-} from "@/lib/supabase/client";
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
+import { formatPhoneNumber } from "@/lib/supabase/client"; // Keep phone formatter
 // Remove the problematic import
 // import { AuthOtpResponse } from "@supabase/supabase-js";
 
 export async function POST(request: Request) {
   try {
+    const supabase = createRouteHandlerClient({ cookies }); // Initialize client here
     const body = await request.json();
     const { phone, code, countryCode = "55" } = body;
 
@@ -57,7 +56,7 @@ export async function POST(request: Request) {
     // 4. Verification successful, user is logged in. Now check if they are a motorista.
     const userId = otpData.user.id;
 
-    const { data: profileData, error: profileError } = await supabaseServer // Use server client for secure profile access
+    const { data: profileData, error: profileError } = await supabase // Use the same client instance
       .from("profiles")
       .select("tipo") // Only select the type
       .eq("id", userId)
