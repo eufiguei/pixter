@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'; // Use auth helpers for server-side auth
-import { cookies } from 'next/headers'; // Import cookies
-import Stripe from 'stripe'; // Import Stripe namespace for types
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import Stripe from 'stripe';
+import { getServerSession } from "next-auth/next"; // Import getServerSession
+import { authOptions } from "@/lib/auth/options"; // Import your NextAuth options
 
-// Initialize Stripe client here, assuming STRIPE_SECRET_KEY is set in environment variables
+// Initialize Stripe client
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2022-11-15', // Use a recent stable API version
+  apiVersion: '2022-11-15',
 });
 
 // Helper function to format amount (cents to BRL string)
@@ -29,7 +31,6 @@ function getPaymentMethodDetails(charge: any): string {
       return 'Pix';
     case 'boleto':
       return 'Boleto';
-    // Add other types as needed (e.g., Apple Pay might show as 'card')
     default:
       return details.type;
   }
@@ -37,37 +38,42 @@ function getPaymentMethodDetails(charge: any): string {
 
 export async function GET(request: Request) {
   const cookieStore = cookies();
-  // Correctly instantiate the client with the cookies function
+  // Instantiate Supabase client for DB access
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
   const { searchParams } = new URL(request.url);
-  const startDate = searchParams.get('startDate'); // For Task 2.8
-  const endDate = searchParams.get('endDate'); // For Task 2.8
+  const startDate = searchParams.get('startDate');
+  const endDate = searchParams.get('endDate');
 
   try {
-    // 1. Verify authentication using the correctly instantiated client
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    // 1. Verify authentication using NextAuth session
+    const session = await getServerSession(authOptions);
 
-    if (sessionError || !session) {
-      // Log the specific error if available
-      console.error('Authentication error in /api/motorista/payments:', sessionError?.message || 'No active session');
+    if (!session || !session.user?.id) {
+      console.error('Authentication error in /api/motorista/payments: No active NextAuth session or user ID found.');
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+
+    // Check if user type is motorista (optional but good practice)
+    if (session.user.tipo !== 'motorista') {
+        console.warn(`User ${session.user.id} with type ${session.user.tipo} attempted to access driver payments.`);
+        return NextResponse.json({ error: 'Acesso negado para este tipo de usuário.' }, { status: 403 });
     }
 
     const userId = session.user.id;
 
-    // 2. Get driver's Stripe Account ID from their profile using the same supabase client
+    // 2. Get driver's Stripe Connect ID from their profile using Supabase client
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('stripe_connect_id') // Changed from stripe_account_id based on previous fixes
+      .select('stripe_connect_id')
       .eq('id', userId)
-      .eq('tipo', 'motorista') // Ensure it's a driver profile
+      .eq('tipo', 'motorista') // Redundant check, but safe
       .single();
 
     if (profileError) {
         console.error('Error fetching driver profile:', profileError);
         return NextResponse.json({ error: 'Erro ao buscar perfil do motorista.' }, { status: 500 });
     }
-    
+
     if (!profile?.stripe_connect_id) {
       console.warn(`Stripe Connect ID not found for driver ${userId}`);
       return NextResponse.json({ error: 'Conta Stripe não encontrada ou não conectada.' }, { status: 404 });
@@ -77,19 +83,17 @@ export async function GET(request: Request) {
 
     // 3. Fetch payments (PaymentIntents) from Stripe for the connected account
     const params: Stripe.PaymentIntentListParams = {
-      limit: 100, // Adjust limit as needed
-      expand: ['data.latest_charge'], // Expand charge object to get details
-      // We will fetch PaymentIntents created *on* the connected account
+      limit: 100,
+      expand: ['data.latest_charge'],
     };
 
-    // Add date filtering (Task 2.8)
+    // Add date filtering
     let createdFilter: Stripe.RangeQueryParam | undefined = undefined;
     if (startDate) {
       if (!createdFilter) createdFilter = {};
       createdFilter.gte = Math.floor(new Date(startDate).getTime() / 1000);
     }
     if (endDate) {
-      // Add 1 day to endDate to include the whole day
       const endOfDay = new Date(endDate);
       endOfDay.setDate(endOfDay.getDate() + 1);
       if (!createdFilter) createdFilter = {};
@@ -101,23 +105,21 @@ export async function GET(request: Request) {
 
     // Fetch Payment Intents made ON the connected account
     const paymentIntents = await stripe.paymentIntents.list(params, {
-      stripeAccount: stripeConnectAccountId, // Make the request AS the connected account
+      stripeAccount: stripeConnectAccountId,
     });
 
-    // 4. Format the payments data for the frontend
+    // 4. Format the payments data
     const formattedPayments = paymentIntents.data
-      .filter(pi => pi.status === 'succeeded' && pi.latest_charge) // Ensure payment succeeded and charge exists
+      .filter(pi => pi.status === 'succeeded' && pi.latest_charge)
       .map(pi => {
-        const charge = pi.latest_charge as Stripe.Charge; // Type assertion
+        const charge = pi.latest_charge as Stripe.Charge;
         return {
           id: pi.id,
-          data: new Date(pi.created * 1000).toISOString(), // Use PI creation time
-          valor: formatAmountForDisplay(pi.amount_received, pi.currency), // Amount received by connected account
-          valor_original: formatAmountForDisplay(pi.amount, pi.currency), // Original amount before fees
+          data: new Date(pi.created * 1000).toISOString(),
+          valor: formatAmountForDisplay(pi.amount_received, pi.currency),
+          valor_original: formatAmountForDisplay(pi.amount, pi.currency),
           metodo: getPaymentMethodDetails(charge),
-          // cliente: charge.billing_details?.name || charge.billing_details?.email || 'Cliente Anônimo',
-          // Recibo link needs to be generated - placeholder for now (Task 3.4)
-          recibo_id: charge.id, // Use charge ID for potential receipt lookup
+          recibo_id: charge.id,
           status: pi.status,
         };
       });
@@ -126,7 +128,6 @@ export async function GET(request: Request) {
 
   } catch (error: any) {
     console.error('Error fetching Stripe payments for driver:', error);
-    // Check for specific Stripe errors (e.g., invalid account)
     if (error.type === 'StripeInvalidRequestError' && error.message.includes('No such account')) {
         return NextResponse.json({ error: 'Conta Stripe inválida ou não encontrada.' }, { status: 404 });
     }
