@@ -7,7 +7,7 @@ import { authOptions } from "@/lib/auth/options"; // Import your NextAuth option
 
 // Initialize Stripe client
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2023-10-16',
+  apiVersion: '2022-11-15',
 });
 
 // Helper function to format amount (cents to BRL string)
