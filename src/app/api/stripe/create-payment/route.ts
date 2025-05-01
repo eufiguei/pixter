@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/client'; // Use admin client for s
 import Stripe from 'stripe';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2023-10-16', // Use a recent stable API version
+  apiVersion: '2022-11-15', // Use a recent stable API version
 });
 
 const MIN_AMOUNT_BRL = 1.00; // Minimum payment amount in BRL
