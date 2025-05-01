@@ -2,15 +2,13 @@ import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import Stripe from 'stripe';
-import { getServerSession } from "next-auth/next"; // Import getServerSession
-import { authOptions } from "@/lib/auth/options"; // Import your NextAuth options
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth/options";
 
-// Initialize Stripe client
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2022-11-15',
 });
 
-// Helper function to format amount (cents to BRL string)
 function formatAmountForDisplay(amount: number, currency: string): string {
   const numberFormat = new Intl.NumberFormat('pt-BR', {
     style: 'currency',
@@ -20,7 +18,6 @@ function formatAmountForDisplay(amount: number, currency: string): string {
   return numberFormat.format(amount / 100);
 }
 
-// Helper function to get payment method details
 function getPaymentMethodDetails(charge: any): string {
   if (!charge?.payment_method_details) return 'Desconhecido';
   const details = charge.payment_method_details;
@@ -38,65 +35,59 @@ function getPaymentMethodDetails(charge: any): string {
 
 export async function GET(request: Request) {
   const cookieStore = cookies();
-  // Instantiate Supabase client for DB access
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
   const { searchParams } = new URL(request.url);
   const startDate = searchParams.get('startDate');
   const endDate = searchParams.get('endDate');
 
   try {
-    // 1. Verify authentication using NextAuth session
     const session = await getServerSession(authOptions);
 
     if (!session || !session.user?.id) {
-      console.error('Authentication error in /api/motorista/payments: No active NextAuth session or user ID found.');
+      console.error('No session or user ID found.');
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    // Check if user type is motorista (optional but good practice)
+    console.log("SESSION DATA:", session);
+
+    // Validate 'tipo'
     if (session.user.tipo !== 'motorista') {
-        console.warn(`User ${session.user.id} with type ${session.user.tipo} attempted to access driver payments.`);
-        return NextResponse.json({ error: 'Acesso negado para este tipo de usuário.' }, { status: 403 });
+      console.warn(`Access denied for user ID ${session.user.id}, tipo: ${session.user.tipo}`);
+      return NextResponse.json({ error: 'Acesso negado para este tipo de usuário.' }, { status: 403 });
     }
 
     const userId = session.user.id;
 
-    // 2. Get driver's Stripe Account ID from their profile using Supabase client
+    // Fetch profile from Supabase
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('stripe_account_id') // Corrected column name
+      .select('stripe_account_id')
       .eq('id', userId)
-      .eq('tipo', 'motorista') // Ensure it's a driver profile
+      .eq('tipo', 'motorista')
       .single();
 
-    // Handle profile query errors
     if (profileError) {
-        // Specifically check for the '0 rows returned' error
-        if (profileError.code === 'PGRST116') {
-            console.warn(`Driver profile not found for user ID: ${userId}`);
-            return NextResponse.json({ error: 'Perfil de motorista não encontrado ou não configurado corretamente.' }, { status: 404 });
-        }
-        // Handle other potential database errors
-        console.error('Error fetching driver profile:', profileError);
-        return NextResponse.json({ error: 'Erro ao buscar perfil do motorista.' }, { status: 500 });
+      if (profileError.code === 'PGRST116') {
+        console.warn(`Driver profile not found for user ID: ${userId}`);
+        return NextResponse.json({ error: 'Perfil de motorista não encontrado.' }, { status: 404 });
+      }
+      console.error('Error fetching profile:', profileError);
+      return NextResponse.json({ error: 'Erro ao buscar perfil.' }, { status: 500 });
     }
 
-    // Check if stripe_account_id exists on the found profile
     if (!profile?.stripe_account_id) {
-      console.warn(`Stripe Account ID not found on profile for driver ${userId}`);
-      // Even if profile exists, if stripe_account_id is missing, treat as not configured
-      return NextResponse.json({ error: 'Conta Stripe não encontrada ou não conectada ao perfil.' }, { status: 404 });
+      console.warn(`No Stripe account linked for user ID: ${userId}`);
+      return NextResponse.json({ error: 'Conta Stripe não vinculada.' }, { status: 404 });
     }
 
     const stripeAccountId = profile.stripe_account_id;
 
-    // 3. Fetch payments (PaymentIntents) from Stripe for the connected account
+    // Prepare Stripe filters
     const params: Stripe.PaymentIntentListParams = {
       limit: 100,
       expand: ['data.latest_charge'],
     };
 
-    // Add date filtering
     let createdFilter: Stripe.RangeQueryParam | undefined = undefined;
     if (startDate) {
       if (!createdFilter) createdFilter = {};
@@ -108,16 +99,12 @@ export async function GET(request: Request) {
       if (!createdFilter) createdFilter = {};
       createdFilter.lt = Math.floor(endOfDay.getTime() / 1000);
     }
-    if (createdFilter) {
-        params.created = createdFilter;
-    }
+    if (createdFilter) params.created = createdFilter;
 
-    // Fetch Payment Intents made ON the connected account
     const paymentIntents = await stripe.paymentIntents.list(params, {
       stripeAccount: stripeAccountId,
     });
 
-    // 4. Format the payments data
     const formattedPayments = paymentIntents.data
       .filter(pi => pi.status === 'succeeded' && pi.latest_charge)
       .map(pi => {
@@ -136,14 +123,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ payments: formattedPayments });
 
   } catch (error: any) {
-    console.error('Error fetching Stripe payments for driver:', error);
+    console.error('Unhandled error:', error);
     if (error.type === 'StripeInvalidRequestError' && error.message.includes('No such account')) {
-        return NextResponse.json({ error: 'Conta Stripe inválida ou não encontrada.' }, { status: 404 });
+      return NextResponse.json({ error: 'Conta Stripe inválida.' }, { status: 404 });
     }
-    return NextResponse.json(
-      { error: error.message || 'Erro interno ao buscar pagamentos do Stripe' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message || 'Erro interno.' }, { status: 500 });
   }
 }
-
