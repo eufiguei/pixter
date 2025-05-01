@@ -76,17 +76,18 @@ export const authOptions: NextAuthOptions = {
         const countryCode = credentials.countryCode || "55";
         const formattedPhone = formatPhoneNumber(credentials.phone, countryCode);
 
-        // 1. Verify OTP using Supabase Admin Auth verifyOtp
-        // This runs server-side, use admin client
-        const { data: verifyData, error: verifyError } = await supabaseAdmin.auth.admin.verifyOtp({
+        // 1. Verify OTP using Supabase Auth verifyOtp
+        // Use the server client instance (supabaseServer)
+        // This assumes supabaseServer is a correctly configured Supabase client instance
+        const { data: verifyData, error: verifyError } = await supabaseServer.auth.verifyOtp({
           phone: formattedPhone,
           token: credentials.code,
           type: "sms", // or "whatsapp" depending on what send-verification used
         });
 
-        // Note: admin.verifyOtp returns { user: User | null } directly
-        if (verifyError || !verifyData.user) {
-          console.error(`Supabase Admin verifyOtp error for ${formattedPhone}:`, verifyError?.message);
+        // verifyOtp returns { data: { user, session }, error }
+        if (verifyError || !verifyData?.user) {
+          console.error(`Supabase verifyOtp error for ${formattedPhone}:`, verifyError?.message);
           // Map common errors
           let errorMessage = "Código inválido ou expirado";
           if (verifyError?.message.includes("expired")) {
