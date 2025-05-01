@@ -2,11 +2,23 @@ import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 
-// Note: Stripe is not used in this GET route, so it's removed for clarity.
+// Define an interface for the expected payment structure after the query
+interface Payment {
+  id: string;
+  amount: number;
+  tip_amount: number | null;
+  total_amount: number;
+  payment_method_details: object | null;
+  status: string;
+  created_at: string;
+  driver_profile: { nome: string | null } | null;
+}
 
 export async function GET(request: Request) {
   const cookieStore = cookies();
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+  // Define the type for the Supabase client with the database schema
+  // Replace 'any' with your actual Database type if generated
+  const supabase = createRouteHandlerClient<any>({ cookies: () => cookieStore });
 
   try {
     // Check authentication
@@ -28,6 +40,7 @@ export async function GET(request: Request) {
 
     // Fetch payments for the user using the route handler client
     // Included driver's name via join
+    // Removed the comment from the select string
     const { data: payments, error } = await supabase
       .from('pagamentos') // Ensure this table name is correct
       .select(`
@@ -35,10 +48,10 @@ export async function GET(request: Request) {
         amount,
         tip_amount,
         total_amount,
-        payment_method_details, // Assuming this column stores card brand/last4
+        payment_method_details,
         status,
         created_at,
-        driver_profile:driver_id ( nome ) 
+        driver_profile:driver_id ( nome )
       `)
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
@@ -51,8 +64,11 @@ export async function GET(request: Request) {
       );
     }
 
+    // Ensure payments is treated as an array of Payment objects
+    const typedPayments = payments as Payment[];
+
     // Format the data for the response
-    const formattedPayments = payments.map(payment => ({
+    const formattedPayments = typedPayments.map(payment => ({
       id: payment.id,
       amount: payment.amount / 100, // Assuming amount is in cents
       tip_amount: (payment.tip_amount || 0) / 100, // Assuming tip is in cents
