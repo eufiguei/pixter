@@ -1,9 +1,9 @@
-/* ──────────────────────────────────────────────────────────────
-   src/lib/supabase/client.ts   ←  TypeScript (garante tree-shaking)
-   ────────────────────────────────────────────────────────────── */
-import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
+/* 
+   src/lib/supabase/client.ts   
+   */
+import { createClient, User } from '@supabase/supabase-js';
 
-/*──────────────── VARIÁVEIS DE AMBIENTE ───────────────*/
+/* */
 const supabaseUrl        = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey    = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!; // Make sure this is defined in your server environment variables
@@ -17,48 +17,22 @@ if (typeof window !== "undefined") { // Only log in the browser
   }
 }
 
-/*──────────────── CLIENTES ────────────────────────────*/
-
-// Singleton pattern for client-side Supabase instance
-let supabaseClientInstance: SupabaseClient | null = null;
-
-const createSupabaseClient = () => {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    // This check should ideally be caught by the logs above, but added for safety
-    console.error("Supabase URL or Anon Key is missing during client creation!");
-    // Return a dummy client or throw an error, depending on desired handling
-    // Throwing error might be better to halt execution if config is missing
-    throw new Error("Supabase URL or Anon Key is missing.");
+/* */
+// Client-side instance (safe for browser)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  // Explicitly passing options object as an alternative initialization
+  auth: {
+    // Using default auth options
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
   }
-  return createClient(supabaseUrl, supabaseAnonKey);
-};
-
-// Client-side instance (safe for browser) - Singleton
-export const supabase = (() => {
-  if (typeof window === 'undefined') {
-    // Return a server-side client or null during SSR/build time if needed,
-    // but generally, client-side logic shouldn't run on the server.
-    // For safety, return a new instance (or null) to avoid sharing client instance on server.
-    // However, this export should primarily be used in client components.
-    // Returning null might be safer if it's accidentally imported on server.
-    // console.warn("Attempted to get client-side Supabase instance on the server.");
-    // return null; // Or handle differently based on server-side needs
-    // Let's return a new instance for now, assuming it might be needed server-side temporarily
-    // but ideally refactor server-side code to use supabaseServer.
-    return createSupabaseClient();
-  }
-  if (!supabaseClientInstance) {
-    supabaseClientInstance = createSupabaseClient();
-  }
-  return supabaseClientInstance;
-})();
-
+});
 // Server-side instance (uses service key, ONLY for backend/API routes)
-// No need for singleton here as serverless functions are stateless
 export const supabaseServer = createClient(supabaseUrl, supabaseServiceKey);
 export const supabaseAdmin  = supabaseServer;  // alias for Admin API
 
-/*──────────────── EMAIL/PASSWORD SIGNUP (Client-Side) ──*/
+/* */
 // Added back based on user request, with fix for unconfirmed emails
 export async function signUpWithEmail(email: string, password: string, optionsData?: { celular?: string; nome?: string; cpf?: string; tipo?: string }) {
   // Use the client-side supabase instance for sign-up initiated from the browser
@@ -97,7 +71,7 @@ export async function signUpWithEmail(email: string, password: string, optionsDa
   return { success: false, message: 'An unexpected error occurred during signup. Please try again.' };
 }
 
-/*──────────────── OTP HELPERS (Server/Client?) ─────────*/
+/* */
 // These interact with your custom 'verification_codes' table.
 // Ensure RLS is set up correctly if called from the client, or use supabaseServer if called from API routes.
 
@@ -131,13 +105,13 @@ export const deleteVerificationCode = (phone: string) =>
   // Assuming this might be called from client or server.
   supabase.from('verification_codes').delete().eq('phone', phone);
 
-/*──────────────── UTIL ────────────────────────────────*/
+/* */
 export const formatPhoneNumber = (phone: string, code = '55') => {
   const p = phone.replace(/\D/g, '');
   return p.startsWith(code) ? `+${p}` : `+${code}${p}`; // Ensure E.164 format
 };
 
-/*──────────────── DRIVER via TELEFONE (Server-Side ONLY) ──*/
+/* */
 // This function uses supabaseAdmin and should ONLY be called from secure server-side API routes.
 export const createDriverWithPhone = async (
   phone: string, // Expects E.164 format from formatPhoneNumber
@@ -229,7 +203,7 @@ export const createDriverWithPhone = async (
   return { data: { user: authData.user }, error: null };
 };
 
-/*──────────────── sign-in OTP via telefone (Client-Side?) ──*/
+/* */
 // This seems to use signInWithOtp with a temporary email, which is unusual.
 // Standard phone OTP uses signInWithOtp({ phone: formattedPhone }).
 // Verify if this is the intended logic.
@@ -240,7 +214,7 @@ export const signInWithPhone = (phone: string) => {
   return supabase.auth.signInWithOtp({ phone: formattedPhone });
 };
 
-/*──────────────── CRUD perfil / storage (Client/Server?) ──*/
+/* */
 // Use client `supabase` for reads/uploads initiated by the user.
 // Use `supabaseServer` for updates from API routes.
 
