@@ -62,25 +62,33 @@ export async function GET(request: Request) {
     const userId = session.user.id;
 
     // 2. Get driver's Stripe Account ID from their profile using Supabase client
-    // Use 'stripe_account_id' as the column name
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('stripe_account_id') // Corrected column name
       .eq('id', userId)
-      .eq('tipo', 'motorista') // Redundant check, but safe
+      .eq('tipo', 'motorista') // Ensure it's a driver profile
       .single();
 
+    // Handle profile query errors
     if (profileError) {
+        // Specifically check for the '0 rows returned' error
+        if (profileError.code === 'PGRST116') {
+            console.warn(`Driver profile not found for user ID: ${userId}`);
+            return NextResponse.json({ error: 'Perfil de motorista não encontrado ou não configurado corretamente.' }, { status: 404 });
+        }
+        // Handle other potential database errors
         console.error('Error fetching driver profile:', profileError);
         return NextResponse.json({ error: 'Erro ao buscar perfil do motorista.' }, { status: 500 });
     }
 
-    if (!profile?.stripe_account_id) { // Corrected property name
-      console.warn(`Stripe Account ID not found for driver ${userId}`);
-      return NextResponse.json({ error: 'Conta Stripe não encontrada ou não conectada.' }, { status: 404 });
+    // Check if stripe_account_id exists on the found profile
+    if (!profile?.stripe_account_id) {
+      console.warn(`Stripe Account ID not found on profile for driver ${userId}`);
+      // Even if profile exists, if stripe_account_id is missing, treat as not configured
+      return NextResponse.json({ error: 'Conta Stripe não encontrada ou não conectada ao perfil.' }, { status: 404 });
     }
 
-    const stripeAccountId = profile.stripe_account_id; // Corrected variable name
+    const stripeAccountId = profile.stripe_account_id;
 
     // 3. Fetch payments (PaymentIntents) from Stripe for the connected account
     const params: Stripe.PaymentIntentListParams = {
@@ -106,7 +114,7 @@ export async function GET(request: Request) {
 
     // Fetch Payment Intents made ON the connected account
     const paymentIntents = await stripe.paymentIntents.list(params, {
-      stripeAccount: stripeAccountId, // Use the correct variable
+      stripeAccount: stripeAccountId,
     });
 
     // 4. Format the payments data
