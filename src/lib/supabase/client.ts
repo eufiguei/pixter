@@ -1,7 +1,10 @@
 /* 
    src/lib/supabase/client.ts   
+   This file now primarily exports server-side clients and helper functions.
+   Client-side components should use `createClientComponentClient` from `@supabase/auth-helpers-nextjs`.
    */
 import { createClient, User } from '@supabase/supabase-js';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'; // Import for potential use in helpers
 
 /* */
 const supabaseUrl        = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -9,6 +12,7 @@ const supabaseAnonKey    = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!; // Make sure this is defined in your server environment variables
 
 // Add console logs for debugging environment variables on the client-side
+// Keeping these temporarily for verification
 if (typeof window !== "undefined") { // Only log in the browser
   console.log("Supabase Client Env Check - URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
   console.log("Supabase Client Env Check - Anon Key:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
@@ -18,24 +22,32 @@ if (typeof window !== "undefined") { // Only log in the browser
 }
 
 /* */
-// Client-side instance (safe for browser)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  // Explicitly passing options object as an alternative initialization
-  auth: {
-    // Using default auth options
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true
-  }
-});
+// REMOVED conflicting manual client-side instance:
+// export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
 // Server-side instance (uses service key, ONLY for backend/API routes)
+// Ensure URL and Service Key are available in the server environment
 export const supabaseServer = createClient(supabaseUrl, supabaseServiceKey);
 export const supabaseAdmin  = supabaseServer;  // alias for Admin API
 
+// Helper function to get client-side instance (using Auth Helpers)
+// Components should ideally create their own instance, but this can be a utility
+export const getSupabaseClientComponentClient = () => {
+    // Ensure this is only called client-side
+    if (typeof window === 'undefined') {
+        throw new Error('Attempted to call getSupabaseClientComponentClient on the server.');
+    }
+    // Note: This creates a new instance each time it's called.
+    // For performance, components can create and memoize their own instance.
+    return createClientComponentClient();
+}
+
+
 /* */
-// Added back based on user request, with fix for unconfirmed emails
+// Modified signUpWithEmail to use Auth Helpers client
 export async function signUpWithEmail(email: string, password: string, optionsData?: { celular?: string; nome?: string; cpf?: string; tipo?: string }) {
-  // Use the client-side supabase instance for sign-up initiated from the browser
+  // Use the Auth Helpers client-side instance
+  const supabase = createClientComponentClient(); // Create instance here
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -72,17 +84,14 @@ export async function signUpWithEmail(email: string, password: string, optionsDa
 }
 
 /* */
-// These interact with your custom 'verification_codes' table.
-// Ensure RLS is set up correctly if called from the client, or use supabaseServer if called from API routes.
-
+// Modified OTP helpers to use Auth Helpers client
 export const storeVerificationCode = (
   phone: string,
   code: string,
   minutes = 10
-) =>
-  // Assuming this might be called from client or server, using client instance for now.
-  // If only called from server, change to supabaseServer.
-  supabase
+) => {
+  const supabase = createClientComponentClient(); // Create instance here
+  return supabase
     .from('verification_codes')
     .upsert({
       phone, // Ensure phone is consistently formatted (E.164 recommended)
@@ -90,20 +99,23 @@ export const storeVerificationCode = (
       created_at: new Date().toISOString(),
       expires_at: new Date(Date.now() + minutes * 60_000).toISOString()
     });
+}
 
-export const verifyCode = (phone: string, code: string) =>
-  // Assuming this might be called from client or server.
-  supabase
+export const verifyCode = (phone: string, code: string) => {
+  const supabase = createClientComponentClient(); // Create instance here
+  return supabase
     .from('verification_codes')
     .select('*')
     .eq('phone', phone)
     .eq('code', code)
     .gt('expires_at', new Date().toISOString())
     .single();
+}
 
-export const deleteVerificationCode = (phone: string) =>
-  // Assuming this might be called from client or server.
-  supabase.from('verification_codes').delete().eq('phone', phone);
+export const deleteVerificationCode = (phone: string) => {
+  const supabase = createClientComponentClient(); // Create instance here
+  return supabase.from('verification_codes').delete().eq('phone', phone);
+}
 
 /* */
 export const formatPhoneNumber = (phone: string, code = '55') => {
@@ -112,7 +124,7 @@ export const formatPhoneNumber = (phone: string, code = '55') => {
 };
 
 /* */
-// This function uses supabaseAdmin and should ONLY be called from secure server-side API routes.
+// createDriverWithPhone uses supabaseAdmin, no changes needed here
 export const createDriverWithPhone = async (
   phone: string, // Expects E.164 format from formatPhoneNumber
   userData: Record<string, any>
@@ -204,34 +216,36 @@ export const createDriverWithPhone = async (
 };
 
 /* */
-// This seems to use signInWithOtp with a temporary email, which is unusual.
-// Standard phone OTP uses signInWithOtp({ phone: formattedPhone }).
-// Verify if this is the intended logic.
+// Modified signInWithPhone to use Auth Helpers client
 export const signInWithPhone = (phone: string) => {
+  const supabase = createClientComponentClient(); // Create instance here
   const formattedPhone = formatPhoneNumber(phone);
-  // Original code used email: `${phone.replace(/\D/g, '')}@pixter-temp.com`
   // Using standard phone OTP sign-in instead:
   return supabase.auth.signInWithOtp({ phone: formattedPhone });
 };
 
 /* */
-// Use client `supabase` for reads/uploads initiated by the user.
-// Use `supabaseServer` for updates from API routes.
+// Modified CRUD helpers to use Auth Helpers client
+export const getProfile = (id: string) => {
+  const supabase = createClientComponentClient(); // Create instance here
+  return supabase.from('profiles').select('*').eq('id', id).single();
+}
 
-export const getProfile = (id: string) =>
-  supabase.from('profiles').select('*').eq('id', id).single();
-
-// Changed updateProfile to use client `supabase` assuming it's called after user is logged in.
-// RLS policies MUST allow users to update their own profile.
-export const updateProfile = (id: string, updates: Record<string, any>) =>
-  supabase // Use client instance if called from frontend where user is authenticated
+export const updateProfile = (id: string, updates: Record<string, any>) => {
+  const supabase = createClientComponentClient(); // Create instance here
+  return supabase // Use client instance if called from frontend where user is authenticated
     .from('profiles')
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('id', id); // RLS policy `auth.uid() = id` will enforce security
+}
 
-export const uploadImage = (bucket: string, path: string, file: File) =>
-  supabase.storage.from(bucket).upload(path, file, { upsert: true });
+export const uploadImage = (bucket: string, path: string, file: File) => {
+  const supabase = createClientComponentClient(); // Create instance here
+  return supabase.storage.from(bucket).upload(path, file, { upsert: true });
+}
 
-export const getImageUrl = (bucket: string, path: string) =>
-  supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+export const getImageUrl = (bucket: string, path: string) => {
+  const supabase = createClientComponentClient(); // Create instance here
+  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+}
 
