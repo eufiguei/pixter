@@ -1,7 +1,7 @@
 /* ──────────────────────────────────────────────────────────────
    src/lib/supabase/client.ts   ←  TypeScript (garante tree-shaking)
    ────────────────────────────────────────────────────────────── */
-import { createClient, User } from '@supabase/supabase-js';
+import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
 
 /*──────────────── VARIÁVEIS DE AMBIENTE ───────────────*/
 const supabaseUrl        = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -18,9 +18,43 @@ if (typeof window !== "undefined") { // Only log in the browser
 }
 
 /*──────────────── CLIENTES ────────────────────────────*/
-// Client-side instance (safe for browser)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Singleton pattern for client-side Supabase instance
+let supabaseClientInstance: SupabaseClient | null = null;
+
+const createSupabaseClient = () => {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    // This check should ideally be caught by the logs above, but added for safety
+    console.error("Supabase URL or Anon Key is missing during client creation!");
+    // Return a dummy client or throw an error, depending on desired handling
+    // Throwing error might be better to halt execution if config is missing
+    throw new Error("Supabase URL or Anon Key is missing.");
+  }
+  return createClient(supabaseUrl, supabaseAnonKey);
+};
+
+// Client-side instance (safe for browser) - Singleton
+export const supabase = (() => {
+  if (typeof window === 'undefined') {
+    // Return a server-side client or null during SSR/build time if needed,
+    // but generally, client-side logic shouldn't run on the server.
+    // For safety, return a new instance (or null) to avoid sharing client instance on server.
+    // However, this export should primarily be used in client components.
+    // Returning null might be safer if it's accidentally imported on server.
+    // console.warn("Attempted to get client-side Supabase instance on the server.");
+    // return null; // Or handle differently based on server-side needs
+    // Let's return a new instance for now, assuming it might be needed server-side temporarily
+    // but ideally refactor server-side code to use supabaseServer.
+    return createSupabaseClient();
+  }
+  if (!supabaseClientInstance) {
+    supabaseClientInstance = createSupabaseClient();
+  }
+  return supabaseClientInstance;
+})();
+
 // Server-side instance (uses service key, ONLY for backend/API routes)
+// No need for singleton here as serverless functions are stateless
 export const supabaseServer = createClient(supabaseUrl, supabaseServiceKey);
 export const supabaseAdmin  = supabaseServer;  // alias for Admin API
 
@@ -226,3 +260,4 @@ export const uploadImage = (bucket: string, path: string, file: File) =>
 
 export const getImageUrl = (bucket: string, path: string) =>
   supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+
