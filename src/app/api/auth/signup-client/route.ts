@@ -39,17 +39,20 @@ export async function POST(request: Request) {
       console.error("Erro ao criar usuário:", authError);
       // Handle specific errors like "User already registered"
       if (authError.message.includes("User already registered")) {
-         // Check if it's an unconfirmed user
-         const { data: existingUser, error: fetchError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1, filter: email });
-         if (existingUser && existingUser.users.length > 0 && !existingUser.users[0].email_confirmed_at) {
-            // Resend confirmation email
-            await supabase.auth.resend({ type: "signup", email });
+         // Attempt to resend confirmation email as the user might be unconfirmed
+         const { error: resendError } = await supabase.auth.resend({ type: "signup", email });
+
+         if (resendError) {
+            // If resend fails (e.g., user is already confirmed or other issue), return the generic "already registered" error.
+            console.error("Resend failed (user might already be confirmed):", resendError);
+            return NextResponse.json({ error: "Email já registrado." }, { status: 409 });
+         } else {
+            // If resend succeeds, inform the user to check their email.
             return NextResponse.json(
               { error: "Email já registrado, mas não confirmado. Verifique seu email (incluindo spam) para o link de confirmação.", needsConfirmation: true },
               { status: 409 } // Conflict
             );
          }
-         return NextResponse.json({ error: "Email já registrado." }, { status: 409 });
       }
       return NextResponse.json(
         { error: authError.message || "Erro ao criar usuário" },
