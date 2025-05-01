@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       // Handle specific errors like "User already registered"
       if (authError.message.includes("User already registered")) {
          // Check if it's an unconfirmed user
-         const { data: existingUser, error: fetchError } = await supabase.auth.admin.listUsers({ email });
+         const { data: existingUser, error: fetchError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1, filter: email });
          if (existingUser && existingUser.users.length > 0 && !existingUser.users[0].email_confirmed_at) {
             // Resend confirmation email
             await supabase.auth.resend({ type: "signup", email });
