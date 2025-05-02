@@ -1,102 +1,74 @@
+// src/components/OTPInput.tsx
+"use client";
 
-'use client';
+import { useState, useRef, useEffect, ChangeEvent, ClipboardEvent } from "react";
 
-import React, { useState, useRef, ChangeEvent, KeyboardEvent, ClipboardEvent } from 'react';
-
-interface OtpInputProps {
+interface OTPInputProps {
   length: number;
-  onChange: (otp: string) => void;
+  onChange: (code: string) => void;
 }
 
-const OtpInput: React.FC<OtpInputProps> = ({ length, onChange }) => {
-  const [otp, setOtp] = useState<string[]>(new Array(length).fill(''));
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+export default function OTPInput({ length, onChange }: OTPInputProps) {
+  const [values, setValues] = useState<string[]>(Array(length).fill(""));
+  const inputsRef = useRef<HTMLInputElement[]>([]);
 
-  const handleChange = (element: HTMLInputElement, index: number) => {
-    const value = element.value;
-    // Allow only digits and take the last digit entered
-    if (/^[0-9]$/.test(value)) {
-      const newOtp = [...otp];
-      newOtp[index] = value;
-      setOtp(newOtp);
-      onChange(newOtp.join(''));
+  // whenever values changes, notify parent
+  useEffect(() => {
+    onChange(values.join(""));
+  }, [values, onChange]);
 
-      // Move focus to the next input if available
-      if (index < length - 1 && inputRefs.current[index + 1]) {
-        inputRefs.current[index + 1]?.focus();
-      }
-    } else if (value === '') {
-      // Handle clearing the input
-      const newOtp = [...otp];
-      newOtp[index] = '';
-      setOtp(newOtp);
-      onChange(newOtp.join(''));
-      // Optionally move focus back on clear, handled by backspace
+  const focusNext = (idx: number) => {
+    if (idx < length - 1) {
+      inputsRef.current[idx + 1]?.focus();
+    }
+  };
+  const focusPrev = (idx: number) => {
+    if (idx > 0) {
+      inputsRef.current[idx - 1]?.focus();
     }
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>, index: number) => {
-    if (e.key === 'Backspace') {
-      // If current input is empty and we press backspace, move focus to previous input and clear it
-      if (otp[index] === '' && index > 0 && inputRefs.current[index - 1]) {
-        const newOtp = [...otp];
-        newOtp[index - 1] = ''; // Clear previous input as well
-        setOtp(newOtp);
-        onChange(newOtp.join(''));
-        inputRefs.current[index - 1]?.focus();
-      } else {
-        // If current input has value, just clear it
-        const newOtp = [...otp];
-        newOtp[index] = '';
-        setOtp(newOtp);
-        onChange(newOtp.join(''));
-        // Keep focus here, user might want to type a new digit
-      }
-      e.preventDefault(); // Prevent default backspace behavior
-    } else if (e.key === 'ArrowLeft') {
-      if (index > 0 && inputRefs.current[index - 1]) {
-        inputRefs.current[index - 1]?.focus();
-      }
-      e.preventDefault();
-    } else if (e.key === 'ArrowRight') {
-      if (index < length - 1 && inputRefs.current[index + 1]) {
-        inputRefs.current[index + 1]?.focus();
-      }
-      e.preventDefault();
+  const handleChange = (e: ChangeEvent<HTMLInputElement>, idx: number) => {
+    const val = e.target.value.replace(/\D/g, "").slice(0, 1);
+    const newVals = [...values];
+    newVals[idx] = val;
+    setValues(newVals);
+    if (val) focusNext(idx);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, idx: number) => {
+    if (e.key === "Backspace" && !values[idx]) {
+      focusPrev(idx);
     }
   };
 
-  const handlePaste = (e: ClipboardEvent<HTMLInputElement>) => {
+  const handlePaste = (e: ClipboardEvent<HTMLDivElement>) => {
+    const paste = e.clipboardData.getData("Text").trim();
+    if (!/^\d+$/.test(paste)) return;
+    const digits = paste.slice(0, length).split("");
+    const newVals = values.map((_, i) => digits[i] || "");
+    setValues(newVals);
+    // after paste, move focus to last filled
+    const lastFilled = Math.min(digits.length, length) - 1;
+    inputsRef.current[lastFilled]?.focus();
     e.preventDefault();
-    const pasteData = e.clipboardData.getData('text').replace(/[^0-9]/g, ''); // Get only digits
-    if (pasteData.length === length) {
-      const newOtp = pasteData.split('');
-      setOtp(newOtp);
-      onChange(newOtp.join(''));
-      // Optionally move focus to the last input
-      inputRefs.current[length - 1]?.focus();
-    }
   };
 
   return (
-    <div className="flex justify-center space-x-2" onPaste={handlePaste}>
-      {otp.map((data, index) => (
+    <div className="flex space-x-2" onPaste={handlePaste}>
+      {Array.from({ length }).map((_, i) => (
         <input
-          key={index}
-          ref={(el) => (inputRefs.current[index] = el)}
-          type="text" // Use text to handle single char input better
-          inputMode="numeric" // Hint for mobile keyboards
+          key={i}
+          type="text"
+          inputMode="numeric"
           maxLength={1}
-          value={data}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => handleChange(e.target, index)}
-          onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => handleKeyDown(e, index)}
-          onFocus={(e) => e.target.select()} // Select all text on focus
-          className="w-10 h-12 sm:w-12 sm:h-14 border border-gray-300 rounded-md text-center text-lg sm:text-xl font-medium focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          className="w-10 h-10 text-center border rounded focus:outline-none"
+          ref={(el) => (inputsRef.current[i] = el!)}
+          value={values[i]}
+          onChange={(e) => handleChange(e, i)}
+          onKeyDown={(e) => handleKeyDown(e, i)}
         />
       ))}
     </div>
   );
-};
-
-export default OtpInput;
-
+}
