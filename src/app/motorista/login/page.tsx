@@ -141,7 +141,7 @@ export default function MotoristaLogin() {
             </p>
             <OtpInput
               length={6}
-              onComplete={code => setVerificationCode(code)}
+              onChange={code => setVerificationCode(code)}
             />
             <button
               onClick={verificarCodigo}
