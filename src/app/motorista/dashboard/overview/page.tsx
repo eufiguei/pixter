@@ -30,7 +30,7 @@ type Profile = {
     id: string;
     nome?: string;
     email?: string;
-    telefone?: string;
+    celular?: string;
     stripe_account_id?: string;
     tipo?: string; // Ensure tipo is included
     // Add other fields as needed
@@ -63,7 +63,7 @@ export default function DriverDashboardPage() {
           console.log(`[Dashboard] Fetching profile for user ID: ${userId}`);
           const { data: profileData, error: profileError } = await supabase
               .from("profiles")
-              .select("id, nome, email, telefone, stripe_account_id, tipo") // Fetch tipo as well
+              .select("id, nome, email, celular, stripe_account_id, tipo") // Fetch tipo as well
               .eq("id", userId)
               // Removed .eq("tipo", "motorista") for diagnosis
               .single();
@@ -219,7 +219,7 @@ export default function DriverDashboardPage() {
             <div className="space-y-2 text-gray-700 mb-4">
               <p><span className="font-medium">Nome:</span> {profile?.nome || "-"}</p>
               <p><span className="font-medium">Email:</span> {profile?.email || "-"}</p>
-              <p><span className="font-medium">Telefone:</span> {profile?.telefone || "-"}</p>
+              <p><span className="font-medium">Celular:</span> {profile?.celular || "-"}</p>
               {/* TODO: Add display for bank/pix info if available in profile */}
               <p><span className="font-medium">Conta Bancária/Pix:</span> Cadastrada</p> {/* Placeholder */}
             </div>
