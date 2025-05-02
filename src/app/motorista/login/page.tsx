@@ -1,10 +1,11 @@
+// src/app/motorista/login/page.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
-import OTPInput from '@/components/OTPInput'
+import OtpInput from '@/components/OtpInput'  // ← fixed import
 
 export default function MotoristaLogin() {
   const router = useRouter()
@@ -39,7 +40,10 @@ export default function MotoristaLogin() {
       // start countdown
       const timer = setInterval(() => {
         setCountdown(c => {
-          if (c <= 1) { clearInterval(timer); return 0 }
+          if (c <= 1) {
+            clearInterval(timer)
+            return 0
+          }
           return c - 1
         })
       }, 1000)
@@ -135,7 +139,7 @@ export default function MotoristaLogin() {
             <p className="text-center text-gray-700 mb-2">
               Insira o código de 6 dígitos que enviamos
             </p>
-            <OTPInput
+            <OtpInput
               length={6}
               onComplete={code => setVerificationCode(code)}
             />
