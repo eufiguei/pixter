@@ -5,7 +5,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
-import OtpInput from '@/components/OtpInput'  // ← fixed import
+import OtpInput from '@/components/OtpInput'
 
 export default function MotoristaLogin() {
   const router = useRouter()
@@ -18,7 +18,6 @@ export default function MotoristaLogin() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  // 1) send SMS OTP
   const enviarCodigoVerificacao = async () => {
     if (!phone) {
       setError('Por favor, informe seu número de WhatsApp')
@@ -37,13 +36,9 @@ export default function MotoristaLogin() {
       setCountdown(60)
       setSuccess('Código enviado! Verifique seu WhatsApp.')
 
-      // start countdown
       const timer = setInterval(() => {
         setCountdown(c => {
-          if (c <= 1) {
-            clearInterval(timer)
-            return 0
-          }
+          if (c <= 1) { clearInterval(timer); return 0 }
           return c - 1
         })
       }, 1000)
@@ -55,7 +50,6 @@ export default function MotoristaLogin() {
     }
   }
 
-  // 2) verify OTP with NextAuth
   const verificarCodigo = async () => {
     if (verificationCode.length < 6) {
       setError('Por favor, insira o código completo')

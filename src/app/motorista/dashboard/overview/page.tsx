@@ -7,7 +7,6 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import QRCode from "qrcode";
 
-// Define Payment type (matches your API)
 type Payment = {
   id: string;
   data: string;
@@ -19,7 +18,6 @@ type Payment = {
   cliente?: string;
 };
 
-// Define Profile type
 type Profile = {
   id: string;
   nome?: string;
@@ -33,14 +31,12 @@ export default function DriverDashboardPage() {
   const router = useRouter();
   const { data: session, status: sessionStatus } = useSession();
 
-  const [profile, setProfile] = useState<Profile | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [available, setAvailable] = useState("—");
-  const [pending, setPending] = useState("—");
-  const [paymentPageLink, setPaymentPageLink] = useState("");
-  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState("");
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [paymentPageLink, setPaymentPageLink] = useState<string>("");
   const qrCodeRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -50,7 +46,7 @@ export default function DriverDashboardPage() {
         setError("");
 
         try {
-          // 1) PROFILE
+          // 1) Fetch driver profile (must include NextAuth cookie)
           const profileRes = await fetch("/api/motorista/profile", {
             credentials: "include",
           });
@@ -58,43 +54,22 @@ export default function DriverDashboardPage() {
             const err = await profileRes.json();
             throw new Error(err.error || `Erro ao carregar perfil (${profileRes.status})`);
           }
-          const { profile: profileData } = await profileRes.json();
+          const profileData: Profile = await profileRes.json();
+
           if (profileData.tipo !== "motorista") {
             throw new Error(`Acesso negado: tipo inválido (${profileData.tipo}).`);
           }
           setProfile(profileData);
 
-          // 2) BALANCE
-          const balRes = await fetch("/api/motorista/balance", {
-            credentials: "include",
-          });
-          if (balRes.ok) {
-            const { available: av, pending: pd, currency } = await balRes.json();
-            setAvailable(
-              new Intl.NumberFormat("pt-BR", {
-                style: "currency",
-                currency,
-              }).format(av / 100)
-            );
-            setPending(
-              new Intl.NumberFormat("pt-BR", {
-                style: "currency",
-                currency,
-              }).format(pd / 100)
-            );
-          } else {
-            console.warn("Falha ao carregar saldo:", await balRes.text());
-          }
-
-          // 3) PAYMENTS
-          // build your payment page link & QR
+          // Build payment page link + QR
           const link = `${window.location.origin}/pagamento/${profileData.id}`;
           setPaymentPageLink(link);
-          QRCode.toDataURL(link, { errorCorrectionLevel: "H", margin: 2, scale: 6 }, (err, url) => {
-            if (!err && url) setQrCodeUrl(url);
+          QRCode.toDataURL(link, { errorCorrectionLevel: "H", margin: 2, scale: 6 }, (_, url) => {
+            if (url) setQrCodeUrl(url);
           });
-          QRCode.toCanvas(qrCodeRef.current, link, { errorCorrectionLevel: "H", margin: 2, width: 200 }, () => {});
+          QRCode.toCanvas(qrCodeRef.current!, link, { errorCorrectionLevel: "H", margin: 2, width: 200 }, () => {});
 
+          // 2) Fetch payments (include cookie for auth)
           const paymentsRes = await fetch("/api/motorista/payments", {
             credentials: "include",
           });
@@ -102,7 +77,7 @@ export default function DriverDashboardPage() {
             const err = await paymentsRes.json();
             throw new Error(err.error || `Erro ao carregar pagamentos (${paymentsRes.status})`);
           }
-          const { payments: paymentsData } = await paymentsRes.json();
+          const { payments: paymentsData }: { payments: Payment[] } = await paymentsRes.json();
           setPayments(paymentsData || []);
         } catch (err: any) {
           console.error("[Dashboard] fetchData error:", err);
@@ -116,7 +91,6 @@ export default function DriverDashboardPage() {
     } else if (sessionStatus === "unauthenticated") {
       router.push("/motorista/login");
     }
-    // if loading, do nothing
   }, [sessionStatus, session, router]);
 
   const handleCopyLink = () => {
@@ -125,15 +99,13 @@ export default function DriverDashboardPage() {
   };
 
   const handleDownloadQR = () => {
-    if (qrCodeRef.current) {
-      const a = document.createElement("a");
-      a.download = `pixter_qr_${profile?.id || "code"}.png`;
-      a.href = qrCodeRef.current.toDataURL("image/png");
-      a.click();
-    }
+    if (!qrCodeRef.current) return;
+    const a = document.createElement("a");
+    a.download = `pixter_qr_${profile?.id || "code"}.png`;
+    a.href = qrCodeRef.current.toDataURL("image/png");
+    a.click();
   };
 
-  // --- RENDER STATES ---
   if (sessionStatus === "loading" || (sessionStatus === "authenticated" && loadingData)) {
     return <div className="p-6 text-center">Carregando dashboard...</div>;
   }
@@ -151,15 +123,7 @@ export default function DriverDashboardPage() {
   if (sessionStatus === "authenticated" && profile) {
     return (
       <div className="p-4 md:p-8 space-y-8">
-        {/* Greeting */}
         <h1 className="text-3xl font-bold text-gray-800">Olá, {profile.nome || "Motorista"}!</h1>
-
-        {/* BALANCE */}
-        <section className="bg-white p-4 rounded-lg shadow-md">
-          <h2 className="font-semibold text-lg text-gray-700">Saldo disponível</h2>
-          <p className="text-2xl">{available}</p>
-          <p className="text-sm text-gray-500">Pendente: {pending}</p>
-        </section>
 
         {/* Pagamentos Recebidos */}
         <section className="bg-white p-4 md:p-6 rounded-lg shadow-md">
@@ -169,11 +133,21 @@ export default function DriverDashboardPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valor</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Método</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Comprovante</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Data
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Valor
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Cliente
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Método
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      Comprovante
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -189,7 +163,7 @@ export default function DriverDashboardPage() {
                           target="_blank"
                           className="text-indigo-600 hover:text-indigo-900"
                         >
-                          Baixar Comprovante
+                          Baixar
                         </Link>
                       </td>
                     </tr>
@@ -202,7 +176,7 @@ export default function DriverDashboardPage() {
           )}
         </section>
 
-        {/* Meus Dados */}
+        {/* Meus Dados & Minha Página de Pagamento */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <section className="bg-white p-4 md:p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-semibold mb-4 text-gray-700">Meus Dados</h2>
@@ -218,11 +192,9 @@ export default function DriverDashboardPage() {
             </Link>
           </section>
 
-          {/* Minha Página de Pagamento */}
           <section className="bg-white p-4 md:p-6 rounded-lg shadow-md flex flex-col items-center">
             <h2 className="text-xl font-semibold mb-4 text-gray-700">Minha Página de Pagamento</h2>
             <input
-              type="text"
               readOnly
               value={paymentPageLink}
               className="w-full mb-4 px-3 py-2 border rounded-md text-center bg-gray-50"
