@@ -2,6 +2,7 @@
 // Redesigned based on user feedback (A3BE9B45)
 // Added Payment Page section content
 // Updated to use NextAuth useSession for auth check
+// Modified profile fetch to diagnose type mismatch
 
 "use client";
 
@@ -29,8 +30,9 @@ type Profile = {
     id: string;
     nome?: string;
     email?: string;
-    celular?: string;
+    telefone?: string;
     stripe_account_id?: string;
+    tipo?: string; // Ensure tipo is included
     // Add other fields as needed
 };
 
@@ -49,30 +51,42 @@ export default function DriverDashboardPage() {
 
   // Fetch payments and profile data
   useEffect(() => {
-    // Only run if session is authenticated and user is motorista
-    if (sessionStatus === "authenticated" && session?.user?.tipo === "motorista") {
+    // Only run if session is authenticated
+    if (sessionStatus === "authenticated") {
       const userId = session.user.id;
 
       const fetchData = async () => {
         setLoadingData(true);
         setError("");
         try {
-          // Fetch profile using Supabase (RLS should allow based on authenticated user ID)
+          // Fetch profile using only user ID
+          console.log(`[Dashboard] Fetching profile for user ID: ${userId}`);
           const { data: profileData, error: profileError } = await supabase
               .from("profiles")
-              .select("id, nome, email, celular, stripe_account_id") // Fetch needed profile fields
+              .select("id, nome, email, telefone, stripe_account_id, tipo") // Fetch tipo as well
               .eq("id", userId)
-              .eq("tipo", "motorista") // Double check type here, though session should have it
+              // Removed .eq("tipo", "motorista") for diagnosis
               .single();
 
           if (profileError) {
               if (profileError.code === "PGRST116") {
-                  // This case should ideally not happen if session.user.tipo is correct
-                  throw new Error("Perfil de motorista não encontrado. Verifique seus dados.");
+                  // Profile genuinely not found for this user ID
+                  console.error(`[Dashboard] Profile not found for user ID: ${userId}`);
+                  throw new Error(`Perfil não encontrado para o usuário ID: ${userId}. Verifique se o cadastro foi concluído.`);
               } else {
+                  console.error(`[Dashboard] Error fetching profile:`, profileError);
                   throw new Error(profileError.message || "Erro ao buscar perfil.");
               }
           }
+
+          // Check if the fetched profile is actually a driver
+          if (profileData.tipo !== "motorista") {
+              console.warn(`[Dashboard] Profile found for user ${userId}, but type is '${profileData.tipo}', not 'motorista'.`);
+              throw new Error(`Acesso negado. O perfil encontrado não é do tipo 'motorista'. Tipo encontrado: '${profileData.tipo}'. Verifique os dados no banco.`);
+          }
+
+          // Profile found and type is correct
+          console.log(`[Dashboard] Profile found for motorista: ${userId}`);
           setProfile(profileData);
 
           // Construct payment page link (assuming it uses profile ID)
@@ -89,18 +103,20 @@ export default function DriverDashboardPage() {
               if (err) console.error("QR Code canvas error:", err);
           });
 
-          // Fetch payments (adjust date range if needed, maybe last 30 days?)
-          const paymentsRes = await fetch(`/api/motorista/payments`); // Fetch all for now
+          // Fetch payments (using the API route which validates session again)
+          console.log(`[Dashboard] Fetching payments for motorista: ${userId}`);
+          const paymentsRes = await fetch(`/api/motorista/payments`);
           if (!paymentsRes.ok) {
             const errorData = await paymentsRes.json();
-            // Handle specific errors from the API if needed
+            console.error(`[Dashboard] Error fetching payments: ${paymentsRes.status}`, errorData);
             throw new Error(errorData.error || `Erro ao carregar pagamentos (${paymentsRes.status})`);
           }
           const paymentsData = await paymentsRes.json();
+          console.log(`[Dashboard] Received ${paymentsData.payments?.length ?? 0} payments.`);
           setPayments(paymentsData.payments || []);
 
         } catch (err: any) {
-          console.error("Erro ao carregar dados do dashboard do motorista:", err);
+          console.error("[Dashboard] Error during data fetch:", err);
           setError(err.message || "Não foi possível carregar os dados do dashboard.");
         } finally {
           setLoadingData(false);
@@ -109,13 +125,8 @@ export default function DriverDashboardPage() {
       fetchData();
     } else if (sessionStatus === "unauthenticated") {
         // Redirect if not authenticated
+        console.log("[Dashboard] Session unauthenticated, redirecting to login.");
         router.push("/motorista/login");
-    } else if (sessionStatus === "authenticated" && session?.user?.tipo !== "motorista") {
-        // Handle case where user is logged in but not a driver
-        setError("Acesso negado. Esta área é apenas para motoristas.");
-        setLoadingData(false);
-        // Optionally redirect to a different page
-        // router.push("/");
     }
     // If sessionStatus is 'loading', do nothing and wait
 
@@ -137,14 +148,21 @@ export default function DriverDashboardPage() {
   };
 
   // --- Render Logic ---
-  // Show loading state while session is loading
+  // Show loading state while session is loading or data is fetching
   if (sessionStatus === "loading" || (sessionStatus === "authenticated" && loadingData)) {
       return <div className="p-6 text-center">Carregando dashboard...</div>;
   }
 
-  // Show error message if any error occurred or user is not a driver
+  // Show error message if any error occurred
   if (error) {
-      return <div className="p-6 text-red-500">Erro: {error}</div>;
+      // Provide more context in the error message
+      return (
+          <div className="p-6 text-red-500">
+              <p className="font-semibold">Erro ao carregar dashboard:</p>
+              <p>{error}</p>
+              <p className="mt-2 text-sm text-gray-600">Por favor, verifique os dados do seu perfil no banco de dados ou entre em contato com o suporte.</p>
+          </div>
+      );
   }
 
   // If authenticated and profile is loaded, show dashboard
@@ -153,7 +171,7 @@ export default function DriverDashboardPage() {
       <div className="p-4 md:p-8 space-y-8">
         {/* Greeting */}
         <h1 className="text-3xl font-bold text-gray-800">
-          Olá, {profile?.nome || "motorista"}!
+          Olá, {profile?.nome || "Motorista"}!
         </h1>
 
         {/* Pagamentos Recebidos Section */}
@@ -201,7 +219,7 @@ export default function DriverDashboardPage() {
             <div className="space-y-2 text-gray-700 mb-4">
               <p><span className="font-medium">Nome:</span> {profile?.nome || "-"}</p>
               <p><span className="font-medium">Email:</span> {profile?.email || "-"}</p>
-              <p><span className="font-medium">Celular:</span> {profile?.celular || "-"}</p>
+              <p><span className="font-medium">Telefone:</span> {profile?.telefone || "-"}</p>
               {/* TODO: Add display for bank/pix info if available in profile */}
               <p><span className="font-medium">Conta Bancária/Pix:</span> Cadastrada</p> {/* Placeholder */}
             </div>
@@ -254,6 +272,7 @@ export default function DriverDashboardPage() {
     );
   }
 
-  // Fallback for unexpected states (e.g., authenticated but no profile yet, though handled by error state now)
+  // Fallback for unexpected states
   return <div className="p-6 text-center">Redirecionando...</div>; // Or some other placeholder
 }
+
