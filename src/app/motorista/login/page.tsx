@@ -1,26 +1,28 @@
 // src/app/motorista/login/page.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
-import OtpInput from '@/components/OtpInput'
 
 export default function MotoristaLogin() {
   const router = useRouter()
   const [phone, setPhone] = useState('')
-  const [countryCode, setCountryCode] = useState('55')
-  const [verificationCode, setVerificationCode] = useState('')
+  const [countryCode] = useState('55')
   const [codeSent, setCodeSent] = useState(false)
   const [countdown, setCountdown] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  // 1) Send OTP
-  const enviarCodigoVerificacao = async () => {
-    if (!phone) {
+  // OTP state as array of 6
+  const [otp, setOtp] = useState<string[]>(['', '', '', '', '', ''])
+  const inputsRef = useRef<Array<HTMLInputElement | null>>([])
+
+  // Send OTP
+  const enviarCodigo = async () => {
+    if (!phone.trim()) {
       setError('Por favor, informe seu número de WhatsApp')
       return
     }
@@ -28,7 +30,7 @@ export default function MotoristaLogin() {
       setLoading(true); setError(''); setSuccess('')
       const res = await fetch('/api/auth/send-verification', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ phone, countryCode }),
       })
       const data = await res.json()
@@ -36,25 +38,25 @@ export default function MotoristaLogin() {
       setCodeSent(true)
       setCountdown(60)
       setSuccess('Código enviado! Verifique seu WhatsApp.')
-
+      // start countdown
       const timer = setInterval(() => {
         setCountdown(c => {
           if (c <= 1) { clearInterval(timer); return 0 }
           return c - 1
         })
       }, 1000)
-
-    } catch (err: any) {
-      console.error(err)
-      setError(err.message || 'Falha ao enviar código')
+    } catch (e: any) {
+      console.error(e)
+      setError(e.message || 'Falha ao enviar código')
     } finally {
       setLoading(false)
     }
   }
 
-  // 2) Verify OTP with NextAuth
+  // Verify OTP
   const verificarCodigo = async () => {
-    if (verificationCode.length < 6) {
+    const code = otp.join('')
+    if (code.length < 6) {
       setError('Por favor, insira o código completo')
       return
     }
@@ -63,22 +65,54 @@ export default function MotoristaLogin() {
       const result = await signIn('phone-otp', {
         redirect: false,
         phone,
-        code: verificationCode,
+        code,
         countryCode,
       })
       if (result?.error) {
         setError(result.error)
       } else {
-        // always send drivers to their dashboard
         router.push('/motorista/dashboard')
       }
-    } catch (err: any) {
-      console.error(err)
-      setError(err.message || 'Erro ao verificar código')
+    } catch (e: any) {
+      console.error(e)
+      setError(e.message || 'Erro ao verificar código')
     } finally {
       setLoading(false)
     }
   }
+
+  // Handle single-box input
+  const handleChange = (idx: number, val: string) => {
+    if (!/^\d?$/.test(val)) return
+    const next = [...otp]
+    next[idx] = val
+    setOtp(next)
+    // move focus
+    if (val && inputsRef.current[idx+1]) {
+      inputsRef.current[idx+1]!.focus()
+    }
+  }
+
+  // Handle paste of full code
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData('Text').replace(/\D/g,'').slice(0,6)
+    if (pasted.length) {
+      const next = pasted.split('')
+      while (next.length < 6) next.push('')
+      setOtp(next)
+      // focus last filled or next
+      const pos = pasted.length >= 6 ? 5 : pasted.length
+      inputsRef.current[pos]?.focus()
+    }
+  }
+
+  // If user clears all boxes, focus first
+  useEffect(() => {
+    if (otp.every(d => d === '')) {
+      inputsRef.current[0]?.focus()
+    }
+  }, [otp])
 
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -89,22 +123,12 @@ export default function MotoristaLogin() {
           <p className="text-sm text-gray-600">Use seu WhatsApp para entrar</p>
         </div>
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded mb-4">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded mb-4">
-            {success}
-          </div>
-        )}
+        {error && <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded mb-4">{error}</div>}
+        {success && <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded mb-4">{success}</div>}
 
         {!codeSent ? (
           <>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              WhatsApp (com DDD)
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp (com DDD)</label>
             <div className="flex mb-4">
               <span className="inline-flex items-center px-3 bg-gray-100 border border-r-0 border-gray-300 rounded-l">
                 +{countryCode}
@@ -117,18 +141,14 @@ export default function MotoristaLogin() {
                 onChange={e => setPhone(e.target.value)}
                 disabled={loading}
                 placeholder="11 98765-4321"
-                className={`flex-1 border border-gray-300 rounded-r px-3 ${
-                  loading ? 'bg-gray-100' : ''
-                }`}
+                className={`flex-1 border border-gray-300 rounded-r px-3 ${loading? 'bg-gray-100':''}`}
               />
             </div>
             <button
-              onClick={enviarCodigoVerificacao}
+              onClick={enviarCodigo}
               disabled={loading || !phone}
               className={`w-full py-2 rounded text-white ${
-                loading || !phone
-                  ? 'bg-purple-300 cursor-not-allowed'
-                  : 'bg-purple-600 hover:bg-purple-700'
+                loading || !phone ? 'bg-purple-300 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'
               }`}
             >
               {loading ? 'Enviando…' : 'Enviar código'}
@@ -136,34 +156,38 @@ export default function MotoristaLogin() {
           </>
         ) : (
           <>
-            <p className="text-center text-gray-700 mb-2">
-              Insira o código de 6 dígitos que enviamos
-            </p>
-            <OtpInput
-              length={6}
-              value={verificationCode}
-              onChange={setVerificationCode}
-              autoFocus
-            />
+            <p className="text-center text-gray-700 mb-2">Insira o código de 6 dígitos que enviamos</p>
+            <div className="flex justify-center gap-2 mb-4">
+              {otp.map((digit, i) => (
+                <input
+                  key={i}
+                  ref={el => inputsRef.current[i] = el}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  onChange={e => handleChange(i, e.target.value)}
+                  onPaste={handlePaste}
+                  className="w-10 h-10 text-center border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                />
+              ))}
+            </div>
             <button
               onClick={verificarCodigo}
-              disabled={loading || verificationCode.length < 6}
-              className={`w-full mt-4 py-2 rounded text-white ${
-                loading || verificationCode.length < 6
+              disabled={loading || otp.join('').length < 6}
+              className={`w-full mt-2 py-2 rounded text-white ${
+                loading || otp.join('').length < 6
                   ? 'bg-purple-300 cursor-not-allowed'
                   : 'bg-purple-600 hover:bg-purple-700'
               }`}
             >
               {loading ? 'Verificando…' : 'Entrar'}
             </button>
-
             {countdown > 0 ? (
-              <p className="text-sm text-gray-500 mt-3 text-center">
-                Reenviar em {countdown}s
-              </p>
+              <p className="text-sm text-gray-500 mt-3 text-center">Reenviar em {countdown}s</p>
             ) : (
               <button
-                onClick={enviarCodigoVerificacao}
+                onClick={enviarCodigo}
                 disabled={loading}
                 className="mt-3 text-sm text-purple-600 hover:underline"
               >
