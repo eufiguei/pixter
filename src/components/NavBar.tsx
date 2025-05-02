@@ -1,14 +1,13 @@
 // src/components/NavBar.tsx
-// Updated based on user feedback (IMG_0354, IMG_0355, IMG_0356, A3BE9B45)
-
 'use client';
+
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Session, User } from '@supabase/supabase-js';
 
-// Define a type for the user with the 'tipo' property
+// Extend Supabase User to include your `tipo` metadata
 interface UserWithTipo extends User {
   user_metadata: {
     tipo?: 'cliente' | 'motorista';
@@ -16,56 +15,59 @@ interface UserWithTipo extends User {
   };
 }
 
-// Define a type for the session with the extended user type
+// Extend Session similarly
 interface SessionWithTipo extends Omit<Session, 'user'> {
   user: UserWithTipo | null;
 }
 
 export default function NavBar() {
-  const pathname = usePathname();
+  const pathname = usePathname() || '/';
   const router = useRouter();
   const supabase = createClientComponentClient();
   const [session, setSession] = useState<SessionWithTipo | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Load session + tipo on mount & on auth changes
   useEffect(() => {
-    const getSessionData = async () => {
+    const load = async () => {
       setLoading(true);
-      const { data: { session }, error } = await supabase.auth.getSession();
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
 
       if (error) {
-        console.error('Error getting session:', error);
+        console.error('Error fetching session:', error);
         setSession(null);
       } else if (session) {
-        // Check if user type ('tipo') is already in user_metadata
-        if (!session.user?.user_metadata?.tipo) {
-          // If not, fetch it from the profiles table
-          const { data: profile, error: profileError } = await supabase
+        // If we already have tipo in metadata, skip fetch
+        if (session.user?.user_metadata?.tipo) {
+          setSession(session as SessionWithTipo);
+        } else {
+          // Else fetch from profiles table
+          const { data: profile, error: pErr } = await supabase
             .from('profiles')
             .select('tipo')
             .eq('id', session.user.id)
             .single();
 
-          if (profileError && profileError.code !== 'PGRST116') { // Ignore 'not found' error
-            console.error('Error fetching profile type:', profileError);
-            setSession(session as SessionWithTipo); // Keep session without type
+          if (pErr && pErr.code !== 'PGRST116') {
+            console.error('Error fetching perfil.tipo:', pErr);
+            setSession(session as SessionWithTipo);
           } else if (profile) {
-            // Add the type to the user metadata in the session state
-            const updatedUser = {
-              ...session.user,
-              user_metadata: {
-                ...session.user.user_metadata,
-                tipo: profile.tipo,
+            setSession({
+              ...session,
+              user: {
+                ...session.user,
+                user_metadata: {
+                  ...session.user.user_metadata,
+                  tipo: profile.tipo,
+                },
               },
-            } as UserWithTipo;
-            setSession({ ...session, user: updatedUser });
+            });
           } else {
-             console.warn('Profile not found for user, cannot determine type:', session.user.id);
-             setSession(session as SessionWithTipo); // Keep session without type
+            setSession(session as SessionWithTipo);
           }
-        } else {
-          // Type already exists in session
-          setSession(session as SessionWithTipo);
         }
       } else {
         setSession(null);
@@ -73,101 +75,148 @@ export default function NavBar() {
       setLoading(false);
     };
 
-    getSessionData();
+    load();
 
-    // Listen for auth changes
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth event:', event);
-      // Refetch session data on sign-in/sign-out to get updated profile info if needed
-      getSessionData();
+    // subscribe to auth changes to always have fresh tipo
+    const { data: listener } = supabase.auth.onAuthStateChange(() => {
+      load();
     });
-
-    // Cleanup listener on component unmount
-    return () => {
-      authListener?.subscription.unsubscribe();
-    };
+    return () => listener.subscription.unsubscribe();
   }, [supabase]);
 
   const handleSignOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error('Error signing out:', error);
-    } else {
-      setSession(null); // Clear session state immediately
-      router.push('/'); // Redirect to home page after sign out
-      router.refresh(); // Refresh server components
-    }
+    await supabase.auth.signOut();
+    setSession(null);
+    router.push('/');
+    router.refresh();
   };
 
-  // Determine page context
-  const isPublicPaymentPage = pathname?.startsWith('/pagamento/') && pathname.split('/').length === 3; // Matches /pagamento/[id] but not subpages
-  const isDriverDashboard = pathname?.startsWith('/motorista/dashboard');
-  const isClientDashboard = pathname?.startsWith('/cliente/dashboard') || pathname?.startsWith('/payment-methods'); // Include payment methods page
+  const isPublicPaymentPage =
+    pathname.startsWith('/pagamento/') && pathname.split('/').length === 3;
+  const isDriverDash = pathname.startsWith('/motorista/dashboard');
+  const isClientDash =
+    pathname.startsWith('/cliente/dashboard') ||
+    pathname.startsWith('/payment-methods');
 
-  // Determine logo link destination
   const getLogoLink = () => {
-    if (session && session.user) {
-      const userType = session.user.user_metadata?.tipo;
-      // Link to the main dashboard page for logged-in users
-      if (userType === 'motorista') return '/motorista/dashboard'; 
-      if (userType === 'cliente') return '/cliente/dashboard';
-    }
-    return '/'; // Default to home page if logged out or type unknown
+    const tipo = session?.user?.user_metadata?.tipo;
+    if (tipo === 'motorista') return '/motorista/dashboard';
+    if (tipo === 'cliente') return '/cliente/dashboard';
+    return '/';
   };
 
   const renderLinks = () => {
     if (loading) {
-      return <div className="h-6 w-24 bg-gray-200 animate-pulse rounded"></div>; // Placeholder for loading
+      return (
+        <div className="h-6 w-24 bg-gray-200 animate-pulse rounded"></div>
+      );
     }
 
-    // --- Logged IN --- 
-    if (session && session.user) {
-      const userType = session.user.user_metadata?.tipo;
-
-      if (userType === 'motorista') {
-        // Logged-in Driver Links (Updated based on A3BE9B45)
-        // Assuming a single dashboard page at /motorista/dashboard now
+    if (session?.user) {
+      const tipo = session.user.user_metadata?.tipo;
+      if (tipo === 'motorista') {
         return (
           <nav className="flex items-center space-x-4">
-            <Link href="/motorista/dashboard#pagamentos" className={`text-sm font-medium hover:text-purple-600`}>Pagamentos Recebidos</Link>
-            <Link href="/motorista/dashboard#dados" className={`text-sm font-medium hover:text-purple-600`}>Meus Dados</Link>
-            <Link href="/motorista/dashboard#pagina-pagamento" className={`text-sm font-medium hover:text-purple-600`}>Minha Página de Pagamento</Link>
-            <button onClick={handleSignOut} className="text-sm font-medium hover:text-purple-600">Sair</button>
+            <Link
+              href="/motorista/dashboard#pagamentos"
+              className="text-sm font-medium hover:text-purple-600"
+            >
+              Pagamentos
+            </Link>
+            <Link
+              href="/motorista/dashboard#dados"
+              className="text-sm font-medium hover:text-purple-600"
+            >
+              Meus Dados
+            </Link>
+            <Link
+              href="/motorista/dashboard#pagina-pagamento"
+              className="text-sm font-medium hover:text-purple-600"
+            >
+              Minha Página
+            </Link>
+            <button
+              onClick={handleSignOut}
+              className="text-sm font-medium hover:text-purple-600"
+            >
+              Sair
+            </button>
           </nav>
         );
-      } else if (userType === 'cliente') {
-        // Logged-in Client Links (Updated Structure from IMG_0354)
+      } else if (tipo === 'cliente') {
         return (
           <nav className="flex items-center space-x-4">
-            <Link href="/cliente/dashboard" className={`text-sm font-medium ${pathname === '/cliente/dashboard' ? 'text-purple-600' : 'hover:text-purple-600'}`}>Histórico de Pagamentos</Link>
-            <Link href="/payment-methods" className={`text-sm font-medium ${pathname?.startsWith('/payment-methods') ? 'text-purple-600' : 'hover:text-purple-600'}`}>Métodos de Pagamento</Link>
-            {/* Assuming profile page is /cliente/dashboard for now, adjust if needed */}
-            <Link href="/cliente/dashboard" className={`text-sm font-medium ${pathname === '/cliente/dashboard' ? 'text-purple-600' : 'hover:text-purple-600'}`}>Meu Perfil</Link> 
-            <button onClick={handleSignOut} className="text-sm font-medium hover:text-purple-600">Sair</button>
+            <Link
+              href="/cliente/dashboard"
+              className={`text-sm font-medium ${
+                pathname === '/cliente/dashboard'
+                  ? 'text-purple-600'
+                  : 'hover:text-purple-600'
+              }`}
+            >
+              Histórico
+            </Link>
+            <Link
+              href="/payment-methods"
+              className={`text-sm font-medium ${
+                pathname.startsWith('/payment-methods')
+                  ? 'text-purple-600'
+                  : 'hover:text-purple-600'
+              }`}
+            >
+              Cartões
+            </Link>
+            <button
+              onClick={handleSignOut}
+              className="text-sm font-medium hover:text-purple-600"
+            >
+              Sair
+            </button>
           </nav>
         );
       } else {
-        // Logged-in user, but type is unknown/missing (Generic logout)
-         console.warn('User logged in but type (tipo) is missing:', session.user.id);
-         return (
-           <nav className="flex items-center space-x-4">
-             <span className="text-sm font-medium text-gray-500">{session.user.email || 'Usuário'}</span>
-             <button onClick={handleSignOut} className="text-sm font-medium hover:text-purple-600">Sair</button>
-           </nav>
-         );
+        // logged-in, unknown tipo
+        return (
+          <nav className="flex items-center space-x-4">
+            <span className="text-sm font-medium text-gray-500">
+              {session.user.email}
+            </span>
+            <button
+              onClick={handleSignOut}
+              className="text-sm font-medium hover:text-purple-600"
+            >
+              Sair
+            </button>
+          </nav>
+        );
       }
-    // --- Logged OUT --- 
     } else {
-      // Public Payment Page ([id] only) - No links on the right (IMG_0356)
+      // Not signed in
       if (isPublicPaymentPage) {
-        return null; // Render nothing on the right side
+        return null; // hide on /pagamento/[id]
       }
-      // Default for home and other public pages (e.g., login, signup)
+      // If you’re a client on a payment page and click login, we’ll return them here
+      const returnToParam = `?returnTo=${encodeURIComponent(pathname)}`;
       return (
         <nav className="flex items-center space-x-4">
-          <Link href="/login" className="text-sm font-medium hover:text-purple-600">Entrar</Link>
-          <Link href="/cadastro" className="text-sm font-medium hover:text-purple-600">Criar Conta</Link>
-          <Link href="/motorista/login" className="text-sm font-medium hover:text-purple-600">Motoristas</Link>
+          <Link
+            href={`/login${returnToParam}`}
+            className="text-sm font-medium hover:text-purple-600"
+          >
+            Entrar
+          </Link>
+          <Link
+            href={`/cadastro${returnToParam}`}
+            className="text-sm font-medium hover:text-purple-600"
+          >
+            Criar Conta
+          </Link>
+          <Link
+            href="/motorista/login"
+            className="text-sm font-medium hover:text-purple-600"
+          >
+            Motoristas
+          </Link>
         </nav>
       );
     }
@@ -176,15 +225,12 @@ export default function NavBar() {
   return (
     <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 bg-white shadow-md">
       <Link href={getLogoLink()} className="flex items-center space-x-2">
-        {/* Simple P logo */}
         <div className="w-8 h-8 flex items-center justify-center rounded bg-purple-600">
-            <span className="text-white font-bold text-lg">P</span>
+          <span className="text-white font-bold text-lg">P</span>
         </div>
         <span className="font-bold text-2xl">Pixter</span>
       </Link>
-
       {renderLinks()}
     </header>
   );
 }
-

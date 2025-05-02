@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import OtpInput from '@/components/OtpInput'; import { signIn } from "next-auth/react"; // Re-add signIn import
+import { signIn } from 'next-auth/react'
+import OTPInput from '@/components/OTPInput'
 
 export default function MotoristaLogin() {
   const router = useRouter()
@@ -16,218 +17,161 @@ export default function MotoristaLogin() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  // Enviar código de verificação (Keep this function as is, assuming /api/auth/send-verification works)
+  // 1) send SMS OTP
   const enviarCodigoVerificacao = async () => {
     if (!phone) {
       setError('Por favor, informe seu número de WhatsApp')
       return
     }
-
     try {
-      setLoading(true)
-      setError('')
-      setSuccess('') // Clear success message on resend
-
-      const response = await fetch('/api/auth/send-verification', {
+      setLoading(true); setError(''); setSuccess('')
+      const res = await fetch('/api/auth/send-verification', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          phone,
-          countryCode
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, countryCode }),
       })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Erro ao enviar código de verificação')
-      }
-
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao enviar código')
       setCodeSent(true)
-      setCountdown(60) // 60 segundos para reenvio
-      setSuccess('Código enviado com sucesso! Verifique seu WhatsApp.')
+      setCountdown(60)
+      setSuccess('Código enviado! Verifique seu WhatsApp.')
 
-      // Iniciar contador regressivo
+      // start countdown
       const timer = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            clearInterval(timer)
-            return 0
-          }
-          return prev - 1
+        setCountdown(c => {
+          if (c <= 1) { clearInterval(timer); return 0 }
+          return c - 1
         })
       }, 1000)
-
-    } catch (err: any) { // Added type annotation
-      console.error('Erro ao enviar código:', err)
-      setError(err.message || 'Falha ao enviar código de verificação')
+    } catch (err: any) {
+      console.error(err)
+      setError(err.message || 'Falha ao enviar código')
     } finally {
       setLoading(false)
     }
   }
 
-  // Verificar código e fazer login using NextAuth signIn
+  // 2) verify OTP with NextAuth
   const verificarCodigo = async () => {
-    if (!verificationCode) {
-      setError('Por favor, informe o código de verificação')
+    if (verificationCode.length < 6) {
+      setError('Por favor, insira o código completo')
       return
     }
-
     try {
-      setLoading(true)
-      setError('')
-      setSuccess('') // Clear success message
-
-      // Use NextAuth signIn instead of fetch
-      const result = await signIn("phone-otp", {
-        redirect: false, // Handle redirect manually based on result
-        phone: phone,
+      setLoading(true); setError(''); setSuccess('')
+      const result = await signIn('phone-otp', {
+        redirect: false,
+        phone,
         code: verificationCode,
-        countryCode: countryCode, // Pass countryCode if needed by your provider
-      });
-
+        countryCode,
+      })
       if (result?.error) {
-        console.error("NextAuth OTP Sign-in failed:", result.error);
-        // Use the error message from NextAuth (which comes from the authorize function)
-        setError(result.error || "Falha no login. Verifique o código ou tente novamente.");
-      } else if (result?.ok && !result.error) {
-        console.log("NextAuth OTP Sign-in successful, redirecting...");
-        // Login bem-sucedido, redirecionar para o dashboard
-        router.push('/motorista/dashboard');
-        // No need to set success message here as we are redirecting
+        setError(result.error)
       } else {
-        // Handle unexpected result
-        console.error("Unexpected OTP sign-in result:", result);
-        setError("Ocorreu um erro inesperado durante o login.");
+        router.push('/motorista/dashboard')
       }
-
-    } catch (err: any) { // Catch any unexpected errors during the signIn call itself
-      console.error('Erro ao verificar código via NextAuth:', err)
-      setError(err.message || 'Falha ao verificar código')
+    } catch (err: any) {
+      console.error(err)
+      setError(err.message || 'Erro ao verificar código')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-        <div className="mb-6 text-center">
-          <Link href="/" className="text-3xl font-bold text-gray-900">
-            Pixter
-          </Link>
-          <h2 className="mt-4 text-2xl font-bold text-gray-900">Login de Motorista</h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Acesse sua conta usando seu número de WhatsApp
-          </p>
+    <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white p-8 rounded-lg shadow">
+        <div className="text-center mb-6">
+          <Link href="/" className="text-3xl font-bold">Pixter</Link>
+          <h2 className="mt-4 text-2xl">Login de Motorista</h2>
+          <p className="text-sm text-gray-600">Use seu WhatsApp para entrar</p>
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-4">
+          <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded mb-4">
             {error}
           </div>
         )}
-
         {success && (
-          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md mb-4">
+          <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded mb-4">
             {success}
           </div>
         )}
 
-        <div className="space-y-6">
-          <div>
-            <label htmlFor="celular" className="block text-sm font-medium text-gray-700 mb-1">
-              WhatsApp (com DDD)
-            </label>
-            <div className="flex">
-              <span className="inline-flex items-center px-3 bg-gray-100 border border-r-0 border-gray-300 rounded-l-md text-gray-500">
+        {!codeSent ? (
+          <>
+            <label className="block text-sm font-medium text-gray-700">WhatsApp (com DDD)</label>
+            <div className="flex mb-4">
+              <span className="inline-flex items-center px-3 bg-gray-100 border border-r-0 border-gray-300 rounded-l">
                 +{countryCode}
               </span>
               <input
-                id="celular"
-                name="celular"
                 type="tel"
                 autoComplete="tel"
                 required
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                disabled={codeSent} // Disable phone input after code is sent
-                className={`flex-1 px-3 py-2 border border-gray-300 rounded-r-md focus:outline-none focus:ring-2 focus:ring-purple-500 ${codeSent ? 'bg-gray-100' : ''}`}
+                onChange={e => setPhone(e.target.value)}
+                disabled={loading}
                 placeholder="11 98765-4321"
+                className={`flex-1 border border-gray-300 rounded-r px-3 ${
+                  loading ? 'bg-gray-100' : ''
+                }`}
               />
             </div>
-          </div>
-
-          {!codeSent ? (
             <button
-              type="button"
               onClick={enviarCodigoVerificacao}
               disabled={loading || !phone}
-              className={`w-full bg-purple-600 text-white py-3 px-4 rounded-md font-medium transition ${
-                loading || !phone ? 'opacity-70 cursor-not-allowed' : 'hover:bg-purple-700'
+              className={`w-full py-2 rounded text-white ${
+                loading || !phone
+                  ? 'bg-purple-300 cursor-not-allowed'
+                  : 'bg-purple-600 hover:bg-purple-700'
               }`}
             >
-              {loading ? 'Enviando...' : 'Enviar código de verificação'}
+              {loading ? 'Enviando…' : 'Enviar código'}
             </button>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="codigo" className="block text-sm font-medium text-gray-700 mb-2 text-center">
-                  Código de verificação
-                </label>
-                {/* Replace standard input with OtpInput component */}
-                <OtpInput length={6} onChange={setVerificationCode} />
-                {/* Old input removed:
-                <input
-                  id="codigo"
-                  name="codigo"
-                  type="text"
-                  required
-                  value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="Digite o código recebido"
-                />
-                */}
-              </div>
+          </>
+        ) : (
+          <>
+            <p className="text-center text-gray-700 mb-2">
+              Insira o código de 6 dígitos que enviamos
+            </p>
+            <OTPInput
+              length={6}
+              onComplete={code => setVerificationCode(code)}
+            />
+            <button
+              onClick={verificarCodigo}
+              disabled={loading || verificationCode.length < 6}
+              className={`w-full mt-4 py-2 rounded text-white ${
+                loading || verificationCode.length < 6
+                  ? 'bg-purple-300 cursor-not-allowed'
+                  : 'bg-purple-600 hover:bg-purple-700'
+              }`}
+            >
+              {loading ? 'Verificando…' : 'Entrar'}
+            </button>
 
+            {countdown > 0 ? (
+              <p className="text-sm text-gray-500 mt-3 text-center">
+                Reenviar em {countdown}s
+              </p>
+            ) : (
               <button
-                type="button"
-                onClick={verificarCodigo} // This now calls the NextAuth signIn logic
-                disabled={loading || !verificationCode}
-                className={`w-full bg-purple-600 text-white py-3 px-4 rounded-md font-medium transition ${
-                  loading || !verificationCode ? 'opacity-70 cursor-not-allowed' : 'hover:bg-purple-700'
-                }`}
+                onClick={enviarCodigoVerificacao}
+                disabled={loading}
+                className="mt-3 text-sm text-purple-600 hover:underline"
               >
-                {loading ? 'Verificando...' : 'Entrar'}
+                Reenviar código
               </button>
+            )}
+          </>
+        )}
 
-              {countdown > 0 ? (
-                <p className="text-sm text-gray-500 text-center">
-                  Reenviar código em {countdown}s
-                </p>
-              ) : (
-                <button
-                  type="button"
-                  onClick={enviarCodigoVerificacao}
-                  disabled={loading}
-                  className="w-full text-sm text-purple-600 hover:text-purple-800"
-                >
-                  Reenviar código
-                </button>
-              )}
-            </div>
-          )}
-
-          <div className="text-center text-sm text-gray-500">
-            Não tem uma conta? <Link href="/motorista/cadastro" className="text-purple-600 hover:text-purple-800">Cadastre-se aqui</Link>
-          </div>
-
-          <div className="text-center text-sm text-gray-500">
-            É um cliente? <Link href="/login" className="text-purple-600 hover:text-purple-800">Acesse aqui</Link>
-          </div>
+        <div className="mt-6 text-center text-sm text-gray-500">
+          Não tem conta?{' '}
+          <Link href="/motorista/cadastro" className="text-purple-600 hover:underline">
+            Cadastre-se
+          </Link>
         </div>
       </div>
     </main>
