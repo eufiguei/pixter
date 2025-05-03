@@ -28,7 +28,7 @@ export default function DriverPaymentPage({
       setLoadingProfile(true);
       setError('');
       try {
-        const res = await fetch(`/api/public-profile?id=${phoneNumber}`);
+	const res = await fetch(`/api/public/driver-info/${phoneNumber}`);
         if (!res.ok) {
           throw new Error(`Erro ${res.status}`);
         }
