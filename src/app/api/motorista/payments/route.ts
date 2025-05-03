@@ -1,10 +1,12 @@
 // src/app/api/motorista/payments/route.ts
+
 import { NextResponse } from "next/server";
-import Stripe, { BalanceTransactionListParams } from "stripe";
+import Stripe from "stripe";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth/options";
 import { supabaseServer } from "@/lib/supabase/client";
 
+// Initialize Stripe client
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2022-11-15",
 });
@@ -18,7 +20,7 @@ function formatAmount(amount: number, currency: string): string {
 }
 
 export async function GET(request: Request) {
-  // 1) Auth
+  // 1) Authenticate user via NextAuth
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -27,7 +29,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
   }
 
-  // 2) Lookup Stripe account
+  // 2) Lookup connected Stripe account for this driver
   const userId = session.user.id;
   const { data: profile, error: profileError } = await supabaseServer
     .from("profiles")
@@ -44,20 +46,20 @@ export async function GET(request: Request) {
   }
   const stripeAccountId = profile.stripe_account_id;
 
-  // 3) Pull query filters
+  // 3) Parse optional date filters
   const url = new URL(request.url);
   const startDate = url.searchParams.get("startDate");
   const endDate = url.searchParams.get("endDate");
 
   try {
-    // 4) Retrieve balances
+    // 4) Retrieve balance for connected account
     const bal = await stripe.balance.retrieve(
       {},
       { stripeAccount: stripeAccountId }
     );
 
-    // 5) Build created‑filter if any
-    const listParams: BalanceTransactionListParams = { limit: 100 };
+    // 5) Build parameters for listing balance transactions
+    const listParams: Stripe.BalanceTransactionListParams = { limit: 100 };
     if (startDate || endDate) {
       listParams.created = {};
       if (startDate) {
@@ -72,7 +74,7 @@ export async function GET(request: Request) {
       }
     }
 
-    // 6) Retrieve transactions with filter
+    // 6) Retrieve the transactions list
     const txList = await stripe.balanceTransactions.list(
       listParams,
       { stripeAccount: stripeAccountId }
@@ -88,18 +90,18 @@ export async function GET(request: Request) {
       currency: b.currency,
     }));
 
-    // 8) Format each transaction
+    // 8) Format each transaction record
     const transactions = txList.data.map((t) => ({
       id: t.id,
       amount: formatAmount(t.amount, t.currency),
       currency: t.currency,
-      description: t.description || "-",          
+      description: t.description || "-",
       created: new Date(t.created * 1000).toISOString(),
       type: t.type,
       fee: typeof t.fee === "number" ? formatAmount(t.fee, t.currency) : undefined,
     }));
 
-    // 9) Return exactly the shape your pages expect
+    // 9) Return shape matching the dashboard expectations
     return NextResponse.json({
       balance: { available, pending },
       transactions,
