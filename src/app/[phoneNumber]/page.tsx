@@ -1,53 +1,40 @@
+// src/app/[celular]/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import CurrencyInput from 'react-currency-input-field';
-
-// … your loadStripe / Elements / PaymentForm imports here if you’re doing Stripe integration …
+import { useBRLFormatter } from '@/components/useBRLFormatter';
 
 export default function DriverPaymentPage({
   params,
 }: {
-  params: { phoneNumber: string };
+  params: { celular: string };
 }) {
-  const { phoneNumber } = params;
-
-  const [driverProfile, setDriverProfile] = useState<{
-    id: string;
-    nome?: string;
-    avatar_url?: string;
-  } | null>(null);
-  const [loadingProfile, setLoadingProfile] = useState(true);
+  const { celular } = params;
+  const [driver, setDriver] = useState<{ nome?: string; avatar_url?: string } | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { value: valor, onChange: handleValorChange } = useBRLFormatter('');
 
-  // fetch driver, but first verify we got JSON back
   useEffect(() => {
-    const fetchDriver = async () => {
-      setLoadingProfile(true);
-      setError('');
+    async function fetchDriver() {
       try {
-	const res = await fetch(`/api/public/driver-info/${phoneNumber}`);
-        if (!res.ok) {
-          throw new Error(`Erro ${res.status}`);
-        }
-        const contentType = res.headers.get('content-type') || '';
-        if (!contentType.includes('application/json')) {
-          throw new Error('Resposta inválida do servidor.');
-        }
-        const json = await res.json();
-        setDriverProfile(json.profile);
+        setLoading(true);
+        const res = await fetch(`/api/public-profile?celular=${celular}`);
+        if (!res.ok) throw new Error(`Erro ${res.status}`);
+        const { profile } = await res.json();
+        setDriver(profile);
       } catch (err: any) {
         setError(err.message);
       } finally {
-        setLoadingProfile(false);
+        setLoading(false);
       }
-    };
+    }
     fetchDriver();
-  }, [phoneNumber]);
+  }, [celular]);
 
-  if (loadingProfile) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600" />
@@ -55,11 +42,11 @@ export default function DriverPaymentPage({
     );
   }
 
-  if (error && !driverProfile) {
+  if (error || !driver) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-600 mb-4">{error}</p>
+          <p className="text-red-600 mb-4">{error || 'Motorista não encontrado'}</p>
           <Link href="/">Voltar à página inicial</Link>
         </div>
       </div>
@@ -67,31 +54,49 @@ export default function DriverPaymentPage({
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      {/* NavBar will now show only “Entrar/Criar Conta” here */}
-      {/* <NavBar /> */}
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      {/* your NavBar lives in layout.tsx, no need to repeat here */}
 
       <main className="flex-grow flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white shadow-md rounded-lg p-8">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
           {/* Driver info */}
           <div className="flex flex-col items-center mb-8">
             <Image
-              src={driverProfile!.avatar_url ?? '/images/avatars/avatar_1.png'}
-              alt={driverProfile!.nome || 'Motorista'}
+              src={driver.avatar_url ?? '/images/avatars/avatar_1.png'}
+              alt={driver.nome || 'Motorista'}
               width={96}
               height={96}
               className="rounded-full"
             />
-            <h2 className="mt-4 text-xl font-bold">
-              {driverProfile!.nome}
-            </h2>
+            <h2 className="mt-4 text-xl font-bold">{driver.nome}</h2>
             <p className="text-gray-600">
-              {phoneNumber.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')}
+              {celular.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')}
             </p>
           </div>
 
-          {/* Your currency input & Stripe Elements go here… */}
+          {/* Valor input only */}
+          <div>
+            <label
+              htmlFor="valor"
+              className="block text-sm text-gray-700 text-center mb-2"
+            >
+              Qual valor pago?
+            </label>
+            <input
+              id="valor"
+              name="valor"
+              type="text"
+              inputMode="decimal"
+              lang="pt-BR"
+              pattern="[0-9]*[.,]?[0-9]{0,2}"
+              placeholder="0,00"
+              value={valor}
+              onChange={(e) => handleValorChange(e.target.value)}
+              className="w-full py-3 text-2xl text-center border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
+            />
+          </div>
 
+          {/* …later, when you have clientSecret, you can mount your Stripe <Elements> here */}
         </div>
       </main>
     </div>
