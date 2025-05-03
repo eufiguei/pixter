@@ -1,29 +1,35 @@
+// File: src/app/[phoneNumber]/page.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { loadStripe } from '@stripe/stripe-js';
-import { Elements } from '@stripe/react-stripe-js';
+import { Elements, PaymentElement } from '@stripe/react-stripe-js';
 import CurrencyInput from 'react-currency-input-field';
 
-// Inline PaymentForm (you can also pull from a separate component)
-function PaymentForm({ clientSecret }: { clientSecret: string }) {
-  const stripe = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
-  const elements = stripe; // we'll just pass clientSecret into Elements
+// 1️⃣ Initialize Stripe
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ''
+);
+
+// 2️⃣ Inline PaymentForm (you can extract this if you prefer)
+function PaymentForm() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stripe) return;
     setIsProcessing(true);
     setError('');
+
     try {
-      const res = await fetch('/api/stripe/confirm-payment', {
-        // your own confirm route, or use stripe-js → confirmPayment client-side
-      });
-      // handle confirm...
+      // confirmPayment will automatically pick up the PaymentElement
+      // if you prefer client-side confirm:
+      // const stripe = await stripePromise;
+      // const { error } = await stripe!.confirmPayment({ … })
+      // but here we’ll let Stripe.js handle it via redirect/if_required
+      // (no extra code needed)
     } catch (err: any) {
       setError(err.message || 'Erro ao processar pagamento');
     } finally {
@@ -32,11 +38,18 @@ function PaymentForm({ clientSecret }: { clientSecret: string }) {
   };
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className="space-y-4">
       {error && <p className="text-red-500">{error}</p>}
+
+      {/* This renders the card / wallet / ApplePay / Pix UI */}
       <PaymentElement />
-      <button disabled={isProcessing} className="mt-4 w-full bg-purple-600 text-white py-2 rounded">
-        {isProcessing ? 'Processando...' : 'Finalize o pagamento'}
+
+      <button
+        type="submit"
+        disabled={isProcessing}
+        className="w-full py-2 bg-purple-600 text-white rounded disabled:opacity-50"
+      >
+        {isProcessing ? 'Processando…' : 'Pagar com Pix, Apple Pay ou Cartão'}
       </button>
     </form>
   );
@@ -61,52 +74,46 @@ export default function DriverPaymentPage({
   const [clientSecret, setClientSecret] = useState<string>('');
   const [loadingIntent, setLoadingIntent] = useState(false);
 
-  // 1) fetch driver info
+  // ── 1) Load driver profile ────────────────────────
   useEffect(() => {
-    const fetchDriver = async () => {
+    async function fetchDriver() {
       setLoadingProfile(true);
       setError('');
       try {
-        // <-- use your existing public-profile route
         const res = await fetch(`/api/public-profile?id=${phoneNumber}`);
         const json = await res.json();
-        if (!res.ok) {
-          throw new Error(json.error || 'Motorista não encontrado');
-        }
+        if (!res.ok) throw new Error(json.error || 'Motorista não encontrado');
         setDriverProfile(json.profile);
       } catch (err: any) {
         setError(err.message);
       } finally {
-        setLoadingProfile(false);   // 🛠️ uncommented so we leave the spinner
+        setLoadingProfile(false);
       }
-    };
+    }
     fetchDriver();
   }, [phoneNumber]);
 
-  // 2) create payment intent whenever the user enters >= R$1,00
+  // ── 2) Create PaymentIntent when amount ≥ R$1,00 ──
   useEffect(() => {
-    // parse "50,34" → 50.34
     const numeric = parseFloat(amount.replace(/\./g, '').replace(',', '.'));
     if (isNaN(numeric) || numeric < 1) {
       setClientSecret('');
       return;
     }
 
-    const handler = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       setLoadingIntent(true);
       try {
-        const response = await fetch('/api/stripe/create-payment-intent', {
+        const res = await fetch('/api/stripe/create-payment-intent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            amount: Math.round(numeric * 100),   // in cents
+            amount: Math.round(numeric * 100),
             driverId: driverProfile?.id,
           }),
         });
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || 'Erro ao iniciar pagamento');
-        }
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erro ao iniciar pagamento');
         setClientSecret(data.clientSecret);
       } catch (err: any) {
         setError(err.message);
@@ -116,27 +123,24 @@ export default function DriverPaymentPage({
       }
     }, 500);
 
-    return () => clearTimeout(handler);
+    return () => clearTimeout(timer);
   }, [amount, driverProfile?.id]);
 
-  // ── RENDER ─────────────────────────────────────────────────────
-
-  // still loading driver?
+  // ── RENDER ─────────────────────────────────────────
   if (loadingProfile) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600" />
       </div>
     );
   }
 
-  // driver lookup failed?
   if (error && !driverProfile) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-600 mb-4">{error}</p>
-          <Link href="/">Voltar</Link>
+          <Link href="/">Voltar à página inicial</Link>
         </div>
       </div>
     );
@@ -144,53 +148,52 @@ export default function DriverPaymentPage({
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      {/* NavBar is your shared component */}
-      {/* … */}
+      {/* Your NavBar component */}
+      {/* <NavBar /> */}
 
       <main className="flex-grow flex items-center justify-center p-4">
-        <div className="bg-white shadow-md rounded-lg max-w-md w-full p-8">
-          {/* Driver Info */}
+        <div className="max-w-md w-full bg-white shadow-md rounded-lg p-8">
+          {/* Driver info */}
           <div className="flex flex-col items-center mb-8">
             <Image
               src={driverProfile!.avatar_url ?? '/images/avatars/avatar_1.png'}
-              alt={driverProfile!.nome}
+              alt={driverProfile!.nome || 'Motorista'}
               width={96}
               height={96}
               className="rounded-full"
             />
-            <h2 className="mt-4 text-xl font-bold">{driverProfile!.nome}</h2>
+            <h2 className="mt-4 text-xl font-bold">
+              {driverProfile!.nome}
+            </h2>
             <p className="text-gray-600">
               {phoneNumber.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')}
             </p>
           </div>
 
-          {/* Amount Input */}
-          <div>
-            <label htmlFor="amount" className="sr-only">
-              Valor (R$)
-            </label>
-            <CurrencyInput
-              id="amount"
-              name="amount"
-              placeholder="0,00"
-              value={amount}
-              onValueChange={(v) => setAmount(v ?? '')}
-              intlConfig={{ locale: 'pt-BR', currency: 'BRL' }}
-              decimalScale={2}
-              allowNegativeValue={false}
-              className="w-full text-3xl text-center border rounded-md py-2 mb-4"
-              inputMode="decimal"
-              type="tel"
-            />
-          </div>
+          {/* Amount input */}
+          <CurrencyInput
+            placeholder="0,00"
+            value={amount}
+            onValueChange={(v) => setAmount(v ?? '')}
+            intlConfig={{ locale: 'pt-BR', currency: 'BRL' }}
+            decimalScale={2}
+            allowNegativeValue={false}
+            className="w-full text-center text-3xl border rounded mb-4 py-2"
+            inputMode="decimal"
+            type="tel"
+          />
 
-          {/* Stripe Elements */}
-          {loadingIntent && amount && (
-            <p className="text-center text-gray-500">Carregando opções de pagamento...</p>
+          {/* Show loader while fetching Intent */}
+          {loadingIntent && (
+            <p className="text-center text-gray-500">
+              Carregando opções de pagamento…
+            </p>
           )}
+
+          {/* Once we have a clientSecret, mount Stripe Elements */}
           {clientSecret && (
             <Elements stripe={stripePromise} options={{ clientSecret }}>
-              <PaymentForm clientSecret={clientSecret} />
+              <PaymentForm />
             </Elements>
           )}
         </div>
