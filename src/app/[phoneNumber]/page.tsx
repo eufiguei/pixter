@@ -1,76 +1,216 @@
 // src/app/[phoneNumber]/page.tsx
-'use client';
+"use client";
 
-import { useState, useEffect, ChangeEvent } from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
+import { useState, useEffect, useRef, FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { loadStripe, StripePaymentRequest } from "@stripe/stripe-js";
+import {
+  Elements,
+  PaymentElement,
+  useStripe,
+  useElements,
+  PaymentRequestButtonElement,
+} from "@stripe/react-stripe-js";
+import CurrencyInput from "react-currency-input-field";
 
-type Driver = {
-  id: string;
-  nome?: string;
-  avatar_url?: string;
-  profissao?: string;
-};
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
+);
 
-export default function PublicPaymentPage({
+// ────────────────────────────────────────────────────────────────────────────
+// Child component that renders Apple Pay / Google Pay button *and* card form
+// ────────────────────────────────────────────────────────────────────────────
+function StripeCheckout({
+  clientSecret,
+  amountInCents,
+}: {
+  clientSecret: string;
+  amountInCents: number;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [paymentRequest, setPaymentRequest] =
+    useState<StripePaymentRequest | null>(null);
+  const [error, setError] = useState<string>("");
+
+  // build the PaymentRequest for Apple Pay / Google Pay
+  useEffect(() => {
+    if (!stripe || amountInCents < 1) return;
+
+    const pr = stripe.paymentRequest({
+      country: "BR",
+      currency: "brl",
+      total: { label: "Total", amount: amountInCents },
+      requestPayerName: true,
+      requestPayerEmail: true,
+    });
+
+    pr.canMakePayment().then((result) => {
+      if (result) {
+        setPaymentRequest(pr);
+        pr.on("paymentmethod", async (ev) => {
+          // confirm via Payment Request API
+          const { error: err } = await stripe.confirmPayment({
+            elements,
+            confirmParams: {
+              return_url: `${window.location.origin}/payment-success`,
+            },
+            payment_method: ev.paymentMethod.id,
+          });
+          if (err) {
+            ev.complete("fail");
+            setError(err.message || "Erro no pagamento");
+          } else {
+            ev.complete("success");
+          }
+        });
+      }
+    });
+  }, [stripe, amountInCents, elements]);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!stripe || !elements) return;
+
+    const { error: err } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/payment-success`,
+      },
+    });
+    if (err) setError(err.message || "Erro no pagamento");
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {paymentRequest && (
+        <PaymentRequestButtonElement
+          options={{ paymentRequest }}
+          className="w-full"
+        />
+      )}
+      <PaymentElement />
+      {error && (
+        <p className="text-red-600 text-sm text-center">{error}</p>
+      )}
+      <button
+        type="submit"
+        disabled={!stripe}
+        className="w-full bg-purple-600 text-white py-3 rounded-md hover:bg-purple-700 disabled:opacity-50"
+      >
+        Pagar R${(amountInCents / 100).toFixed(2)}
+      </button>
+    </form>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Main page component
+// ────────────────────────────────────────────────────────────────────────────
+export default function DriverPaymentPage({
   params,
 }: {
   params: { phoneNumber: string };
 }) {
+  const router = useRouter();
   const { phoneNumber } = params;
-  const [driver, setDriver] = useState<Driver | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [valor, setValor] = useState('');
 
-  // 1️⃣ Fetch the driver profile
+  const [driverProfile, setDriverProfile] = useState<{
+    id: string;
+    nome: string;
+    avatar_url?: string;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
+  const [amount, setAmount] = useState(""); // raw string like "50,00"
+  const [amountInCents, setAmountInCents] = useState(0);
+  const [clientSecret, setClientSecret] = useState("");
+  const debounceRef = useRef<NodeJS.Timeout>();
+
+  // 1) Fetch public driver info
   useEffect(() => {
-    async function fetchDriver() {
+    const load = async () => {
+      setLoading(true);
+      setFetchError("");
       try {
         const res = await fetch(
-          `/api/public/driver-info/${encodeURIComponent(phoneNumber)}`
+          `/api/public/driver-info/${phoneNumber}`
         );
-        if (!res.ok) {
-          const { error } = await res.json();
-          throw new Error(error || `Erro ${res.status}`);
-        }
-        const { profile } = await res.json();
-        setDriver(profile);
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error);
+        setDriverProfile(json.profile);
       } catch (err: any) {
-        setError(err.message);
+        setFetchError(err.message);
       } finally {
         setLoading(false);
       }
-    }
-    fetchDriver();
+    };
+    load();
   }, [phoneNumber]);
 
-  // 2️⃣ Handle BRL input: dots → commas, only digits/comma, max two decimals
-  const handleValorChange = (e: ChangeEvent<HTMLInputElement>) => {
-    let v = e.target.value
-      .replace(/\./g, ',')
-      .replace(/[^\d,]/g, '');
+  // 2) Debounce amount → cents + create PaymentIntent
+  useEffect(() => {
+    // parse "50,00" → 5000
+    const numeric = parseFloat(
+      amount.replace(/\./g, "").replace(",", ".")
+    );
+    const cents = isNaN(numeric) ? 0 : Math.round(numeric * 100);
+    setAmountInCents(cents);
 
-    const [intPart, decPart] = v.split(',');
-    if (decPart && decPart.length > 2) {
-      v = intPart + ',' + decPart.slice(0, 2);
+    // only if >= 1 BRL
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (cents >= 100) {
+      debounceRef.current = setTimeout(async () => {
+        try {
+          const res = await fetch(
+            "/api/stripe/create-payment-intent",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                amount: cents,
+                driverId: driverProfile!.id,
+              }),
+            }
+          );
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error);
+          setClientSecret(json.clientSecret);
+        } catch (err: any) {
+          console.error(err);
+        }
+      }, 500);
+    } else {
+      setClientSecret("");
     }
-    setValor(v);
+  }, [amount, driverProfile]);
+
+  // handle raw input change
+  const onAmountChange = (val: string) => {
+    // enforce max two decimals
+    const [i, d] = val.split(",");
+    let s = i.replace(/\D/g, "");
+    if (d != null) s += "," + d.slice(0, 2);
+    setAmount(s);
   };
 
+  // ─── rendering ──────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600" />
+        <div className="animate-spin h-12 w-12 border-4 border-purple-600 border-t-transparent rounded-full" />
       </div>
     );
   }
-
-  if (error || !driver) {
+  if (fetchError || !driverProfile) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">{error || 'Motorista não encontrado'}</p>
+      <div className="min-h-screen p-4 text-center text-red-600">
+        {fetchError || "Motorista não encontrado."}
+        <div className="mt-4">
           <Link href="/" className="text-purple-600 hover:underline">
             Voltar à página inicial
           </Link>
@@ -80,53 +220,70 @@ export default function PublicPaymentPage({
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 space-y-8">
-        {/* Driver Info */}
-        <div className="flex flex-col items-center space-y-2">
-          <Image
-            src={driver.avatar_url || '/images/avatars/avatar_1.png'}
-            alt={driver.nome || 'Motorista'}
-            width={96}
-            height={96}
-            className="rounded-full"
-            priority
-          />
-          <h2 className="text-xl font-semibold">{driver.nome}</h2>
-          {driver.profissao && (
-            <p className="text-gray-600">{driver.profissao}</p>
-          )}
-          <p className="text-gray-600">
-            {phoneNumber
-              .replace(/\D/g, '')
-              .replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')}
-          </p>
-        </div>
+    <div className="min-h-screen flex flex-col">
+      {/* Header */}
+      <header className="p-4 flex justify-between items-center bg-white shadow">
+        <Link href="/">
+          <span className="text-2xl font-bold">Pixter</span>
+        </Link>
+        <nav className="space-x-4">
+          <Link href="/login" className="hover:text-purple-600">
+            Entrar
+          </Link>
+          <Link href="/cadastro" className="hover:text-purple-600">
+            Criar Conta
+          </Link>
+        </nav>
+      </header>
 
-        {/* Amount Input */}
-        <div>
+      {/* Payment form */}
+      <main className="flex-grow flex flex-col items-center justify-center p-6">
+        <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+          <div className="text-center mb-6">
+            <img
+              src={driverProfile.avatar_url}
+              alt={driverProfile.nome}
+              className="mx-auto w-24 h-24 rounded-full"
+            />
+            <h2 className="mt-4 text-2xl font-semibold">
+              {driverProfile.nome}
+            </h2>
+          </div>
+
           <label
-            htmlFor="valor"
-            className="block text-sm font-medium text-gray-700 text-center mb-1"
+            htmlFor="amount"
+            className="block text-center text-gray-700 mb-2"
           >
             Qual valor pago?
           </label>
-          <input
-            id="valor"
-            name="valor"
-            type="text"
-            inputMode="decimal"
-            lang="pt-BR"
-            pattern="[0-9]*[.,]?[0-9]{0,2}"
+          <CurrencyInput
+            id="amount"
             placeholder="0,00"
-            value={valor}
-            onChange={handleValorChange}
-            className="w-full text-2xl text-center py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+            value={amount}
+            onValueChange={onAmountChange}
+            intlConfig={{ locale: "pt-BR", currency: "BRL" }}
+            decimalScale={2}
+            allowNegativeValue={false}
+            className="w-full py-3 px-4 text-2xl text-center border rounded-md mb-6"
           />
-        </div>
 
-        {/* TODO: Once you have your clientSecret from Stripe, mount <Elements> + <PaymentElement> here */}
-      </div>
-    </main>
+          {clientSecret && amountInCents >= 100 ? (
+            <Elements
+              stripe={stripePromise}
+              options={{ clientSecret }}
+            >
+              <StripeCheckout
+                clientSecret={clientSecret}
+                amountInCents={amountInCents}
+              />
+            </Elements>
+          ) : (
+            <p className="text-center text-gray-500">
+              Digite pelo menos R$ 1,00 para ver opções de pagamento
+            </p>
+          )}
+        </div>
+      </main>
+    </div>
   );
 }
