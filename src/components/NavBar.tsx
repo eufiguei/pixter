@@ -72,9 +72,9 @@ export default function NavBar() {
     // — Driver everywhere else
     links = (
       <nav className="flex space-x-4">
-        <Link href="/motorista/dashboard/overview#pagamentos">Pagamentos</Link>
-        <Link href="/motorista/dashboard/overview#dados">Meus Dados</Link>
-        <Link href="/motorista/dashboard/overview#pagina-pagamento">Minha Página</Link>
+        <Link href="/motorista/dashboard/pagamentos">Pagamentos</Link>
+        <Link href="/motorista/dashboard/dados">Meus Dados</Link>
+        <Link href="/motorista/dashboard/pagina-pagamento">Minha Página</Link>
         <button onClick={handleSignOut}>Sair</button>
       </nav>
     );
