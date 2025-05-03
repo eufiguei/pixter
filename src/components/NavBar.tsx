@@ -3,83 +3,151 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 
 export default function NavBar() {
+  const { data: session, status } = useSession();
   const pathname = usePathname() || '/';
   const router = useRouter();
-  const { data: session, status } = useSession();
-  const loading = status === 'loading';
 
-  // Determine which menu to show
-  const isPaymentPage = pathname.match(/^\/\d+$/);
-  const isDriverDash = pathname.startsWith('/motorista/dashboard');
-  const isClientDash = pathname.startsWith('/cliente/dashboard') || pathname.startsWith('/payment-methods');
+  // quick checks
+  const isLoading = status === 'loading';
+  const isPublicPay = pathname.startsWith('/pagamento/');
+  const userType = session?.user?.tipo; // must be set in your NextAuth JWT/user object
 
-  // Logo link destination
-  const logoHref = session?.user?.tipo === 'motorista'
-    ? '/motorista/dashboard'
-    : session?.user?.tipo === 'cliente'
-      ? '/cliente/dashboard'
-      : '/';
+  // Logo always goes to the right home
+  const logoHref = session
+    ? userType === 'motorista'
+      ? '/motorista/dashboard'
+      : '/cliente/dashboard'
+    : '/';
 
-  // Sign out handler
+  // signOut handler
   const handleSignOut = async () => {
     await signOut({ redirect: false });
     router.push('/');
   };
 
-  // Render right‐side links
-  const renderLinks = () => {
-    if (loading) {
+  // Build the right-hand links
+  function renderLinks() {
+    if (isLoading) {
       return <div className="h-6 w-24 bg-gray-200 animate-pulse rounded" />;
     }
 
-    if (session?.user) {
-      if (session.user.tipo === 'motorista') {
+    // ── 1) PUBLIC PAYMENT PAGES ─────────────────────────────────
+    if (isPublicPay) {
+      // if a client is already signed in, show only their links
+      if (session && userType === 'cliente') {
         return (
-          <nav className="flex space-x-4">
-            <Link href="/motorista/dashboard#pagamentos" className="hover:text-purple-600">Pagamentos</Link>
-            <Link href="/motorista/dashboard#dados" className="hover:text-purple-600">Meus Dados</Link>
-            <Link href="/motorista/dashboard#pagina-pagamento" className="hover:text-purple-600">Minha Página</Link>
-            <button onClick={handleSignOut} className="hover:text-purple-600">Sair</button>
+          <nav className="flex items-center space-x-4">
+            <Link
+              href="/cliente/dashboard"
+              className="text-sm font-medium hover:text-purple-600"
+            >
+              Histórico
+            </Link>
+            <Link
+              href="/payment-methods"
+              className="text-sm font-medium hover:text-purple-600"
+            >
+              Métodos
+            </Link>
+            <button
+              onClick={handleSignOut}
+              className="text-sm font-medium hover:text-purple-600"
+            >
+              Sair
+            </button>
           </nav>
         );
       }
-      if (session.user.tipo === 'cliente') {
-        return (
-          <nav className="flex space-x-4">
-            <Link href="/cliente/dashboard" className={`hover:text-purple-600 ${isClientDash ? 'text-purple-600' : ''}`}>Histórico</Link>
-            <Link href="/payment-methods" className={`hover:text-purple-600 ${pathname.startsWith('/payment-methods') ? 'text-purple-600' : ''}`}>Cartões</Link>
-            <button onClick={handleSignOut} className="hover:text-purple-600">Sair</button>
-          </nav>
-        );
-      }
-      // fallback for unknown tipo
+
+      // otherwise (not signed in OR motorista), just show client sign-in/sign-up
       return (
-        <nav className="flex space-x-4">
-          <span className="text-gray-500">{session.user.email}</span>
-          <button onClick={handleSignOut} className="hover:text-purple-600">Sair</button>
+        <nav className="flex items-center space-x-4">
+          <Link href="/login" className="text-sm font-medium hover:text-purple-600">
+            Entrar
+          </Link>
+          <Link href="/cadastro" className="text-sm font-medium hover:text-purple-600">
+            Criar Conta
+          </Link>
         </nav>
       );
     }
 
-    // not signed in
-    if (isPaymentPage) {
-      return null; // hide links on public payment page
+    // ── 2) EVERYTHING ELSE ────────────────────────────────────────
+    if (session) {
+      if (userType === 'motorista') {
+        return (
+          <nav className="flex items-center space-x-4">
+            <Link
+              href="/motorista/dashboard#pagamentos"
+              className="text-sm font-medium hover:text-purple-600"
+            >
+              Pagamentos
+            </Link>
+            <Link
+              href="/motorista/dashboard#dados"
+              className="text-sm font-medium hover:text-purple-600"
+            >
+              Meus Dados
+            </Link>
+            <Link
+              href="/motorista/dashboard#pagina-pagamento"
+              className="text-sm font-medium hover:text-purple-600"
+            >
+              Minha Página
+            </Link>
+            <button
+              onClick={handleSignOut}
+              className="text-sm font-medium hover:text-purple-600"
+            >
+              Sair
+            </button>
+          </nav>
+        );
+      } else {
+        // logged-in cliente
+        return (
+          <nav className="flex items-center space-x-4">
+            <Link
+              href="/cliente/dashboard"
+              className="text-sm font-medium hover:text-purple-600"
+            >
+              Histórico
+            </Link>
+            <Link
+              href="/payment-methods"
+              className="text-sm font-medium hover:text-purple-600"
+            >
+              Métodos
+            </Link>
+            <button
+              onClick={handleSignOut}
+              className="text-sm font-medium hover:text-purple-600"
+            >
+              Sair
+            </button>
+          </nav>
+        );
+      }
     }
 
-    // preserve where client came from
-    const returnTo = encodeURIComponent(pathname);
+    // ── 3) NOT SIGNED IN ─────────────────────────────────────────
     return (
-      <nav className="flex space-x-4">
-        <Link href={`/login?returnTo=${returnTo}`} className="hover:text-purple-600">Entrar</Link>
-        <Link href={`/cadastro?returnTo=${returnTo}`} className="hover:text-purple-600">Criar Conta</Link>
-        <Link href="/motorista/login" className="hover:text-purple-600">Motoristas</Link>
+      <nav className="flex items-center space-x-4">
+        <Link href="/login" className="text-sm font-medium hover:text-purple-600">
+          Entrar
+        </Link>
+        <Link href="/cadastro" className="text-sm font-medium hover:text-purple-600">
+          Criar Conta
+        </Link>
+        <Link href="/motorista/login" className="text-sm font-medium hover:text-purple-600">
+          Motoristas
+        </Link>
       </nav>
     );
-  };
+  }
 
   return (
     <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 bg-white shadow-md">
