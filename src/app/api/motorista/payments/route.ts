@@ -57,7 +57,7 @@ export async function GET(request: Request) {
     );
 
     // 5) Build created‐filter if any
-    const listParams: Stripe.BalanceTransactionsListParams = { limit: 100 };
+    const listParams: Stripe.BalanceTransactionListParams = { limit: 100 };
     if (startDate || endDate) {
       listParams.created = {};
       if (startDate) {
