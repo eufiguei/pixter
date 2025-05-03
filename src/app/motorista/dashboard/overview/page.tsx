@@ -61,7 +61,7 @@ export default function DriverDashboardPage() {
           }
           setProfile(profileData);
 
-          // Build payment page link + QR
+          // 2) Build payment page link + QR
           const link = `${window.location.origin}/pagamento/${profileData.id}`;
           setPaymentPageLink(link);
           QRCode.toDataURL(link, { errorCorrectionLevel: "H", margin: 2, scale: 6 }, (_, url) => {
@@ -69,7 +69,7 @@ export default function DriverDashboardPage() {
           });
           QRCode.toCanvas(qrCodeRef.current!, link, { errorCorrectionLevel: "H", margin: 2, width: 200 }, () => {});
 
-          // 2) Fetch payments (include cookie for auth)
+          // 3) Fetch payments (include cookie for auth)
           const paymentsRes = await fetch("/api/motorista/payments", {
             credentials: "include",
           });
@@ -133,21 +133,11 @@ export default function DriverDashboardPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Data
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Valor
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Cliente
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Método
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                      Comprovante
-                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valor</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Método</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Comprovante</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
