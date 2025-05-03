@@ -1,25 +1,39 @@
+// src/app/[phoneNumber]/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, ChangeEvent } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
-export default function DriverPaymentPage({
+type Driver = {
+  id: string;
+  nome?: string;
+  avatar_url?: string;
+  profissao?: string;
+};
+
+export default function PublicPaymentPage({
   params,
 }: {
   params: { phoneNumber: string };
 }) {
   const { phoneNumber } = params;
-  const [driver, setDriver] = useState<{ nome?: string; avatar_url?: string } | null>(null);
+  const [driver, setDriver] = useState<Driver | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [valor, setValor] = useState('');
 
+  // 1️⃣ Fetch the driver profile
   useEffect(() => {
     async function fetchDriver() {
       try {
-        const res = await fetch(`/api/public-profile?celular=${phoneNumber}`);
-        if (!res.ok) throw new Error(`Erro ${res.status}`);
+        const res = await fetch(
+          `/api/public/driver-info/${encodeURIComponent(phoneNumber)}`
+        );
+        if (!res.ok) {
+          const { error } = await res.json();
+          throw new Error(error || `Erro ${res.status}`);
+        }
         const { profile } = await res.json();
         setDriver(profile);
       } catch (err: any) {
@@ -31,8 +45,8 @@ export default function DriverPaymentPage({
     fetchDriver();
   }, [phoneNumber]);
 
-  // Brazilian BRL formatting: replace dots with commas, allow up to 2 decimals
-  const handleValorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 2️⃣ Handle BRL input: dots → commas, only digits/comma, max two decimals
+  const handleValorChange = (e: ChangeEvent<HTMLInputElement>) => {
     let v = e.target.value
       .replace(/\./g, ',')
       .replace(/[^\d,]/g, '');
@@ -57,57 +71,62 @@ export default function DriverPaymentPage({
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-600 mb-4">{error || 'Motorista não encontrado'}</p>
-          <Link href="/">Voltar à página inicial</Link>
+          <Link href="/" className="text-purple-600 hover:underline">
+            Voltar à página inicial
+          </Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <main className="flex-grow flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-          {/* Driver info */}
-          <div className="flex flex-col items-center mb-8">
-            <Image
-              src={driver.avatar_url ?? '/images/avatars/avatar_1.png'}
-              alt={driver.nome || 'Motorista'}
-              width={96}
-              height={96}
-              className="rounded-full"
-              priority
-            />
-            <h2 className="mt-4 text-xl font-bold">{driver.nome}</h2>
-            <p className="text-gray-600">
-              {phoneNumber.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')}
-            </p>
-          </div>
-
-          {/* Valor input */}
-          <div>
-            <label
-              htmlFor="valor"
-              className="block text-sm text-gray-700 text-center mb-2"
-            >
-              Qual valor pago?
-            </label>
-            <input
-              id="valor"
-              name="valor"
-              type="text"
-              inputMode="decimal"
-              lang="pt-BR"
-              pattern="[0-9]*[.,]?[0-9]{0,2}"
-              placeholder="0,00"
-              value={valor}
-              onChange={handleValorChange}
-              className="w-full py-3 text-2xl text-center border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
-            />
-          </div>
-
-          {/* TODO: once you have clientSecret, mount Stripe <Elements> + <PaymentElement> here */}
+    <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 space-y-8">
+        {/* Driver Info */}
+        <div className="flex flex-col items-center space-y-2">
+          <Image
+            src={driver.avatar_url || '/images/avatars/avatar_1.png'}
+            alt={driver.nome || 'Motorista'}
+            width={96}
+            height={96}
+            className="rounded-full"
+            priority
+          />
+          <h2 className="text-xl font-semibold">{driver.nome}</h2>
+          {driver.profissao && (
+            <p className="text-gray-600">{driver.profissao}</p>
+          )}
+          <p className="text-gray-600">
+            {phoneNumber
+              .replace(/\D/g, '')
+              .replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')}
+          </p>
         </div>
-      </main>
-    </div>
+
+        {/* Amount Input */}
+        <div>
+          <label
+            htmlFor="valor"
+            className="block text-sm font-medium text-gray-700 text-center mb-1"
+          >
+            Qual valor pago?
+          </label>
+          <input
+            id="valor"
+            name="valor"
+            type="text"
+            inputMode="decimal"
+            lang="pt-BR"
+            pattern="[0-9]*[.,]?[0-9]{0,2}"
+            placeholder="0,00"
+            value={valor}
+            onChange={handleValorChange}
+            className="w-full text-2xl text-center py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+        </div>
+
+        {/* TODO: Once you have your clientSecret from Stripe, mount <Elements> + <PaymentElement> here */}
+      </div>
+    </main>
   );
 }
