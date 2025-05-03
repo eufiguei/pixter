@@ -7,15 +7,19 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import QRCode from "qrcode";
 
-type Payment = {
+type BalanceEntry = {
+  amount: string;     // e.g. "R$ 500,00"
+  currency: string;   // "brl"
+};
+
+type Transaction = {
   id: string;
-  data: string;
-  valor: string;
-  valor_original?: string;
-  metodo: string;
-  recibo_id: string;
-  status: string;
-  cliente?: string;
+  amount: string;     // formatted
+  currency: string;
+  description: string;
+  created: string;    // ISO date
+  type: string;       // e.g. "payment"
+  fee?: string;       // formatted
 };
 
 type Profile = {
@@ -23,7 +27,6 @@ type Profile = {
   nome?: string;
   email?: string;
   celular?: string;
-  stripe_account_id?: string;
   tipo?: string;
 };
 
@@ -31,180 +34,172 @@ export default function DriverDashboardPage() {
   const router = useRouter();
   const { data: session, status: sessionStatus } = useSession();
 
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loadingData, setLoadingData] = useState(true);
-  const [error, setError] = useState("");
-  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
-  const [paymentPageLink, setPaymentPageLink] = useState<string>("");
+  const [profile, setProfile]           = useState<Profile | null>(null);
+  const [balance, setBalance]           = useState<{ available: BalanceEntry[]; pending: BalanceEntry[] } | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState("");
+  const [paymentPageLink, setPaymentPageLink] = useState("");
   const qrCodeRef = useRef<HTMLCanvasElement>(null);
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (sessionStatus === "authenticated") {
-      const fetchData = async () => {
-        setLoadingData(true);
-        setError("");
-
-        try {
-          // 1) Fetch driver profile (must include NextAuth cookie)
-          const profileRes = await fetch("/api/motorista/profile", {
-            credentials: "include",
-          });
-          if (!profileRes.ok) {
-            const err = await profileRes.json();
-            throw new Error(err.error || `Erro ao carregar perfil (${profileRes.status})`);
-          }
-          const profileData: Profile = await profileRes.json();
-
-          if (profileData.tipo !== "motorista") {
-            throw new Error(`Acesso negado: tipo inválido (${profileData.tipo}).`);
-          }
-          setProfile(profileData);
-
-          // 2) Build payment page link + QR
-          const link = `${window.location.origin}/pagamento/${profileData.id}`;
-          setPaymentPageLink(link);
-          QRCode.toDataURL(link, { errorCorrectionLevel: "H", margin: 2, scale: 6 }, (_, url) => {
-            if (url) setQrCodeUrl(url);
-          });
-          QRCode.toCanvas(qrCodeRef.current!, link, { errorCorrectionLevel: "H", margin: 2, width: 200 }, () => {});
-
-          // 3) Fetch payments (include cookie for auth)
-          const paymentsRes = await fetch("/api/motorista/payments", {
-            credentials: "include",
-          });
-          if (!paymentsRes.ok) {
-            const err = await paymentsRes.json();
-            throw new Error(err.error || `Erro ao carregar pagamentos (${paymentsRes.status})`);
-          }
-          const { payments: paymentsData }: { payments: Payment[] } = await paymentsRes.json();
-          setPayments(paymentsData || []);
-        } catch (err: any) {
-          console.error("[Dashboard] fetchData error:", err);
-          setError(err.message || "Erro ao carregar dados do dashboard.");
-        } finally {
-          setLoadingData(false);
-        }
-      };
-
-      fetchData();
-    } else if (sessionStatus === "unauthenticated") {
-      router.push("/motorista/login");
+    if (sessionStatus !== "authenticated") {
+      if (sessionStatus === "unauthenticated") router.push("/motorista/login");
+      return;
     }
-  }, [sessionStatus, session, router]);
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(paymentPageLink);
-    alert("Link copiado!");
-  };
+    const fetchAll = async () => {
+      setLoading(true);
+      setError("");
 
-  const handleDownloadQR = () => {
-    if (!qrCodeRef.current) return;
-    const a = document.createElement("a");
-    a.download = `pixter_qr_${profile?.id || "code"}.png`;
-    a.href = qrCodeRef.current.toDataURL("image/png");
-    a.click();
-  };
+      try {
+        // 1) load profile
+        const pr = await fetch("/api/motorista/profile", { credentials: "include" });
+        if (!pr.ok) throw new Error((await pr.json()).error || "Erro ao carregar perfil");
+        const profileData: Profile = await pr.json();
+        if (profileData.tipo !== "motorista") throw new Error("Acesso negado: não é motorista");
+        setProfile(profileData);
 
-  if (sessionStatus === "loading" || (sessionStatus === "authenticated" && loadingData)) {
+        // build payment page + QR
+        const link = `${window.location.origin}/${profileData.celular?.replace(/\D/g, "")}`;
+        setPaymentPageLink(link);
+        QRCode.toDataURL(link, { errorCorrectionLevel: "H", margin: 2, scale: 6 }, (_, url) => {
+          if (url) setQrCodeUrl(url);
+        });
+        QRCode.toCanvas(qrCodeRef.current!, link, { errorCorrectionLevel: "H", margin: 2, width: 200 }, () => {});
+
+        // 2) load balance + transactions
+        // you can append ?startDate=…&endDate=… here if you wish
+        const resp = await fetch("/api/motorista/payments", { credentials: "include" });
+        if (!resp.ok) throw new Error((await resp.json()).error || "Erro ao carregar pagamentos");
+        const { balance: bal, transactions: txs }: { balance: { available: BalanceEntry[]; pending: BalanceEntry[] }; transactions: Transaction[] } =
+          await resp.json();
+
+        setBalance(bal);
+        setTransactions(txs);
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || "Erro inesperado");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAll();
+  }, [sessionStatus, router]);
+
+  if (loading) {
     return <div className="p-6 text-center">Carregando dashboard...</div>;
   }
-
-  if (error) {
+  if (error || !profile || !balance) {
     return (
       <div className="p-6 text-red-500">
         <p className="font-semibold">Erro ao carregar dashboard:</p>
-        <p>{error}</p>
-        <p className="mt-2 text-sm text-gray-600">Verifique os dados ou contate o suporte.</p>
+        <p>{error || "Dados incompletos"}</p>
       </div>
     );
   }
 
-  if (sessionStatus === "authenticated" && profile) {
-    return (
-      <div className="p-4 md:p-8 space-y-8">
-        <h1 className="text-3xl font-bold text-gray-800">Olá, {profile.nome || "Motorista"}!</h1>
+  const availableTotal = balance.available
+    .map((b) => Number(b.amount.replace(/\D/g, "")) / 100)
+    .reduce((sum, v) => sum + v, 0);
+  const formattedAvailable = balance.available[0]?.amount || "R$ 0,00";
 
-        {/* Pagamentos Recebidos */}
-        <section className="bg-white p-4 md:p-6 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4 text-gray-700">Pagamentos Recebidos</h2>
-          {payments.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valor</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Método</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Comprovante</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {payments.map((p) => (
-                    <tr key={p.id}>
-                      <td className="px-4 py-3 text-sm text-gray-700">{new Date(p.data).toLocaleDateString("pt-BR")}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{p.valor}</td>
-                      <td className="px-4 py-3 text-sm text-gray-700">{p.cliente || "-"}</td>
-                      <td className="px-4 py-3 text-sm text-gray-700">{p.metodo}</td>
-                      <td className="px-4 py-3 text-right text-sm font-medium">
-                        <Link
-                          href={`/api/receipts/${p.recibo_id}?type=driver`}
-                          target="_blank"
-                          className="text-indigo-600 hover:text-indigo-900"
-                        >
-                          Baixar
-                        </Link>
-                      </td>
-                    </tr>
+  return (
+    <div className="p-4 md:p-8 space-y-8">
+      <h1 className="text-3xl font-bold text-gray-800">Olá, {profile.nome || "Motorista"}!</h1>
+
+      {/* Balance */}
+      <section className="bg-white p-6 rounded-lg shadow-md">
+        <h2 className="text-xl font-semibold mb-2">Saldo Disponível</h2>
+        <p className="text-4xl font-bold text-gray-900">{formattedAvailable}</p>
+        {balance.pending.length > 0 && (
+          <p className="mt-1 text-sm text-gray-500">
+            (Pendente: {balance.pending[0].amount})
+          </p>
+        )}
+      </section>
+
+      {/* Transactions */}
+      <section className="bg-white p-4 rounded-lg shadow-md">
+        <h2 className="text-xl font-semibold mb-4">Movimentações</h2>
+        {transactions.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  {["Data", "Valor", "Descrição", "Taxa", "Tipo"].map((th) => (
+                    <th key={th} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      {th}
+                    </th>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="text-gray-500">Nenhum pagamento recebido encontrado.</p>
-          )}
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {transactions.map((t) => (
+                  <tr key={t.id}>
+                    <td className="px-4 py-2 text-sm text-gray-700">
+                      {new Date(t.created).toLocaleDateString("pt-BR")}
+                    </td>
+                    <td className="px-4 py-2 text-sm font-medium text-gray-900">{t.amount}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{t.description || "-"}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{t.fee || "-"}</td>
+                    <td className="px-4 py-2 text-sm text-gray-700 capitalize">{t.type}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-gray-500">Nenhuma movimentação encontrada.</p>
+        )}
+      </section>
+
+      {/* Meus Dados & Minha Página de Pagamento */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Meus Dados */}
+        <section className="bg-white p-4 rounded-lg shadow-md">
+          <h2 className="text-xl font-semibold mb-4">Meus Dados</h2>
+          <p><strong>Nome:</strong> {profile.nome}</p>
+          <p><strong>Email:</strong> {profile.email}</p>
+          <p><strong>Celular:</strong> {profile.celular}</p>
+          <Link href="/motorista/dashboard/dados">
+            <button className="mt-4 w-full py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
+              Atualizar informações
+            </button>
+          </Link>
         </section>
 
-        {/* Meus Dados & Minha Página de Pagamento */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <section className="bg-white p-4 md:p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4 text-gray-700">Meus Dados</h2>
-            <div className="space-y-2 text-gray-700 mb-4">
-              <p><strong>Nome:</strong> {profile.nome || "-"}</p>
-              <p><strong>Email:</strong> {profile.email || "-"}</p>
-              <p><strong>Celular:</strong> {profile.celular || "-"}</p>
-            </div>
-            <Link href="/motorista/dashboard/dados">
-              <button className="w-full px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700">
-                Atualizar informações
-              </button>
-            </Link>
-          </section>
-
-          <section className="bg-white p-4 md:p-6 rounded-lg shadow-md flex flex-col items-center">
-            <h2 className="text-xl font-semibold mb-4 text-gray-700">Minha Página de Pagamento</h2>
-            <input
-              readOnly
-              value={paymentPageLink}
-              className="w-full mb-4 px-3 py-2 border rounded-md text-center bg-gray-50"
-            />
-            <button onClick={handleCopyLink} className="w-full mb-4 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700">
-              Copiar link
-            </button>
-            {qrCodeUrl ? (
-              <img src={qrCodeUrl} alt="QR Code Pagamento" width={150} height={150} />
-            ) : (
-              <div className="w-[150px] h-[150px] bg-gray-200 animate-pulse" />
-            )}
-            <button onClick={handleDownloadQR} className="w-full mt-4 px-4 py-2 border border-purple-600 rounded-md hover:bg-purple-50">
-              Baixar QR Code
-            </button>
-          </section>
-        </div>
+        {/* Minha Página de Pagamento */}
+        <section className="bg-white p-4 rounded-lg shadow-md flex flex-col items-center">
+          <h2 className="text-xl font-semibold mb-4">Minha Página de Pagamento</h2>
+          <input
+            readOnly
+            value={paymentPageLink}
+            className="w-full mb-4 px-3 py-2 border rounded text-center bg-gray-50"
+          />
+          <button
+            onClick={() => { navigator.clipboard.writeText(paymentPageLink); }}
+            className="w-full mb-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+          >
+            Copiar link
+          </button>
+          {qrCodeUrl && <img src={qrCodeUrl} alt="QR Code" width={150} height={150} />}
+          <canvas ref={qrCodeRef} style={{ display: "none" }} />
+          <button
+            onClick={() => {
+              const a = document.createElement("a");
+              a.download = `qr_${profile.id}.png`;
+              a.href = qrCodeRef.current!.toDataURL();
+              a.click();
+            }}
+            className="mt-4 w-full py-2 border border-purple-600 rounded hover:bg-purple-50"
+          >
+            Baixar QR Code
+          </button>
+        </section>
       </div>
-    );
-  }
-
-  return <div className="p-6 text-center">Redirecionando...</div>;
+    </div>
+  );
 }

@@ -91,19 +91,28 @@ export default function NavBar() {
     router.refresh();
   };
 
+  // Hide everything on /pagamento/[id]
   const isPublicPaymentPage =
     pathname.startsWith('/pagamento/') && pathname.split('/').length === 3;
+
+  // Are we inside a driver dashboard?
   const isDriverDash = pathname.startsWith('/motorista/dashboard');
+
+  // Are we inside a client dashboard?
   const isClientDash =
     pathname.startsWith('/cliente/dashboard') ||
     pathname.startsWith('/payment-methods');
 
+  // Logo always points to the correct dashboard or home
   const getLogoLink = () => {
     const tipo = session?.user?.user_metadata?.tipo;
     if (tipo === 'motorista') return '/motorista/dashboard';
     if (tipo === 'cliente') return '/cliente/dashboard';
     return '/';
   };
+
+  // Build `returnTo=` param for end-client flows
+  const returnToParam = `?returnTo=${encodeURIComponent(pathname)}`;
 
   const renderLinks = () => {
     if (loading) {
@@ -112,114 +121,75 @@ export default function NavBar() {
       );
     }
 
+    // --- logged in ---
     if (session?.user) {
       const tipo = session.user.user_metadata?.tipo;
       if (tipo === 'motorista') {
         return (
           <nav className="flex items-center space-x-4">
-            <Link
-              href="/motorista/dashboard#pagamentos"
-              className="text-sm font-medium hover:text-purple-600"
-            >
+            <Link href="/motorista/dashboard#pagamentos" className="text-sm font-medium hover:text-purple-600">
               Pagamentos
             </Link>
-            <Link
-              href="/motorista/dashboard#dados"
-              className="text-sm font-medium hover:text-purple-600"
-            >
+            <Link href="/motorista/dashboard#dados" className="text-sm font-medium hover:text-purple-600">
               Meus Dados
             </Link>
-            <Link
-              href="/motorista/dashboard#pagina-pagamento"
-              className="text-sm font-medium hover:text-purple-600"
-            >
+            <Link href="/motorista/dashboard#pagina-pagamento" className="text-sm font-medium hover:text-purple-600">
               Minha Página
             </Link>
-            <button
-              onClick={handleSignOut}
-              className="text-sm font-medium hover:text-purple-600"
-            >
+            <button onClick={handleSignOut} className="text-sm font-medium hover:text-purple-600">
               Sair
             </button>
           </nav>
         );
-      } else if (tipo === 'cliente') {
+      }
+      if (tipo === 'cliente') {
         return (
           <nav className="flex items-center space-x-4">
-            <Link
-              href="/cliente/dashboard"
-              className={`text-sm font-medium ${
-                pathname === '/cliente/dashboard'
-                  ? 'text-purple-600'
-                  : 'hover:text-purple-600'
-              }`}
-            >
+            <Link href="/cliente/dashboard" className={`text-sm font-medium ${pathname === '/cliente/dashboard' ? 'text-purple-600' : 'hover:text-purple-600'}`}>
               Histórico
             </Link>
-            <Link
-              href="/payment-methods"
-              className={`text-sm font-medium ${
-                pathname.startsWith('/payment-methods')
-                  ? 'text-purple-600'
-                  : 'hover:text-purple-600'
-              }`}
-            >
+            <Link href="/payment-methods" className={`text-sm font-medium ${pathname.startsWith('/payment-methods') ? 'text-purple-600' : 'hover:text-purple-600'}`}>
               Cartões
             </Link>
-            <button
-              onClick={handleSignOut}
-              className="text-sm font-medium hover:text-purple-600"
-            >
-              Sair
-            </button>
-          </nav>
-        );
-      } else {
-        // logged-in, unknown tipo
-        return (
-          <nav className="flex items-center space-x-4">
-            <span className="text-sm font-medium text-gray-500">
-              {session.user.email}
-            </span>
-            <button
-              onClick={handleSignOut}
-              className="text-sm font-medium hover:text-purple-600"
-            >
+            <button onClick={handleSignOut} className="text-sm font-medium hover:text-purple-600">
               Sair
             </button>
           </nav>
         );
       }
-    } else {
-      // Not signed in
-      if (isPublicPaymentPage) {
-        return null; // hide on /pagamento/[id]
-      }
-      // If you’re a client on a payment page and click login, we’ll return them here
-      const returnToParam = `?returnTo=${encodeURIComponent(pathname)}`;
+      // fallback if we can’t determine tipo
       return (
         <nav className="flex items-center space-x-4">
-          <Link
-            href={`/login${returnToParam}`}
-            className="text-sm font-medium hover:text-purple-600"
-          >
-            Entrar
-          </Link>
-          <Link
-            href={`/cadastro${returnToParam}`}
-            className="text-sm font-medium hover:text-purple-600"
-          >
-            Criar Conta
-          </Link>
-          <Link
-            href="/motorista/login"
-            className="text-sm font-medium hover:text-purple-600"
-          >
-            Motoristas
-          </Link>
+          <span className="text-sm font-medium text-gray-500">
+            {session.user.email}
+          </span>
+          <button onClick={handleSignOut} className="text-sm font-medium hover:text-purple-600">
+            Sair
+          </button>
         </nav>
       );
     }
+
+    // --- public visitor ---
+    if (isPublicPaymentPage) {
+      // don’t show any links
+      return null;
+    }
+
+    // not signed in: show entry links
+    return (
+      <nav className="flex items-center space-x-4">
+        <Link href={`/login${returnToParam}`} className="text-sm font-medium hover:text-purple-600">
+          Entrar
+        </Link>
+        <Link href={`/cadastro${returnToParam}`} className="text-sm font-medium hover:text-purple-600">
+          Criar Conta
+        </Link>
+        <Link href="/motorista/login" className="text-sm font-medium hover:text-purple-600">
+          Motoristas
+        </Link>
+      </nav>
+    );
   };
 
   return (

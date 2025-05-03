@@ -8,40 +8,47 @@ import { signIn } from 'next-auth/react'
 
 export default function MotoristaLogin() {
   const router = useRouter()
-  const [phone, setPhone] = useState('')
-  const [countryCode] = useState('55')
-  const [codeSent, setCodeSent] = useState(false)
-  const [countdown, setCountdown] = useState(0)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [phone, setPhone]           = useState('')
+  const [countryCode]               = useState('55')
+  const [codeSent, setCodeSent]     = useState(false)
+  const [countdown, setCountdown]   = useState(0)
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState('')
+  const [success, setSuccess]       = useState('')
 
-  // OTP state as array of 6
+  // --- OTP state & refs ---
   const [otp, setOtp] = useState<string[]>(['', '', '', '', '', ''])
   const inputsRef = useRef<Array<HTMLInputElement | null>>([])
 
-  // Send OTP
+  // 1) Send the 6-digit code via your API
   const enviarCodigo = async () => {
     if (!phone.trim()) {
-      setError('Por favor, informe seu número de WhatsApp')
-      return
+      return setError('Por favor, informe seu número de WhatsApp')
     }
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
     try {
-      setLoading(true); setError(''); setSuccess('')
       const res = await fetch('/api/auth/send-verification', {
         method: 'POST',
-        headers: {'Content-Type':'application/json'},
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, countryCode }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Erro ao enviar código')
+
       setCodeSent(true)
       setCountdown(60)
       setSuccess('Código enviado! Verifique seu WhatsApp.')
-      // start countdown
+
+      // start 60s countdown
       const timer = setInterval(() => {
         setCountdown(c => {
-          if (c <= 1) { clearInterval(timer); return 0 }
+          if (c <= 1) {
+            clearInterval(timer)
+            return 0
+          }
           return c - 1
         })
       }, 1000)
@@ -53,15 +60,17 @@ export default function MotoristaLogin() {
     }
   }
 
-  // Verify OTP
+  // 2) Verify the joined OTP via NextAuth
   const verificarCodigo = async () => {
     const code = otp.join('')
     if (code.length < 6) {
-      setError('Por favor, insira o código completo')
-      return
+      return setError('Por favor, insira o código completo')
     }
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
     try {
-      setLoading(true); setError(''); setSuccess('')
       const result = await signIn('phone-otp', {
         redirect: false,
         phone,
@@ -71,6 +80,7 @@ export default function MotoristaLogin() {
       if (result?.error) {
         setError(result.error)
       } else {
+        // always land on driver dashboard
         router.push('/motorista/dashboard')
       }
     } catch (e: any) {
@@ -81,33 +91,34 @@ export default function MotoristaLogin() {
     }
   }
 
-  // Handle single-box input
+  // handle a single-digit change
   const handleChange = (idx: number, val: string) => {
     if (!/^\d?$/.test(val)) return
     const next = [...otp]
     next[idx] = val
     setOtp(next)
-    // move focus
+    // auto-advance
     if (val && inputsRef.current[idx+1]) {
       inputsRef.current[idx+1]!.focus()
     }
   }
 
-  // Handle paste of full code
+  // handle full 6-digit paste
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault()
     const pasted = e.clipboardData.getData('Text').replace(/\D/g,'').slice(0,6)
-    if (pasted.length) {
-      const next = pasted.split('')
-      while (next.length < 6) next.push('')
-      setOtp(next)
-      // focus last filled or next
-      const pos = pasted.length >= 6 ? 5 : pasted.length
-      inputsRef.current[pos]?.focus()
-    }
+    if (!pasted) return
+
+    const next = pasted.split('')
+    while (next.length < 6) next.push('')
+    setOtp(next)
+
+    // focus next empty or last
+    const pos = pasted.length >= 6 ? 5 : pasted.length
+    inputsRef.current[pos]?.focus()
   }
 
-  // If user clears all boxes, focus first
+  // if user clears all boxes, reset focus to the first
   useEffect(() => {
     if (otp.every(d => d === '')) {
       inputsRef.current[0]?.focus()
@@ -141,14 +152,16 @@ export default function MotoristaLogin() {
                 onChange={e => setPhone(e.target.value)}
                 disabled={loading}
                 placeholder="11 98765-4321"
-                className={`flex-1 border border-gray-300 rounded-r px-3 ${loading? 'bg-gray-100':''}`}
+                className={`flex-1 border border-gray-300 rounded-r px-3 ${loading ? 'bg-gray-100' : ''}`}
               />
             </div>
             <button
               onClick={enviarCodigo}
-              disabled={loading || !phone}
+              disabled={loading || !phone.trim()}
               className={`w-full py-2 rounded text-white ${
-                loading || !phone ? 'bg-purple-300 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'
+                loading || !phone.trim()
+                  ? 'bg-purple-300 cursor-not-allowed'
+                  : 'bg-purple-600 hover:bg-purple-700'
               }`}
             >
               {loading ? 'Enviando…' : 'Enviar código'}
