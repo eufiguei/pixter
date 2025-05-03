@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { loadStripe, StripePaymentRequest } from "@stripe/stripe-js";
+import { loadStripe, PaymentRequest } from "@stripe/stripe-js";
 import {
   Elements,
   PaymentElement,
@@ -31,7 +31,7 @@ function StripeCheckout({
   const stripe = useStripe();
   const elements = useElements();
   const [paymentRequest, setPaymentRequest] =
-    useState<StripePaymentRequest | null>(null);
+    useState<PaymentRequest | null>(null);
   const [error, setError] = useState<string>("");
 
   // build the PaymentRequest for Apple Pay / Google Pay
