@@ -4,207 +4,197 @@ import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { loadStripe } from '@stripe/stripe-js';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { Elements } from '@stripe/react-stripe-js';
 import CurrencyInput from 'react-currency-input-field';
-import QRCode from 'qrcode';
 
-// Initialize Stripe
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
-
-// Default avatar placeholder
-const defaultAvatar = '/images/avatars/avatar_1.png';
-
-// --- PaymentForm child component ---
+// Inline PaymentForm (you can also pull from a separate component)
 function PaymentForm({ clientSecret }: { clientSecret: string }) {
-  const stripe = useStripe();
-  const elements = useElements();
+  const stripe = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+  const elements = stripe; // we'll just pass clientSecret into Elements
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentError, setPaymentError] = useState('');
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stripe || !elements) return;
+    if (!stripe) return;
     setIsProcessing(true);
-    setPaymentError('');
-
-    const { error } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: `${window.location.origin}/payment-success`,
-      },
-      redirect: 'if_required',
-    });
-
-    if (error) {
-      setPaymentError(error.message || 'Ocorreu um erro ao processar o pagamento.');
+    setError('');
+    try {
+      const res = await fetch('/api/stripe/confirm-payment', {
+        // your own confirm route, or use stripe-js → confirmPayment client-side
+      });
+      // handle confirm...
+    } catch (err: any) {
+      setError(err.message || 'Erro ao processar pagamento');
+    } finally {
+      setIsProcessing(false);
     }
-
-    setIsProcessing(false);
   };
 
   return (
-    <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-      {paymentError && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm">
-          {paymentError}
-        </div>
-      )}
+    <form onSubmit={handleSubmit}>
+      {error && <p className="text-red-500">{error}</p>}
       <PaymentElement />
-      <button
-        type="submit"
-        disabled={!stripe || isProcessing}
-        className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-md shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isProcessing ? 'Processando...' : 'Pagar com Pix, Apple Pay ou Cartão'}
+      <button disabled={isProcessing} className="mt-4 w-full bg-purple-600 text-white py-2 rounded">
+        {isProcessing ? 'Processando...' : 'Finalize o pagamento'}
       </button>
-      <p className="text-center text-xs text-gray-500 mt-2">
-        Pagamento processado com segurança via Stripe
-      </p>
     </form>
   );
 }
 
-// --- Main page component ---
-export default function DriverPaymentPage({ params }: { params: { phonenumber: string } }) {
-  const { phonenumber } = params;
-  const [amount, setAmount] = useState('');               // raw BRL string
-  const [driverInfo, setDriverInfo] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [clientSecret, setClientSecret] = useState<string>('');
-  const debounceRef = useRef<NodeJS.Timeout>();
+export default function DriverPaymentPage({
+  params,
+}: {
+  params: { phoneNumber: string };
+}) {
+  const { phoneNumber } = params;
 
-  // Fetch driver info once
+  const [driverProfile, setDriverProfile] = useState<{
+    id: string;
+    nome?: string;
+    avatar_url?: string;
+  } | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [error, setError] = useState('');
+
+  const [amount, setAmount] = useState('');       // e.g. "50,00"
+  const [clientSecret, setClientSecret] = useState<string>('');
+  const [loadingIntent, setLoadingIntent] = useState(false);
+
+  // 1) fetch driver info
   useEffect(() => {
-    if (!phonenumber) return;
-    (async () => {
-      setLoading(true);
+    const fetchDriver = async () => {
+      setLoadingProfile(true);
+      setError('');
       try {
-        const res = await fetch(`/api/public/driver-info/${phonenumber}`);
-        if (!res.ok) throw new Error((await res.json()).error || 'Motorista não encontrado');
-        setDriverInfo(await res.json());
+        // <-- use your existing public-profile route
+        const res = await fetch(`/api/public-profile?id=${phoneNumber}`);
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json.error || 'Motorista não encontrado');
+        }
+        setDriverProfile(json.profile);
       } catch (err: any) {
         setError(err.message);
       } finally {
-        setLoading(false);
+        setLoadingProfile(false);   // 🛠️ uncommented so we leave the spinner
       }
-    })();
-  }, [phonenumber]);
+    };
+    fetchDriver();
+  }, [phoneNumber]);
 
-  // Create PaymentIntent when amount ≥ 1 and debounced
+  // 2) create payment intent whenever the user enters >= R$1,00
   useEffect(() => {
-    clearTimeout(debounceRef.current!);
-    const numeric = parseFloat(amount.replace(/[^\d,]/g, '').replace(',', '.'));
-    if (numeric >= 1) {
-      debounceRef.current = setTimeout(async () => {
-        setLoading(true);
-        setError('');
-        try {
-          const res = await fetch('/api/stripe/create-payment-intent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              amount: Math.round(numeric * 100),
-              driverPhoneNumber: phonenumber,
-            }),
-          });
-          if (!res.ok) throw new Error((await res.json()).error || 'Falha ao iniciar pagamento');
-          setClientSecret((await res.json()).clientSecret);
-        } catch (err: any) {
-          setError(err.message);
-          setClientSecret('');
-        } finally {
-          setLoading(false);
-        }
-      }, 500);
-    } else {
+    // parse "50,34" → 50.34
+    const numeric = parseFloat(amount.replace(/\./g, '').replace(',', '.'));
+    if (isNaN(numeric) || numeric < 1) {
       setClientSecret('');
+      return;
     }
-    return () => clearTimeout(debounceRef.current!);
-  }, [amount, phonenumber]);
 
-  // Loading driver info
-  if (loading && !driverInfo && !error) {
+    const handler = setTimeout(async () => {
+      setLoadingIntent(true);
+      try {
+        const response = await fetch('/api/stripe/create-payment-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: Math.round(numeric * 100),   // in cents
+            driverId: driverProfile?.id,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Erro ao iniciar pagamento');
+        }
+        setClientSecret(data.clientSecret);
+      } catch (err: any) {
+        setError(err.message);
+        setClientSecret('');
+      } finally {
+        setLoadingIntent(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(handler);
+  }, [amount, driverProfile?.id]);
+
+  // ── RENDER ─────────────────────────────────────────────────────
+
+  // still loading driver?
+  if (loadingProfile) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="animate-spin h-12 w-12 border-b-2 border-purple-600 rounded-full" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
       </div>
     );
   }
 
-  // Error fetching driver
-  if (error && !driverInfo) {
+  // driver lookup failed?
+  if (error && !driverProfile) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white p-4">
-        <div className="bg-white p-8 rounded-lg shadow-md text-center max-w-sm">
-          <h1 className="text-2xl font-semibold text-red-600 mb-4">Erro</h1>
-          <p className="text-gray-700 mb-6">{error}</p>
-          <Link href="/" className="text-indigo-600 hover:underline">
-            Voltar à página inicial
-          </Link>
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">{error}</p>
+          <Link href="/">Voltar</Link>
         </div>
       </div>
     );
   }
 
-  // Main render
   return (
-    <main className="min-h-screen bg-white flex flex-col items-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md overflow-hidden">
-        {/* Driver header */}
-        <div className="p-8 text-center">
-          <div className="mx-auto mb-4 w-24 h-24 rounded-full overflow-hidden relative">
+    <div className="min-h-screen bg-white flex flex-col">
+      {/* NavBar is your shared component */}
+      {/* … */}
+
+      <main className="flex-grow flex items-center justify-center p-4">
+        <div className="bg-white shadow-md rounded-lg max-w-md w-full p-8">
+          {/* Driver Info */}
+          <div className="flex flex-col items-center mb-8">
             <Image
-              src={driverInfo.avatar_url || defaultAvatar}
-              alt={driverInfo.nome || 'Avatar'}
-              fill
-              sizes="96px"
-              style={{ objectFit: 'cover' }}
-              onError={(e) => { (e.currentTarget as HTMLImageElement).src = defaultAvatar; }}
+              src={driverProfile!.avatar_url ?? '/images/avatars/avatar_1.png'}
+              alt={driverProfile!.nome}
+              width={96}
+              height={96}
+              className="rounded-full"
+            />
+            <h2 className="mt-4 text-xl font-bold">{driverProfile!.nome}</h2>
+            <p className="text-gray-600">
+              {phoneNumber.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')}
+            </p>
+          </div>
+
+          {/* Amount Input */}
+          <div>
+            <label htmlFor="amount" className="sr-only">
+              Valor (R$)
+            </label>
+            <CurrencyInput
+              id="amount"
+              name="amount"
+              placeholder="0,00"
+              value={amount}
+              onValueChange={(v) => setAmount(v ?? '')}
+              intlConfig={{ locale: 'pt-BR', currency: 'BRL' }}
+              decimalScale={2}
+              allowNegativeValue={false}
+              className="w-full text-3xl text-center border rounded-md py-2 mb-4"
+              inputMode="decimal"
+              type="tel"
             />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">{driverInfo.nome}</h1>
-          {driverInfo.profissao && (
-            <p className="text-gray-600">{driverInfo.profissao}</p>
-          )}
-          <p className="text-gray-600 mt-1">
-            {(() => {
-              const d = phonenumber.replace(/\D/g, '');
-              const local = d.startsWith('55') && d.length === 13 ? d.slice(2) : d;
-              return local.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-            })()}
-          </p>
-        </div>
-
-        {/* Payment input */}
-        <div className="px-8 pb-8">
-          <h2 className="text-center text-3xl font-semibold text-gray-800 mb-6">
-            Qual valor pago?
-          </h2>
-          <CurrencyInput
-            className="block w-full rounded-md border-gray-300 py-3 px-4 text-center text-3xl focus:ring-purple-500 focus:border-purple-500 appearance-none"
-            placeholder="R$ 0,00"
-            value={amount}
-            decimalsLimit={2}
-            intlConfig={{ locale: 'pt-BR', currency: 'BRL' }}
-            onValueChange={(v) => setAmount(v || '')}
-            inputMode="decimal"
-            type="tel"
-          />
-          {error && (
-            <p className="mt-2 text-sm text-red-600 text-center">{error}</p>
-          )}
 
           {/* Stripe Elements */}
+          {loadingIntent && amount && (
+            <p className="text-center text-gray-500">Carregando opções de pagamento...</p>
+          )}
           {clientSecret && (
-            <div className="mt-6">
-              <Elements stripe={stripePromise} options={{ clientSecret }}>
-                <PaymentForm clientSecret={clientSecret} />
-              </Elements>
-            </div>
+            <Elements stripe={stripePromise} options={{ clientSecret }}>
+              <PaymentForm clientSecret={clientSecret} />
+            </Elements>
           )}
         </div>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
