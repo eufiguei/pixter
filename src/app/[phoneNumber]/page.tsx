@@ -1,27 +1,24 @@
-// src/app/[celular]/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useBRLFormatter } from '@/components/useBRLFormatter';
 
 export default function DriverPaymentPage({
   params,
 }: {
-  params: { celular: string };
+  params: { phoneNumber: string };
 }) {
-  const { celular } = params;
+  const { phoneNumber } = params;
   const [driver, setDriver] = useState<{ nome?: string; avatar_url?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const { value: valor, onChange: handleValorChange } = useBRLFormatter('');
+  const [valor, setValor] = useState('');
 
   useEffect(() => {
     async function fetchDriver() {
       try {
-        setLoading(true);
-        const res = await fetch(`/api/public-profile?celular=${celular}`);
+        const res = await fetch(`/api/public-profile?celular=${phoneNumber}`);
         if (!res.ok) throw new Error(`Erro ${res.status}`);
         const { profile } = await res.json();
         setDriver(profile);
@@ -32,7 +29,20 @@ export default function DriverPaymentPage({
       }
     }
     fetchDriver();
-  }, [celular]);
+  }, [phoneNumber]);
+
+  // Brazilian BRL formatting: replace dots with commas, allow up to 2 decimals
+  const handleValorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let v = e.target.value
+      .replace(/\./g, ',')
+      .replace(/[^\d,]/g, '');
+
+    const [intPart, decPart] = v.split(',');
+    if (decPart && decPart.length > 2) {
+      v = intPart + ',' + decPart.slice(0, 2);
+    }
+    setValor(v);
+  };
 
   if (loading) {
     return (
@@ -55,8 +65,6 @@ export default function DriverPaymentPage({
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* your NavBar lives in layout.tsx, no need to repeat here */}
-
       <main className="flex-grow flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
           {/* Driver info */}
@@ -67,14 +75,15 @@ export default function DriverPaymentPage({
               width={96}
               height={96}
               className="rounded-full"
+              priority
             />
             <h2 className="mt-4 text-xl font-bold">{driver.nome}</h2>
             <p className="text-gray-600">
-              {celular.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')}
+              {phoneNumber.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')}
             </p>
           </div>
 
-          {/* Valor input only */}
+          {/* Valor input */}
           <div>
             <label
               htmlFor="valor"
@@ -91,12 +100,12 @@ export default function DriverPaymentPage({
               pattern="[0-9]*[.,]?[0-9]{0,2}"
               placeholder="0,00"
               value={valor}
-              onChange={(e) => handleValorChange(e.target.value)}
+              onChange={handleValorChange}
               className="w-full py-3 text-2xl text-center border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
             />
           </div>
 
-          {/* …later, when you have clientSecret, you can mount your Stripe <Elements> here */}
+          {/* TODO: once you have clientSecret, mount Stripe <Elements> + <PaymentElement> here */}
         </div>
       </main>
     </div>
