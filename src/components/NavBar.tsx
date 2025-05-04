@@ -94,7 +94,7 @@ export default function NavBar() {
       }
     }
 
-    if (!isAuthenticated) {
+    if (status === 'unauthenticated') { // Only redirect if definitively unauthenticated
       const callbackUrlParam = `?callbackUrl=${encodeURIComponent(pathname + searchParams.toString())}`;
       if (pathname.startsWith("/cliente/") || pathname.startsWith("/dashboard") || pathname.startsWith("/payment-methods")) {
         router.replace(`/login${callbackUrlParam}`);

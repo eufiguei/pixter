@@ -7,7 +7,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import CurrencyInput from 'react-currency-input-field';
+// Removed: import CurrencyInput from 'react-currency-input-field';
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
@@ -74,14 +74,38 @@ function PaymentForm({ onSuccess, onError }: any) {
 export default function DriverPaymentPage({ params }: { params: { phoneNumber: string } }) {
   const { phoneNumber } = params;
   const [amount, setAmount] = useState<number | undefined>(undefined);
+  const [rawAmountDigits, setRawAmountDigits] = useState(""); // State for raw digits input
   // driverInfo state will hold the entire API response, including the nested 'profile' object
   const [driverInfo, setDriverInfo] = useState<any>(null);
   const [loadingInfo, setLoadingInfo] = useState(true);
   const [error, setError] = useState('');
-  const [clientSecret, setClientSecret] = useState('');
+  const [clientSecret, setClientSecret] = useState("");
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [paymentDetails, setPaymentDetails] = useState<any>(null);
   const debounceRef = useRef<NodeJS.Timeout>();
+
+  // --- Formatting Helper ---
+  const formatBRL = (digits: string): string => {
+    if (!digits || digits === "0") return "R$ 0,00";
+    // Ensure we handle potential leading zeros if needed, though replace should manage it
+    const num = parseInt(digits, 10);
+    if (isNaN(num)) return "R$ 0,00"; // Handle case where digits might become NaN
+
+    const reais = Math.floor(num / 100);
+    const centavos = (num % 100).toString().padStart(2, '0');
+    // Add thousands separator for reais using Intl.NumberFormat for robustness
+    const formattedReais = reais.toLocaleString('pt-BR');
+    return `R$ ${formattedReais},${centavos}`;
+  };
+
+  // --- Input Handler ---
+  const handleAmountInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Remove non-digit characters
+    const digits = value.replace(/\D/g, "");
+    // Limit length if necessary, e.g., max 9 digits (R$ 999.999,99)
+    setRawAmountDigits(digits.slice(0, 9)); 
+  };
 
   // fetch driver public info
   useEffect(() => {
@@ -92,31 +116,42 @@ export default function DriverPaymentPage({ params }: { params: { phoneNumber: s
       .finally(() => setLoadingInfo(false));
   }, [phoneNumber]);
 
-  // create PaymentIntent whenever `amount` ≥ R$1,00
+  // create PaymentIntent whenever `amount` derived from raw digits is >= R$0.01
   useEffect(() => {
     clearTimeout(debounceRef.current!);
-    const num = amount; // Use the number state directly
-    if (num !== undefined && !isNaN(num) && num >= 1) { // Check if amount is a valid number >= 1 BRL
+    // Derive numeric amount from raw digits
+    const num = parseInt(rawAmountDigits || "0", 10);
+    const numericAmount = num / 100; // Convert cents to BRL value
+
+    // Update the separate amount state for potential display or other logic
+    setAmount(numericAmount);
+
+    if (!isNaN(numericAmount) && numericAmount >= 0.01) { // Check if amount is valid and >= 0.01 BRL
       debounceRef.current = setTimeout(async () => {
-        setError('');
+        setError("");
         try {
-          const res = await fetch('/api/stripe/create-payment-intent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: Math.round(num * 100), driverPhoneNumber: phoneNumber }),
+          const res = await fetch("/api/stripe/create-payment-intent", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            // Send amount in cents (integer)
+            body: JSON.stringify({ amount: num, driverPhoneNumber: phoneNumber }),
           });
           if (!res.ok) throw await res.json();
           const { clientSecret } = await res.json();
           setClientSecret(clientSecret);
         } catch (err: any) {
-          setError(err.error || err.message || 'Erro ao iniciar pagamento');
+          setError(err.error || err.message || "Erro ao iniciar pagamento");
         }
       }, 500);
     } else {
-      setClientSecret('');
-      setError('');
+      setClientSecret("");
+      // Clear error only if input is empty, otherwise keep potential errors
+      if (!rawAmountDigits) {
+          setError("");
+      }
     }
-  }, [amount, phoneNumber]);
+    // Depend on rawAmountDigits instead of amount
+  }, [rawAmountDigits, phoneNumber]);
 
   const handleSuccess = (pi: any) => {
     setPaymentSuccess(true);
@@ -154,6 +189,17 @@ export default function DriverPaymentPage({ params }: { params: { phoneNumber: s
       {/* <NavBar /> Assumed to be in RootLayout */}
       <main className="flex-grow flex flex-col items-center p-4 pt-8 md:pt-16">
         <div className="w-full max-w-md md:max-w-lg lg:max-w-xl bg-white rounded-lg shadow-md p-8 space-y-8">
+          {/* Pixter Header Section */}
+          <div className="text-center mb-8">
+            <div className="flex items-center justify-center space-x-3 mb-2">
+              <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-2xl">P</span>
+              </div>
+              <span className="font-bold text-3xl text-gray-800">Pixter</span>
+            </div>
+            <p className="text-gray-600">Você no controle de pagar no cartão</p>
+          </div>
+
           {/* Driver Info - Access via profile object */}
           <div className="flex flex-col items-center space-y-2">
             <div className="w-24 h-24 rounded-full overflow-hidden relative">
@@ -174,16 +220,13 @@ export default function DriverPaymentPage({ params }: { params: { phoneNumber: s
           {!paymentSuccess ? (
             <>
               <h2 className="text-center text-3xl font-semibold">Qual valor pago?</h2>
-              <CurrencyInput
+              {/* Custom BRL Input */}
+              <input
+                type="text" // Use text to allow custom formatting display
+                inputMode="numeric" // Hint for mobile numeric keyboard
                 placeholder="R$ 0,00"
-                value={amount}
-                onValueChange={(value, name, values) => setAmount(values?.float)}
-                decimalSeparator=","
-                groupSeparator="."
-                intlConfig={{ locale: 'pt-BR', currency: 'BRL' }}
-                allowNegativeValue={false}
-                decimalScale={2}
-                inputMode="decimal"
+                value={formatBRL(rawAmountDigits)} // Display formatted value
+                onChange={handleAmountInputChange} // Handle raw digit input
                 className="w-full text-center text-3xl py-3 border rounded focus:ring-purple-500"
               />
 
