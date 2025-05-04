@@ -4,6 +4,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { signIn } from 'next-auth/react' // Added import for signIn
 import Image from 'next/image'
 
 export default function ClientSignUp() {

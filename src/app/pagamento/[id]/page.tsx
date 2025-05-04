@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useSession } from "next-auth/react"; // Need this for session
 import {
   loadStripe,
   StripeElementsOptions,
@@ -48,6 +48,8 @@ function formatDisplayPhoneNumber(e164Phone?: string): string {
 
 // Wrapper that fetches clientSecret & ephemeralKey and renders Elements
 export default function PaginaPagamento() {
+  /* --- Start Incremental Debug --- */
+
   const { data: session } = useSession();
   // Assuming the [id] parameter in the URL is the phone number
   const { id: driverPhoneNumber } = useParams() as { id: string };
@@ -104,7 +106,7 @@ export default function PaginaPagamento() {
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ /* no amount initially */ }),
+            body: JSON.stringify({ }),
             credentials: "include", // Send cookies for session check
           }
         );
@@ -182,56 +184,18 @@ export default function PaginaPagamento() {
     );
   }
 
-  // Stripe Elements options
-  const options: StripeElementsOptions = {
-    clientSecret,
-    // only include ephemeralKeySecret if the server returned one _and_ there's a logged-in client
-    ...(ephemeralKeySecret && session?.user?.tipo === "cliente"
-      ? { customerEphemeralKeySecret: ephemeralKeySecret }
-      : {}),
-    appearance: { theme: "stripe" },
-  };
+  /* --- Commented out options ---
+  // Stripe Elements options - Temporarily commented out for debugging
+  
+  // Define a minimal options object for now
+  const options: StripeElementsOptions = { clientSecret: clientSecret || "" }; // Provide default empty string
+  */
+  /* --- End Incremental Debug --- */
 
+  // Minimal return for debugging
   return (
     <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 space-y-6">
-        {/* Driver info - Updated to include profession and phone */}
-        <div className="flex flex-col items-center text-center">
-          <div className="w-24 h-24 bg-gray-200 rounded-full overflow-hidden mb-4 shadow">
-            {profile.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt={`Avatar de ${profile.nome}`}
-                className="w-full h-full object-cover"
-                onError={(e) => (e.currentTarget.src = 
-'/images/avatar-placeholder.png")} // Fallback image
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                {/* Placeholder Icon or Initials can go here */}
-                <svg className="w-16 h-16 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"></path></svg>
-              </div>
-            )}
-          </div>
-          <h3 className="text-xl font-semibold text-gray-900">
-            {profile.nome || "Motorista"}
-          </h3>
-          {/* Display Profession */} 
-          {profile.profissao && (
-            <p className="text-sm text-gray-600 mt-1">{profile.profissao}</p>
-          )}
-          {/* Display Formatted Phone Number */} 
-          {profile.celular && (
-            <p className="text-sm text-gray-500 mt-1">{formatDisplayPhoneNumber(profile.celular)}</p>
-          )}
-        </div>
-
-        {/* Payment Element */}
-        <Elements stripe={stripePromise} options={options}>
-          {/* Pass paymentIntentId to the form */}
-          <CheckoutForm paymentIntentId={paymentIntentId} />
-        </Elements>
-      </div>
+      <div>Minimal Content for Debugging - Conditional Rendering Added</div>
     </main>
   );
 }
