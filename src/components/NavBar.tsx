@@ -11,7 +11,7 @@ import { Menu, X } from "lucide-react";
 interface UserSession {
   id?: string;
   tipo?: 'cliente' | 'motorista';
-  cpf_cnpj?: string; // Added for driver's public page link
+  celular?: string; // Use celular for public page link
   // Add other user properties if available and needed
 }
 
@@ -31,7 +31,6 @@ export default function NavBar() {
   const menuRef = useRef<HTMLDivElement>(null);
 
   const userType = session?.user?.tipo;
-  const userCpfCnpj = session?.user?.cpf_cnpj; // Get driver's identifier
   const isLoading = status === "loading";
   const isAuthenticated = status === "authenticated";
 
@@ -55,11 +54,12 @@ export default function NavBar() {
     };
   }, [isMobileMenuOpen]);
 
-  // --- Redirection Logic (Keep as is, seems correct based on requirements) --- 
+  // --- Redirection Logic --- 
   useEffect(() => {
     if (isLoading) return;
 
-    const isPublicPaymentPage = /^\/pagamento\/[^\/]+$/.test(pathname); // Match /pagamento/{any id}
+    // Regex to specifically match /[phoneNumber] (assuming it's numeric) and not other root paths
+    const isPublicPaymentPage = /^\/\+?[0-9]{10,}$/.test(pathname);
     const isClientAuthPage = ["/login", "/cadastro"].includes(pathname);
     const isDriverAuthPage = [
       "/motorista/login",
@@ -84,9 +84,11 @@ export default function NavBar() {
         router.replace("/cliente/dashboard");
         return;
       }
+      // Allow driver to be on their own public page
+      const driverPublicPagePath = session?.user?.celular ? `/${session.user.celular.replace(/\D/g, "")}` : null;
       if (userType === "motorista" && 
           (pathname.startsWith("/cliente/") || pathname.startsWith("/dashboard") || pathname.startsWith("/payment-methods")) && 
-          !isPublicPaymentPage) {
+          pathname !== driverPublicPagePath) { 
         router.replace("/motorista/dashboard/overview");
         return;
       }
@@ -104,7 +106,7 @@ export default function NavBar() {
       }
     }
 
-  }, [status, userType, pathname, router, searchParams, isAuthenticated, isLoading]);
+  }, [status, userType, pathname, router, searchParams, isAuthenticated, isLoading, session?.user?.celular]);
 
   // --- Sign-out Handler --- 
   const handleSignOut = async () => {
@@ -121,11 +123,12 @@ export default function NavBar() {
 
   // --- Render Links based on context --- 
   let linksConfig: { href?: string; text: string; onClick?: () => void }[] = [];
-  const isPublicPaymentPage = /^\/pagamento\/[^\/]+$/.test(pathname); // Match /pagamento/{any id}
+  // Regex to specifically match /[phoneNumber] (assuming it's numeric) and not other root paths
+  const isPublicPaymentPage = /^\/\+?[0-9]{10,}$/.test(pathname);
   const callbackUrlParam = `?callbackUrl=${encodeURIComponent(pathname + searchParams.toString())}`;
 
-  // Determine if the simplified public view should be shown
-  const showSimplifiedPublicView = isPublicPaymentPage && !isAuthenticated;
+  // Determine if the simplified public view should be shown (Guests and Drivers on Public Page)
+  const showSimplifiedPublicView = isPublicPaymentPage && (!isAuthenticated || userType === 'motorista');
 
   if (isLoading) {
     // No links during loading
@@ -134,28 +137,29 @@ export default function NavBar() {
     if (isAuthenticated && userType === "cliente") {
       // Logged-in Client on Public Page (Matches Situation 3)
       linksConfig = [
-        { href: "/cliente/dashboard/historico", text: "Histórico Pagamentos" }, // Updated text
+        { href: "/cliente/dashboard/historico", text: "Histórico Pagamentos" },
         { href: "/cliente/payment-methods", text: "Wallet" },
         { href: "/cliente/dashboard/dados", text: "Meus Dados" },
         { onClick: handleSignOut, text: "Sair" },
       ];
     } else {
-      // Guest or Driver on Public Page (Matches Situation 1 & 5)
+      // Guest or Driver on Public Page (Matches Situation 1 & 2 for public page)
       linksConfig = [
-        { href: `/login${callbackUrlParam}`, text: "Entrar" }, // Simplified text
+        { href: `/login${callbackUrlParam}`, text: "Entrar" },
         { href: `/cadastro${callbackUrlParam}`, text: "Criar Conta" },
       ];
     }
   } else if (isAuthenticated) {
     // --- Authenticated User (Non-Public Page) --- 
     if (userType === "motorista") {
-      // Logged-in Driver (Matches Situation 2)
-      const driverPublicPageLink = userCpfCnpj ? `/pagamento/${userCpfCnpj}` : '#'; // Fallback if no cpf_cnpj
+      // Logged-in Driver (Matches Situation 2 dashboard view)
+      // Use celular for the link, remove /pagamento prefix
+      const driverPublicPageLink = session?.user?.celular ? `/${session.user.celular.replace(/\D/g, "")}` : '#'; 
       linksConfig = [
         { href: "/motorista/dashboard/overview", text: "Visão Geral" },
         { href: "/motorista/dashboard/pagamentos", text: "Pagamentos" },
         { href: "/motorista/dashboard/dados", text: "Meus Dados" },
-        { href: driverPublicPageLink, text: "Minha Página Pública" }, // Updated link and text
+        { href: driverPublicPageLink, text: "Minha Página Pública" }, // Updated link
         { onClick: handleSignOut, text: "Sair" },
       ];
     } else if (userType === "cliente") {
@@ -172,7 +176,7 @@ export default function NavBar() {
     linksConfig = [
       { href: "/login", text: "Entrar" },
       { href: "/cadastro", text: "Criar Conta" },
-      { href: "/motorista/login", text: "Sou Motorista" }, // Changed text slightly as per user request 1
+      { href: "/motorista/login", text: "Sou Motorista" },
     ];
   }
 

@@ -1,3 +1,5 @@
+// src/app/[phoneNumber]/page.tsx
+
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -72,6 +74,7 @@ function PaymentForm({ onSuccess, onError }: any) {
 export default function DriverPaymentPage({ params }: { params: { phoneNumber: string } }) {
   const { phoneNumber } = params;
   const [amount, setAmount] = useState<number | undefined>(undefined);
+  // driverInfo state will hold the entire API response, including the nested 'profile' object
   const [driverInfo, setDriverInfo] = useState<any>(null);
   const [loadingInfo, setLoadingInfo] = useState(true);
   const [error, setError] = useState('');
@@ -84,7 +87,7 @@ export default function DriverPaymentPage({ params }: { params: { phoneNumber: s
   useEffect(() => {
     fetch(`/api/public/driver-info/${phoneNumber}`)
       .then(r => r.ok ? r.json() : Promise.reject(r))
-      .then(setDriverInfo)
+      .then(setDriverInfo) // Store the whole response { profile: { ... } }
       .catch((err: any) => setError(err.error || err.message))
       .finally(() => setLoadingInfo(false));
   }, [phoneNumber]);
@@ -128,36 +131,43 @@ export default function DriverPaymentPage({ params }: { params: { phoneNumber: s
     );
   }
 
-  if (error && !driverInfo) {
+  // Check for error OR if driverInfo exists but driverInfo.profile does not
+  if (error || !driverInfo?.profile) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="p-6 bg-white rounded shadow text-center">
           <h1 className="text-red-600 font-semibold mb-4">Erro</h1>
-          <p>{error}</p>
+          {/* Display specific error or a generic one if profile is missing */}
+          <p>{error || 'Informações do motorista não encontradas.'}</p>
           <Link href="/" className="text-indigo-600 hover:underline mt-4 block">Voltar</Link>
         </div>
       </div>
     );
   }
 
+  // Now we can safely access driverInfo.profile properties
+  const profile = driverInfo.profile;
+
   return (
     <div className="min-h-screen bg-white flex flex-col">
+      {/* Ensure NavBar is rendered *before* main content if it's part of the layout */}
+      {/* <NavBar /> Assumed to be in RootLayout */}
       <main className="flex-grow flex flex-col items-center p-4 pt-8 md:pt-16">
         <div className="w-full max-w-md md:max-w-lg lg:max-w-xl bg-white rounded-lg shadow-md p-8 space-y-8">
-          {/* Driver Info */}
+          {/* Driver Info - Access via profile object */}
           <div className="flex flex-col items-center space-y-2">
             <div className="w-24 h-24 rounded-full overflow-hidden relative">
               <Image
-                src={driverInfo.avatar_url || defaultAvatar}
-                alt={driverInfo.nome}
+                src={profile.avatar_url || defaultAvatar}
+                alt={profile.nome || 'Driver Avatar'}
                 fill
                 style={{ objectFit: 'cover' }}
                 onError={e => (e.currentTarget.src = defaultAvatar)}
               />
             </div>
-            <h1 className="text-2xl font-bold">{driverInfo.nome}</h1>
-            {driverInfo.profissao && <p className="text-sm text-gray-600">{driverInfo.profissao}</p>}
-            {driverInfo.celular && <p className="text-sm text-gray-500">{driverInfo.celular}</p>}
+            <h1 className="text-2xl font-bold">{profile.nome || 'Driver'}</h1>
+            {profile.profissao && <p className="text-sm text-gray-600">{profile.profissao}</p>}
+            {profile.celular && <p className="text-sm text-gray-500">{profile.celular}</p>}
           </div>
 
           {/* amount input */}
@@ -174,7 +184,6 @@ export default function DriverPaymentPage({ params }: { params: { phoneNumber: s
                 allowNegativeValue={false}
                 decimalScale={2}
                 inputMode="decimal"
-
                 className="w-full text-center text-3xl py-3 border rounded focus:ring-purple-500"
               />
 

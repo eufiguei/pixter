@@ -1,15 +1,15 @@
-
-'use client'
+use client'
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation' // Import useSearchParams
-import { signIn } from 'next-auth/react'
+import { signIn, useSession, signOut } from 'next-auth/react'
 
 export default function Login() {
   const router = useRouter()
   const searchParams = useSearchParams() // Get query parameters
-  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard' // Get callbackUrl or default to /dashboard
+  const callbackUrl = searchParams.get("callbackUrl") || "/cliente/dashboard"; // Get callbackUrl or default to client dashboard
+  const { data: session, status } = useSession(); // Get current session status
 
   const [formData, setFormData] = useState({
     email: '',
@@ -30,27 +30,33 @@ export default function Login() {
     e.preventDefault()
     
     if (!formData.email || !formData.password) {
-      setError('Por favor, preencha todos os campos')
+      setError("Por favor, preencha todos os campos")
       return
     }
     
     try {
       setLoading(true)
-      setError('')
+      setError("")
+
+      // Check if currently logged in as a driver
+      if (status === "authenticated" && session?.user?.tipo === "motorista") {
+        await signOut({ redirect: false }); // Sign out driver first
+      }
       
-      const result = await signIn('credentials', {
+      // Attempt client login
+      const result = await signIn("credentials", {
         redirect: false, // We handle redirect manually
         email: formData.email,
         password: formData.password,
-        callbackUrl: callbackUrl // Pass callbackUrl here, though redirect:false means we handle it
+        callbackUrl: callbackUrl // Pass callbackUrl here
       })
       
       if (result?.error) {
         // Mensagens de erro específicas
-        if (result.error.includes('CredentialsSignin')) { // Check for specific error code
-          setError('Email ou senha incorretos')
+        if (result.error.includes("CredentialsSignin")) { // Check for specific error code
+          setError("Email ou senha incorretos")
         } else {
-          setError(result.error || 'Falha ao fazer login')
+          setError(result.error || "Falha ao fazer login")
         }
         setLoading(false); // Stop loading on error
         return
@@ -61,8 +67,8 @@ export default function Login() {
       // No need to setLoading(false) here as we are navigating away
       
     } catch (err) {
-      console.error('Erro ao fazer login:', err)
-      setError('Ocorreu um erro ao fazer login. Tente novamente.')
+      console.error("Erro ao fazer login:", err)
+      setError("Ocorreu um erro ao fazer login. Tente novamente.")
       setLoading(false)
     }
   }
@@ -70,16 +76,21 @@ export default function Login() {
   const handleGoogleSignIn = async () => {
     try {
       setLoading(true)
-      setError('')
+      setError("")
+
+      // Check if currently logged in as a driver
+      if (status === "authenticated" && session?.user?.tipo === "motorista") {
+        await signOut({ redirect: false }); // Sign out driver first
+      }
       
       // Use the determined callbackUrl for Google sign-in
-      await signIn('google', { callbackUrl: callbackUrl })
+      await signIn("google", { callbackUrl: callbackUrl })
       // signIn with redirect will handle navigation, no need for router.push
       // setLoading(false) might not be reached if redirect happens quickly
       
     } catch (err) {
-      console.error('Erro ao fazer login com Google:', err)
-      setError('Ocorreu um erro ao fazer login com Google. Tente novamente.')
+      console.error("Erro ao fazer login com Google:", err)
+      setError("Ocorreu um erro ao fazer login com Google. Tente novamente.")
       setLoading(false)
     }
   }
@@ -187,4 +198,3 @@ export default function Login() {
     </main>
   )
 }
-
