@@ -77,18 +77,14 @@ export const authOptions: NextAuthOptions = {
         const formattedPhone = formatPhoneNumber(credentials.phone, countryCode);
 
         // 1. Verify OTP using Supabase Auth verifyOtp
-        // Use the server client instance (supabaseServer)
-        // This assumes supabaseServer is a correctly configured Supabase client instance
         const { data: verifyData, error: verifyError } = await supabaseServer.auth.verifyOtp({
           phone: formattedPhone,
           token: credentials.code,
-          type: "sms", // or "whatsapp" depending on what send-verification used
+          type: "sms", // or "whatsapp"
         });
 
-        // verifyOtp returns { data: { user, session }, error }
         if (verifyError || !verifyData?.user) {
           console.error(`Supabase verifyOtp error for ${formattedPhone}:`, verifyError?.message);
-          // Map common errors
           let errorMessage = "Código inválido ou expirado";
           if (verifyError?.message.includes("expired")) {
               errorMessage = "Código expirado. Por favor, solicite um novo.";
@@ -96,46 +92,38 @@ export const authOptions: NextAuthOptions = {
           throw new Error(errorMessage);
         }
 
-        // 2. Verification successful, Supabase returns the user object.
-        //    Fetch the user's profile from public.profiles using the user ID.
+        // 2. Fetch profile
         const userId = verifyData.user.id;
-        const { data: profileData, error: profileError } = await supabaseServer // Use server client for profile access
+        const { data: profileData, error: profileError } = await supabaseServer
           .from("profiles")
           .select("*")
           .eq("id", userId)
           .single();
 
-        if (profileError && profileError.code !== "PGRST116") { // Ignore "not found" error here
+        if (profileError && profileError.code !== "PGRST116") {
             console.error(`Error fetching profile for user ${userId} after OTP verify:`, profileError.message);
             throw new Error("Erro ao buscar perfil do usuário.");
         }
 
         if (!profileData) {
             console.warn(`Profile not found for user ${userId} during OTP login. Login allowed, but profile data missing.`);
-            // Ensure the sign-up process or a trigger creates the profile.
-            // For now, allow login but profile might be incomplete.
         }
 
-        // 3. Return the user object for NextAuth session creation
+        // 3. Return user object
         return {
           id: userId,
-          email: verifyData.user.email, // May be null
+          email: verifyData.user.email,
           name: profileData?.nome || null,
           image: profileData?.avatar_url || null,
-          tipo: profileData?.tipo || "cliente", // Default to client if not found
+          tipo: profileData?.tipo || "cliente",
         };
       },
     }),
 
   ],
 
-  /* ---------------------------------------------------------------
-     Callbacks (Ensure these handle the user object from OTP provider)
-  ----------------------------------------------------------------*/
   callbacks: {
     async signIn({ user, account, profile }) {
-      // This logic ensures a profile exists or is created for Google sign-ins
-      // It also assigns the user type to the user object for the JWT callback
       if (account?.provider === "google") {
         const { data: existingProfile, error } = await supabaseServer
           .from("profiles")
@@ -145,7 +133,7 @@ export const authOptions: NextAuthOptions = {
 
         if (error && error.code !== 'PGRST116') {
             console.error("Error checking profile during Google sign-in:", error.message);
-            return false; // Block sign-in on error
+            return false;
         }
 
         if (!existingProfile) {
@@ -157,24 +145,21 @@ export const authOptions: NextAuthOptions = {
                     nome: user.name,
                     email: user.email,
                     avatar_url: user.image,
-                    tipo: 'cliente' // Default Google sign-ups to 'cliente'
+                    tipo: 'cliente'
                 });
             if (insertError) {
                 console.error("Error creating profile for Google user:", insertError.message);
                 return false;
             }
-            (user as any).tipo = 'cliente'; // Assign type for JWT callback
+            (user as any).tipo = 'cliente';
         } else {
-             (user as any).tipo = existingProfile.tipo ?? 'cliente'; // Assign existing type for JWT callback
+             (user as any).tipo = existingProfile.tipo ?? 'cliente';
         }
       }
-      // For credential providers (Email/Pass, Phone/OTP), the 'tipo' should be set in the authorize function
-      // We already added 'tipo' to the user object returned by authorize
-      return true; // Allow sign-in
+      return true;
     },
 
     async jwt({ token, user }) {
-      // Persist the user ID and type from the user object to the token
       if (user) {
         token.id = user.id;
         token.tipo = (user as any).tipo;
@@ -183,7 +168,6 @@ export const authOptions: NextAuthOptions = {
     },
 
     async session({ session, token }) {
-      // Add the user ID and type from the token to the session object
       if (session.user) {
         session.user.id = token.id as string;
         session.user.tipo = token.tipo as string;
@@ -193,24 +177,20 @@ export const authOptions: NextAuthOptions = {
   },
 
   pages: {
-    signIn: "/login", // Custom login page
-    // error: '/auth/error', // Custom error page
-    // verifyRequest: '/auth/verify-request', // Custom email verification page
-    newUser: "/cadastro", // Redirect new users (e.g., after Google signup) here if needed
+    signIn: "/login",
+    newUser: "/cadastro",
   },
 
   session: {
     strategy: "jwt",
-    // Set session max age (e.g., 30 days)
-    maxAge: 30 * 24 * 60 * 60, // 30 days in seconds
-    // Session is automatically updated on user activity if using JWT strategy (default)
+    // Set session max age to 1 day for better security
+    maxAge: 24 * 60 * 60, // 1 day in seconds
     // updateAge: 24 * 60 * 60, // Optional: Update expiry only once every 24 hours
   },
 
   jwt: {
-    // Set JWT max age (e.g., 1 day)
+    // JWT max age remains 1 day (consistent with session maxAge)
     maxAge: 24 * 60 * 60, // 1 day in seconds
-    // You can also define custom encode/decode functions if needed
   },
 };
 

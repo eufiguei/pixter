@@ -17,6 +17,7 @@ export default function ClientSignUp() {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('') // State for success message from backend
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -31,6 +32,7 @@ export default function ClientSignUp() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('') // Clear previous errors
+    setSuccessMessage('') // Clear previous success message
     
     // --- Frontend Validation --- 
     if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
@@ -70,11 +72,17 @@ export default function ClientSignUp() {
         // Use error message from backend if available
         throw new Error(data.error || 'Erro ao criar conta')
       }
+
+      // Check if backend indicated user already exists but resent confirmation
+      if (data.success === true && data.message && data.message.includes('Um novo email de confirmação foi enviado')) {
+          setSuccessMessage(data.message); // Show the specific message from backend
+          // Optionally redirect to a confirmation pending page or stay here
+          router.push('/cadastro/confirmacao-pendente'); // Redirect to confirmation pending page
+          return; // Stop further execution
+      }
       
-      // Signup successful, redirect to dashboard (or login page for verification)
-      // Assuming successful signup logs the user in or redirects appropriately
-      // If email verification is needed, redirect to a confirmation page or login
-      router.push('/login?message=signup_success') // Redirect to login with success message
+      // Signup successful, redirect to confirmation pending page
+      router.push('/cadastro/confirmacao-pendente') 
       
     } catch (err: any) {
       console.error('Erro ao criar conta:', err)
@@ -91,7 +99,7 @@ export default function ClientSignUp() {
       setError('')
       
       // Use next-auth/react signIn for Google
-      await signIn('google', { callbackUrl: '/dashboard' })
+      await signIn('google', { callbackUrl: '/cliente/dashboard' }) // Redirect to client dashboard after Google signin
       // setLoading(false) might not be reached if redirect happens
       
     } catch (err: any) {
@@ -146,6 +154,11 @@ export default function ClientSignUp() {
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-4">
             {error}
           </div>
+        )}
+        {successMessage && (
+           <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-md mb-4">
+             {successMessage}
+           </div>
         )}
         
         <form onSubmit={handleSubmit} className="space-y-4">
