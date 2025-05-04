@@ -29,7 +29,7 @@ function PaymentForm({ onSuccess, onError }: any) {
     try {
       const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
-        confirmParams: { return_url: `${window.location.origin}/payment-success` },
+        confirmParams: { return_url: `${window.location.origin}/pagamento/sucesso` },
         redirect: 'if_required',
       });
 
@@ -71,7 +71,7 @@ function PaymentForm({ onSuccess, onError }: any) {
 
 export default function DriverPaymentPage({ params }: { params: { phoneNumber: string } }) {
   const { phoneNumber } = params;
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount] = useState<number | undefined>(undefined);
   const [driverInfo, setDriverInfo] = useState<any>(null);
   const [loadingInfo, setLoadingInfo] = useState(true);
   const [error, setError] = useState('');
@@ -92,8 +92,8 @@ export default function DriverPaymentPage({ params }: { params: { phoneNumber: s
   // create PaymentIntent whenever `amount` ≥ R$1,00
   useEffect(() => {
     clearTimeout(debounceRef.current!);
-    const num = parseFloat(amount.replace(/\./g,'').replace(',', '.'));
-    if (!isNaN(num) && num >= 1) {
+    const num = amount; // Use the number state directly
+    if (num !== undefined && !isNaN(num) && num >= 1) { // Check if amount is a valid number >= 1 BRL
       debounceRef.current = setTimeout(async () => {
         setError('');
         try {
@@ -142,8 +142,8 @@ export default function DriverPaymentPage({ params }: { params: { phoneNumber: s
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      <main className="flex-grow flex flex-col items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 space-y-8">
+      <main className="flex-grow flex flex-col items-center p-4 pt-8 md:pt-16">
+        <div className="w-full max-w-md md:max-w-lg lg:max-w-xl bg-white rounded-lg shadow-md p-8 space-y-8">
           {/* Driver Info */}
           <div className="flex flex-col items-center space-y-2">
             <div className="w-24 h-24 rounded-full overflow-hidden relative">
@@ -156,6 +156,8 @@ export default function DriverPaymentPage({ params }: { params: { phoneNumber: s
               />
             </div>
             <h1 className="text-2xl font-bold">{driverInfo.nome}</h1>
+            {driverInfo.profissao && <p className="text-sm text-gray-600">{driverInfo.profissao}</p>}
+            {driverInfo.celular && <p className="text-sm text-gray-500">{driverInfo.celular}</p>}
           </div>
 
           {/* amount input */}
@@ -165,14 +167,14 @@ export default function DriverPaymentPage({ params }: { params: { phoneNumber: s
               <CurrencyInput
                 placeholder="R$ 0,00"
                 value={amount}
-                onValueChange={v => setAmount(v || '')}
+                onValueChange={(value, name, values) => setAmount(values?.float)}
                 decimalSeparator=","
                 groupSeparator="."
                 intlConfig={{ locale: 'pt-BR', currency: 'BRL' }}
                 allowNegativeValue={false}
                 decimalScale={2}
                 inputMode="decimal"
-                pattern="[0-9]*[.,]?[0-9]{0,2}"
+
                 className="w-full text-center text-3xl py-3 border rounded focus:ring-purple-500"
               />
 

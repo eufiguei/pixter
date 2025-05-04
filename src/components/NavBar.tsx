@@ -125,7 +125,7 @@ export default function NavBar() {
   const callbackUrlParam = `?callbackUrl=${encodeURIComponent(pathname + searchParams.toString())}`;
 
   // Determine if the simplified public view should be shown
-  const showSimplifiedPublicView = isPublicPaymentPage && (!isAuthenticated || userType === 'motorista');
+  const showSimplifiedPublicView = isPublicPaymentPage && !isAuthenticated;
 
   if (isLoading) {
     // No links during loading
@@ -280,4 +280,3 @@ export default function NavBar() {
     </header>
   );
 }
-
