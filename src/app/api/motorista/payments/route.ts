@@ -19,17 +19,40 @@ function formatAmount(amount: number, currency: string): string {
   }).format(amount / 100);
 }
 
+// Helper to get payment details
+async function getPaymentDetails(tx: Stripe.BalanceTransaction, stripeAccountId: string): Promise<{ metodo: string | null; cliente: string | null; chargeId: string | null }> {
+  if (tx.type === "charge" || tx.type === "payment") {
+    if (typeof tx.source === "string" && (tx.source.startsWith("ch_") || tx.source.startsWith("py_"))) {
+      try {
+        const charge = await stripe.charges.retrieve(tx.source, {
+          stripeAccount: stripeAccountId,
+        });
+        const metodo = charge.payment_method_details?.type || "Desconhecido";
+        const cliente = charge.receipt_email || charge.billing_details?.email || "Não informado";
+        return { metodo, cliente, chargeId: charge.id };
+      } catch (error) {
+        console.error(`Error fetching charge ${tx.source}:`, error);
+        // Fallback or default values if charge retrieval fails
+        return { metodo: tx.type, cliente: "Erro ao buscar", chargeId: null };
+      }
+    } else if (typeof tx.source === "object" && tx.source?.object === "charge") {
+       // Handle cases where source is an expanded Charge object (less common for balance transactions list)
+       const charge = tx.source as Stripe.Charge;
+       const metodo = charge.payment_method_details?.type || "Desconhecido";
+       const cliente = charge.receipt_email || charge.billing_details?.email || "Não informado";
+       return { metodo, cliente, chargeId: charge.id };
+    }
+  }
+  // Default for non-charge transactions or if source is not a charge ID
+  return { metodo: tx.type, cliente: "N/A", chargeId: null };
+}
+
 export async function GET(request: Request) {
-  // 1) Authenticate user via NextAuth
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  if (!session?.user?.id || session.user.tipo !== "motorista") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
-  if (session.user.tipo !== "motorista") {
-    return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
-  }
 
-  // 2) Lookup connected Stripe account for this driver
   const userId = session.user.id;
   const { data: profile, error: profileError } = await supabaseServer
     .from("profiles")
@@ -46,19 +69,16 @@ export async function GET(request: Request) {
   }
   const stripeAccountId = profile.stripe_account_id;
 
-  // 3) Parse optional date filters
   const url = new URL(request.url);
   const startDate = url.searchParams.get("startDate");
   const endDate = url.searchParams.get("endDate");
 
   try {
-    // 4) Retrieve balance for connected account
     const bal = await stripe.balance.retrieve(
       {},
       { stripeAccount: stripeAccountId }
     );
 
-    // 5) Build parameters for listing balance transactions
     const listParams: Stripe.BalanceTransactionListParams = { limit: 100 };
     if (startDate || endDate) {
       listParams.created = {};
@@ -74,13 +94,11 @@ export async function GET(request: Request) {
       }
     }
 
-    // 6) Retrieve the transactions list
     const txList = await stripe.balanceTransactions.list(
       listParams,
       { stripeAccount: stripeAccountId }
     );
 
-    // 7) Format balance buckets
     const available = bal.available.map((b) => ({
       amount: formatAmount(b.amount, b.currency),
       currency: b.currency,
@@ -90,18 +108,25 @@ export async function GET(request: Request) {
       currency: b.currency,
     }));
 
-    // 8) Format each transaction record
-    const transactions = txList.data.map((t) => ({
-      id: t.id,
-      amount: formatAmount(t.amount, t.currency),
-      currency: t.currency,
-      description: t.description || "-",
-      created: new Date(t.created * 1000).toISOString(),
-      type: t.type,
-      fee: typeof t.fee === "number" ? formatAmount(t.fee, t.currency) : undefined,
-    }));
+    // Process transactions in parallel to fetch charge details
+    const transactionsPromises = txList.data.map(async (t) => {
+      const details = await getPaymentDetails(t, stripeAccountId);
+      return {
+        id: t.id, // Keep balance transaction ID for keying if needed
+        chargeId: details.chargeId, // Add charge ID for receipt link
+        amount: formatAmount(t.amount, t.currency),
+        currency: t.currency,
+        description: t.description || "-",
+        data: new Date(t.created * 1000).toISOString(),
+        type: t.type, // Keep original type if needed
+        metodo: details.metodo, // Use fetched payment method
+        cliente: details.cliente, // Use fetched client email
+        fee: typeof t.fee === "number" ? formatAmount(t.fee, t.currency) : undefined,
+      };
+    });
 
-    // 9) Return shape matching the dashboard expectations
+    const transactions = await Promise.all(transactionsPromises);
+
     return NextResponse.json({
       balance: { available, pending },
       transactions,
@@ -114,3 +139,4 @@ export async function GET(request: Request) {
     );
   }
 }
+

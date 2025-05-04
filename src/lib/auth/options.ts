@@ -199,6 +199,18 @@ export const authOptions: NextAuthOptions = {
     newUser: "/cadastro", // Redirect new users (e.g., after Google signup) here if needed
   },
 
-  session: { strategy: "jwt" }, // Use JSON Web Tokens for session management
+  session: {
+    strategy: "jwt",
+    // Set session max age (e.g., 30 days)
+    maxAge: 30 * 24 * 60 * 60, // 30 days in seconds
+    // Session is automatically updated on user activity if using JWT strategy (default)
+    // updateAge: 24 * 60 * 60, // Optional: Update expiry only once every 24 hours
+  },
+
+  jwt: {
+    // Set JWT max age (e.g., 1 day)
+    maxAge: 24 * 60 * 60, // 1 day in seconds
+    // You can also define custom encode/decode functions if needed
+  },
 };
 

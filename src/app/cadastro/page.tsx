@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useState } from 'react'
@@ -16,31 +17,39 @@ export default function ClientSignUp() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({
       ...prev,
       [name]: value
     }))
+    // Clear error when user types
+    if (error) setError('');
   }
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('') // Clear previous errors
     
-    // Validação básica
-    if (!formData.name || !formData.email || !formData.password) {
+    // --- Frontend Validation --- 
+    if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
       setError('Por favor, preencha todos os campos obrigatórios')
       return
     }
     
+    if (formData.password.length < 8) { // Check password length
+      setError('A senha deve ter no mínimo 8 caracteres')
+      return
+    }
+
     if (formData.password !== formData.confirmPassword) {
       setError('As senhas não coincidem')
       return
     }
     
+    // --- API Call --- 
     try {
       setLoading(true)
-      setError('')
       
       const response = await fetch('/api/auth/signup-client', {
         method: 'POST',
@@ -57,18 +66,18 @@ export default function ClientSignUp() {
       const data = await response.json()
       
       if (!response.ok) {
-        if (response.status === 400 && data.error.includes('already')) {
-          throw new Error('Este email já está em uso. Tente fazer login ou use outro email.')
-        } else {
-          throw new Error(data.error || 'Erro ao criar conta')
-        }
+        // Use error message from backend if available
+        throw new Error(data.error || 'Erro ao criar conta')
       }
       
-      // Redirecionar para o dashboard após cadastro bem-sucedido
-      router.push('/dashboard')
+      // Signup successful, redirect to dashboard (or login page for verification)
+      // Assuming successful signup logs the user in or redirects appropriately
+      // If email verification is needed, redirect to a confirmation page or login
+      router.push('/login?message=signup_success') // Redirect to login with success message
       
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao criar conta:', err)
+      // Display specific error messages caught from backend or generic ones
       setError(err.message || 'Falha ao criar conta')
     } finally {
       setLoading(false)
@@ -80,10 +89,11 @@ export default function ClientSignUp() {
       setLoading(true)
       setError('')
       
-      // Redirecionar para a rota de autenticação do Google com callback para dashboard
-      window.location.href = '/api/auth/signin/google?callbackUrl=/dashboard'
+      // Use next-auth/react signIn for Google
+      await signIn('google', { callbackUrl: '/dashboard' })
+      // setLoading(false) might not be reached if redirect happens
       
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao fazer login com Google:', err)
       setError(err.message || 'Falha ao fazer login com Google')
       setLoading(false)
@@ -97,7 +107,7 @@ export default function ClientSignUp() {
           <Link href="/" className="text-3xl font-bold text-gray-900">
             Pixter
           </Link>
-          <h2 className="mt-4 text-2xl font-bold text-gray-900">Crie sua conta</h2>
+          <h2 className="mt-4 text-2xl font-bold text-gray-900">Crie sua conta de Cliente</h2>
           <p className="mt-2 text-sm text-gray-600">
             Ou{' '}
             <Link href="/login" className="text-purple-600 hover:text-purple-800">
@@ -110,8 +120,9 @@ export default function ClientSignUp() {
           type="button"
           onClick={handleGoogleSignIn}
           disabled={loading}
-          className="w-full flex justify-center items-center gap-3 bg-white border border-gray-300 rounded-md py-2 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 mb-4"
+          className="w-full flex justify-center items-center gap-3 bg-white border border-gray-300 rounded-md py-2 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 mb-4 disabled:opacity-70"
         >
+          {/* Google SVG */}
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M19.9895 10.1871C19.9895 9.36767 19.9214 8.76973 19.7742 8.14966H10.1992V11.848H15.8195C15.7062 12.7671 15.0943 14.1512 13.7346 15.0813L13.7155 15.2051L16.7429 17.4969L16.9527 17.5174C18.879 15.7789 19.9895 13.221 19.9895 10.1871Z" fill="#4285F4"/>
             <path d="M10.1993 19.9313C12.9527 19.9313 15.2643 19.0454 16.9527 17.5174L13.7346 15.0813C12.8734 15.6682 11.7176 16.0779 10.1993 16.0779C7.50243 16.0779 5.21352 14.3395 4.39759 11.9366L4.27799 11.9466L1.13003 14.3273L1.08887 14.4391C2.76588 17.6945 6.21061 19.9313 10.1993 19.9313Z" fill="#34A853"/>
@@ -171,7 +182,7 @@ export default function ClientSignUp() {
           
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Senha
+              Senha (mínimo 8 caracteres)
             </label>
             <input
               id="password"
@@ -179,6 +190,7 @@ export default function ClientSignUp() {
               type="password"
               autoComplete="new-password"
               required
+              minLength={8} // Add minLength attribute for browser validation
               value={formData.password}
               onChange={handleChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -210,7 +222,7 @@ export default function ClientSignUp() {
               className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
             />
             <label htmlFor="terms" className="ml-2 block text-sm text-gray-700">
-              Aceito os <a href="/termos" className="text-purple-600 hover:text-purple-800">Termos de Uso</a> e a <a href="/privacidade" className="text-purple-600 hover:text-purple-800">Política de Privacidade</a>
+              Aceito os <a href="/termos" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:text-purple-800">Termos de Uso</a> e a <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:text-purple-800">Política de Privacidade</a>
             </label>
           </div>
           
@@ -228,3 +240,4 @@ export default function ClientSignUp() {
     </main>
   )
 }
+

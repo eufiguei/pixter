@@ -1,12 +1,16 @@
+
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation' // Import useSearchParams
 import { signIn } from 'next-auth/react'
 
 export default function Login() {
   const router = useRouter()
+  const searchParams = useSearchParams() // Get query parameters
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard' // Get callbackUrl or default to /dashboard
+
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -14,7 +18,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({
       ...prev,
@@ -22,7 +26,7 @@ export default function Login() {
     }))
   }
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!formData.email || !formData.password) {
@@ -35,28 +39,30 @@ export default function Login() {
       setError('')
       
       const result = await signIn('credentials', {
-        redirect: false,
+        redirect: false, // We handle redirect manually
         email: formData.email,
-        password: formData.password
+        password: formData.password,
+        callbackUrl: callbackUrl // Pass callbackUrl here, though redirect:false means we handle it
       })
       
       if (result?.error) {
         // Mensagens de erro específicas
-        if (result.error.includes('credentials')) {
+        if (result.error.includes('CredentialsSignin')) { // Check for specific error code
           setError('Email ou senha incorretos')
         } else {
           setError(result.error || 'Falha ao fazer login')
         }
+        setLoading(false); // Stop loading on error
         return
       }
       
-      // Redirecionar para o dashboard
-      router.push('/dashboard')
+      // Redirect using the callbackUrl if login was successful
+      router.push(callbackUrl)
+      // No need to setLoading(false) here as we are navigating away
       
     } catch (err) {
       console.error('Erro ao fazer login:', err)
       setError('Ocorreu um erro ao fazer login. Tente novamente.')
-    } finally {
       setLoading(false)
     }
   }
@@ -66,7 +72,10 @@ export default function Login() {
       setLoading(true)
       setError('')
       
-      await signIn('google', { callbackUrl: '/dashboard' })
+      // Use the determined callbackUrl for Google sign-in
+      await signIn('google', { callbackUrl: callbackUrl })
+      // signIn with redirect will handle navigation, no need for router.push
+      // setLoading(false) might not be reached if redirect happens quickly
       
     } catch (err) {
       console.error('Erro ao fazer login com Google:', err)
@@ -82,7 +91,7 @@ export default function Login() {
           <Link href="/" className="text-3xl font-bold text-gray-900">
             Pixter
           </Link>
-          <h2 className="mt-4 text-2xl font-bold text-gray-900">Entre na sua conta</h2>
+          <h2 className="mt-4 text-2xl font-bold text-gray-900">Entre na sua conta de Cliente</h2>
           <p className="mt-2 text-sm text-gray-600">
             Ou{' '}
             <Link href="/cadastro" className="text-purple-600 hover:text-purple-800">
@@ -95,8 +104,9 @@ export default function Login() {
           type="button"
           onClick={handleGoogleSignIn}
           disabled={loading}
-          className="w-full flex justify-center items-center gap-3 bg-white border border-gray-300 rounded-md py-2 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 mb-4"
+          className="w-full flex justify-center items-center gap-3 bg-white border border-gray-300 rounded-md py-2 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 mb-4 disabled:opacity-70"
         >
+          {/* Google SVG */} 
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M19.9895 10.1871C19.9895 9.36767 19.9214 8.76973 19.7742 8.14966H10.1992V11.848H15.8195C15.7062 12.7671 15.0943 14.1512 13.7346 15.0813L13.7155 15.2051L16.7429 17.4969L16.9527 17.5174C18.879 15.7789 19.9895 13.221 19.9895 10.1871Z" fill="#4285F4"/>
             <path d="M10.1993 19.9313C12.9527 19.9313 15.2643 19.0454 16.9527 17.5174L13.7346 15.0813C12.8734 15.6682 11.7176 16.0779 10.1993 16.0779C7.50243 16.0779 5.21352 14.3395 4.39759 11.9366L4.27799 11.9466L1.13003 14.3273L1.08887 14.4391C2.76588 17.6945 6.21061 19.9313 10.1993 19.9313Z" fill="#34A853"/>
@@ -143,9 +153,9 @@ export default function Login() {
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Senha
               </label>
-              <a href="/esqueci-senha" className="text-sm text-purple-600 hover:text-purple-800">
+              {/* <a href="/esqueci-senha" className="text-sm text-purple-600 hover:text-purple-800">
                 Esqueceu a senha?
-              </a>
+              </a> */}
             </div>
             <input
               id="password"
@@ -177,3 +187,4 @@ export default function Login() {
     </main>
   )
 }
+
