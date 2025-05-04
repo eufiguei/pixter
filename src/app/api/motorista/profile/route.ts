@@ -4,6 +4,9 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth/options";
 import { supabaseServer } from "@/lib/supabase/client";
 
+// Define the list of valid avatar paths for validation
+const VALID_AVATAR_PATHS = Array.from({ length: 9 }, (_, i) => `/images/avatars/avatar_${i + 1}.png`);
+
 export async function GET(request: Request) {
   // 1) Validate via NextAuth
   const session = await getServerSession(authOptions);
@@ -14,11 +17,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
   }
 
-  // 2) Fetch the profile from Supabase with your server key
+  // 2) Fetch the profile from Supabase including stripe_account_status and avatar_url
   const userId = session.user.id;
   const { data: profile, error } = await supabaseServer
     .from("profiles")
-    .select("id, nome, email, celular, tipo, stripe_account_id")
+    .select("id, nome, email, celular, tipo, profissao, stripe_account_id, stripe_account_status, avatar_url") // Added profissao, stripe_account_status, avatar_url
     .eq("id", userId)
     .eq("tipo", "motorista")
     .single();
@@ -35,7 +38,7 @@ export async function GET(request: Request) {
   return NextResponse.json(profile);
 }
 
-// If you also have a PUT to update the driver’s info, do the same pattern:
+// PUT handler to update the driver’s info
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || !session.user?.id) {
@@ -46,19 +49,46 @@ export async function PUT(request: Request) {
   }
 
   const userId = session.user.id;
-  const updates = await request.json();
+  let updates: { [key: string]: any };
+  try {
+      updates = await request.json();
+  } catch (e) {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
-  // Sanitize/validate …
-  delete updates.id;
-  delete updates.tipo;
-  updates.updated_at = new Date().toISOString();
+  // Sanitize/validate updates
+  const allowedUpdates: { [key: string]: any } = {};
+  if (updates.hasOwnProperty("nome")) {
+      allowedUpdates.nome = updates.nome;
+  }
+  if (updates.hasOwnProperty("profissao")) {
+      allowedUpdates.profissao = updates.profissao;
+  }
+  // Validate and add avatar_url if present
+  if (updates.hasOwnProperty("avatar_url")) {
+      if (updates.avatar_url === null || VALID_AVATAR_PATHS.includes(updates.avatar_url)) {
+          allowedUpdates.avatar_url = updates.avatar_url;
+      } else {
+          // Optional: Return an error if the avatar_url is invalid
+          // console.warn(`Invalid avatar_url provided: ${updates.avatar_url}`);
+          // return NextResponse.json({ error: "URL de avatar inválida." }, { status: 400 });
+          // Or simply ignore the invalid avatar_url update
+      }
+  }
+
+  // Ensure there are updates to perform
+  if (Object.keys(allowedUpdates).length === 0) {
+      return NextResponse.json({ error: "Nenhum campo válido para atualização fornecido." }, { status: 400 });
+  }
+
+  allowedUpdates.updated_at = new Date().toISOString();
 
   const { data, error } = await supabaseServer
     .from("profiles")
-    .update(updates)
+    .update(allowedUpdates)
     .eq("id", userId)
     .eq("tipo", "motorista")
-    .select()
+    .select("id, nome, email, celular, tipo, profissao, stripe_account_id, stripe_account_status, avatar_url") // Return updated profile
     .single();
 
   if (error) {
@@ -72,6 +102,7 @@ export async function PUT(request: Request) {
   return NextResponse.json({
     success: true,
     message: "Perfil atualizado com sucesso",
-    profile: data,
+    profile: data, // Return the updated profile data
   });
 }
+
