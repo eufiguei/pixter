@@ -1,31 +1,30 @@
 /* ------------------------------------------------------------------
-   NEXTAUTH + SUPABASE + STRIPE
-   • Keeps generics shallow (no “excessively deep” error)
-   • Adds required `tipo` field when building `User` objects
+   NEXTAUTH + SUPABASE + STRIPE  (v2025-05)
+   • Column in Supabase is `stripe_account_id`
+   • No deep generics   • `tipo` is required on User
 -------------------------------------------------------------------*/
 import { NextAuthOptions, User } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { Stripe } from "stripe";
-
 import { supabaseServer, formatPhoneNumber } from "@/lib/supabase/client";
 
-/* ---------- Row type for the `profiles` table ---------- */
+/* ---------- Row type for `profiles` ---------- */
 interface ProfileRow {
   id: string;
   nome: string | null;
   email: string | null;
   avatar_url: string | null;
   tipo: string | null;
-  stripe_account_id: string | null;
+  stripe_account_id: string | null;        // ← column name in Supabase
 }
 
 /* ---------- Stripe ---------- */
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_YOUR_KEY", {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2022-11-15",
 });
 
-/* ---------- Helper: fetch profile once ---------- */
+/* ---------- Helper: fetch profile ---------- */
 async function getProfile(id: string): Promise<ProfileRow | null> {
   const { data, error } = await supabaseServer
     .from("profiles")
@@ -44,15 +43,15 @@ async function getProfile(id: string): Promise<ProfileRow | null> {
    NextAuth configuration
 -------------------------------------------------------------------*/
 export const authOptions: NextAuthOptions = {
-  /* ====================== PROVIDERS ====================== */
+  /* ================= PROVIDERS ================= */
   providers: [
-    /* ---- Google OAuth ---- */
+    /* Google OAuth */
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
     }),
 
-    /* ---- Email + Senha ---- */
+    /* Email + Password */
     CredentialsProvider({
       id: "email-password",
       name: "Email e Senha",
@@ -77,14 +76,13 @@ export const authOptions: NextAuthOptions = {
           email: data.user.email,
           name: profile?.nome ?? data.user.email?.split("@")[0] ?? null,
           image: profile?.avatar_url ?? null,
-          tipo: profile?.tipo ?? "cliente", // required field ✅
+          tipo: profile?.tipo ?? "cliente", // required
         };
-
         return user;
       },
     }),
 
-    /* ---- Phone + OTP ---- */
+    /* Phone + OTP */
     CredentialsProvider({
       id: "phone-otp",
       name: "Phone OTP",
@@ -104,10 +102,11 @@ export const authOptions: NextAuthOptions = {
           type: "sms",
         });
         if (error || !data?.user) {
-          const msg = error?.message.includes("expired")
-            ? "Código expirado. Por favor, solicite um novo."
-            : "Código inválido ou expirado";
-          throw new Error(msg);
+          throw new Error(
+            error?.message.includes("expired")
+              ? "Código expirado. Por favor, solicite um novo."
+              : "Código inválido ou expirado"
+          );
         }
 
         const profile = await getProfile(data.user.id);
@@ -117,23 +116,23 @@ export const authOptions: NextAuthOptions = {
           email: data.user.email,
           name: profile?.nome ?? null,
           image: profile?.avatar_url ?? null,
-          tipo: profile?.tipo ?? "cliente", // required field ✅
+          tipo: profile?.tipo ?? "cliente",
         };
-
         return user;
       },
     }),
   ],
 
-  /* ====================== CALLBACKS ====================== */
+  /* ================= CALLBACKS ================= */
   callbacks: {
+    /* -------- signIn -------- */
     async signIn({ user }) {
       if (!user?.id) return false;
 
       let stripeCustomerId: string | null = null;
       let profile = await getProfile(user.id);
 
-      /* -------- New user -------- */
+      /* New user: create profile + Stripe customer */
       if (!profile) {
         try {
           const cust = await stripe.customers.create({
@@ -143,7 +142,7 @@ export const authOptions: NextAuthOptions = {
           });
           stripeCustomerId = cust.id;
 
-          const { error: insErr } = await supabaseServer.from("profiles").insert({
+          const { error } = await supabaseServer.from("profiles").insert({
             id: user.id,
             nome: user.name ?? null,
             email: user.email ?? null,
@@ -151,15 +150,16 @@ export const authOptions: NextAuthOptions = {
             tipo: "cliente",
             stripe_account_id: stripeCustomerId,
           });
-          if (insErr) throw insErr;
-          profile = await getProfile(user.id);
+          if (error) throw error;
+
+          profile = await getProfile(user.id); // refresh
         } catch (e: any) {
           console.error("Bootstrap error:", e.message);
           return false;
         }
       }
 
-      /* -------- Existing user: ensure Stripe ID -------- */
+      /* Existing user: ensure Stripe ID */
       if (profile && !profile.stripe_account_id) {
         try {
           const cust = await stripe.customers.create({
@@ -169,11 +169,11 @@ export const authOptions: NextAuthOptions = {
           });
           stripeCustomerId = cust.id;
 
-          const { error: upErr } = await supabaseServer
+          const { error } = await supabaseServer
             .from("profiles")
             .update({ stripe_account_id: stripeCustomerId })
             .eq("id", user.id);
-          if (upErr) throw upErr;
+          if (error) throw error;
         } catch (e: any) {
           console.error("Stripe create error:", e.message);
           return false;
@@ -182,12 +182,13 @@ export const authOptions: NextAuthOptions = {
         stripeCustomerId = profile?.stripe_account_id ?? null;
       }
 
-      /* Attach custom fields for jwt/session */
+      /* expose custom fields to later callbacks */
       (user as any).stripeCustomerId = stripeCustomerId;
       (user as any).tipo = profile?.tipo ?? "cliente";
       return true;
     },
 
+    /* -------- jwt -------- */
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
@@ -197,19 +198,19 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
 
+    /* -------- session -------- */
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string;
-        session.user.tipo = token.tipo as string;
-        session.user.stripeCustomerId = token.stripeCustomerId as string;
+        const u = session.user as any; // cast once for custom props
+        u.id = token.id;
+        u.tipo = token.tipo;
+        u.stripeCustomerId = token.stripeCustomerId;
       }
       return session;
     },
   },
 
-  /* ====================== OTHER OPTIONS ====================== */
   pages: { signIn: "/login", newUser: "/cadastro" },
-
-  session: { strategy: "jwt", maxAge: 86_400 }, // 1 day
+  session: { strategy: "jwt", maxAge: 86_400 },
   jwt: { maxAge: 86_400 },
 };
