@@ -1,13 +1,16 @@
 /* ------------------------------------------------------------------
-   NEXTAUTH + SUPABASE + STRIPE  (Generics trimmed for TS stability)
+   NEXTAUTH + SUPABASE + STRIPE
+   • Keeps generics shallow (no “excessively deep” error)
+   • Adds required `tipo` field when building `User` objects
 -------------------------------------------------------------------*/
 import { NextAuthOptions, User } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { Stripe } from "stripe";
+
 import { supabaseServer, formatPhoneNumber } from "@/lib/supabase/client";
 
-/* ---------- Simple row type we’ll cast to ---------- */
+/* ---------- Row type for the `profiles` table ---------- */
 interface ProfileRow {
   id: string;
   nome: string | null;
@@ -22,7 +25,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_YOUR_KEY", {
   apiVersion: "2022-11-15",
 });
 
-/* ---------- Helper: load profile once ---------- */
+/* ---------- Helper: fetch profile once ---------- */
 async function getProfile(id: string): Promise<ProfileRow | null> {
   const { data, error } = await supabaseServer
     .from("profiles")
@@ -41,14 +44,15 @@ async function getProfile(id: string): Promise<ProfileRow | null> {
    NextAuth configuration
 -------------------------------------------------------------------*/
 export const authOptions: NextAuthOptions = {
+  /* ====================== PROVIDERS ====================== */
   providers: [
-    /* ------------- Google ------------- */
+    /* ---- Google OAuth ---- */
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
     }),
 
-    /* ------------- Email + Senha ------------- */
+    /* ---- Email + Senha ---- */
     CredentialsProvider({
       id: "email-password",
       name: "Email e Senha",
@@ -73,13 +77,14 @@ export const authOptions: NextAuthOptions = {
           email: data.user.email,
           name: profile?.nome ?? data.user.email?.split("@")[0] ?? null,
           image: profile?.avatar_url ?? null,
+          tipo: profile?.tipo ?? "cliente", // required field ✅
         };
-        (user as any).tipo = profile?.tipo ?? "cliente";
+
         return user;
       },
     }),
 
-    /* ------------- Phone + OTP ------------- */
+    /* ---- Phone + OTP ---- */
     CredentialsProvider({
       id: "phone-otp",
       name: "Phone OTP",
@@ -112,23 +117,23 @@ export const authOptions: NextAuthOptions = {
           email: data.user.email,
           name: profile?.nome ?? null,
           image: profile?.avatar_url ?? null,
+          tipo: profile?.tipo ?? "cliente", // required field ✅
         };
-        (user as any).tipo = profile?.tipo ?? "cliente";
+
         return user;
       },
     }),
   ],
 
-  /* ===================== CALLBACKS ===================== */
+  /* ====================== CALLBACKS ====================== */
   callbacks: {
-    /* -------- signIn -------- */
     async signIn({ user }) {
       if (!user?.id) return false;
 
       let stripeCustomerId: string | null = null;
       let profile = await getProfile(user.id);
 
-      /* ---- New user: create Stripe customer & profile ---- */
+      /* -------- New user -------- */
       if (!profile) {
         try {
           const cust = await stripe.customers.create({
@@ -147,15 +152,14 @@ export const authOptions: NextAuthOptions = {
             stripe_customer_id: stripeCustomerId,
           });
           if (insErr) throw insErr;
-
-          profile = await getProfile(user.id); // reload
+          profile = await getProfile(user.id);
         } catch (e: any) {
           console.error("Bootstrap error:", e.message);
           return false;
         }
       }
 
-      /* ---- Existing user: ensure Stripe customer ---- */
+      /* -------- Existing user: ensure Stripe ID -------- */
       if (profile && !profile.stripe_customer_id) {
         try {
           const cust = await stripe.customers.create({
@@ -178,12 +182,12 @@ export const authOptions: NextAuthOptions = {
         stripeCustomerId = profile?.stripe_customer_id ?? null;
       }
 
-      (user as any).tipo = profile?.tipo ?? "cliente";
+      /* Attach custom fields for jwt/session */
       (user as any).stripeCustomerId = stripeCustomerId;
+      (user as any).tipo = profile?.tipo ?? "cliente";
       return true;
     },
 
-    /* -------- jwt -------- */
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
@@ -193,7 +197,6 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
 
-    /* -------- session -------- */
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
@@ -204,8 +207,9 @@ export const authOptions: NextAuthOptions = {
     },
   },
 
+  /* ====================== OTHER OPTIONS ====================== */
   pages: { signIn: "/login", newUser: "/cadastro" },
 
-  session: { strategy: "jwt", maxAge: 86_400 },
+  session: { strategy: "jwt", maxAge: 86_400 }, // 1 day
   jwt: { maxAge: 86_400 },
 };
