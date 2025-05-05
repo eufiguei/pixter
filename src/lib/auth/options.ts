@@ -17,7 +17,7 @@ interface ProfileRow {
   email: string | null;
   avatar_url: string | null;
   tipo: string | null;
-  stripe_customer_id: string | null;
+  stripe_account_id: string | null;
 }
 
 /* ---------- Stripe ---------- */
@@ -149,7 +149,7 @@ export const authOptions: NextAuthOptions = {
             email: user.email ?? null,
             avatar_url: user.image ?? null,
             tipo: "cliente",
-            stripe_customer_id: stripeCustomerId,
+            stripe_account_id: stripeCustomerId,
           });
           if (insErr) throw insErr;
           profile = await getProfile(user.id);
@@ -160,7 +160,7 @@ export const authOptions: NextAuthOptions = {
       }
 
       /* -------- Existing user: ensure Stripe ID -------- */
-      if (profile && !profile.stripe_customer_id) {
+      if (profile && !profile.stripe_account_id) {
         try {
           const cust = await stripe.customers.create({
             email: user.email ?? profile.email ?? undefined,
@@ -171,7 +171,7 @@ export const authOptions: NextAuthOptions = {
 
           const { error: upErr } = await supabaseServer
             .from("profiles")
-            .update({ stripe_customer_id: stripeCustomerId })
+            .update({ stripe_account_id: stripeCustomerId })
             .eq("id", user.id);
           if (upErr) throw upErr;
         } catch (e: any) {
@@ -179,7 +179,7 @@ export const authOptions: NextAuthOptions = {
           return false;
         }
       } else {
-        stripeCustomerId = profile?.stripe_customer_id ?? null;
+        stripeCustomerId = profile?.stripe_account_id ?? null;
       }
 
       /* Attach custom fields for jwt/session */
