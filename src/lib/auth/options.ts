@@ -2,8 +2,14 @@
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { Stripe } from "stripe"; // Import Stripe
 // Import only server/admin clients and helpers needed server-side
 import { supabaseServer, supabaseAdmin, formatPhoneNumber } from "@/lib/supabase/client";
+
+// Initialize Stripe (Use environment variables!)
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_YOUR_KEY", {
+  apiVersion: "2022-11-15", // Use your desired API version
+});
 
 /* ------------------------------------------------------------------
    NextAuth options - Defined and Exported Here
@@ -124,38 +130,114 @@ export const authOptions: NextAuthOptions = {
 
   callbacks: {
     async signIn({ user, account, profile }) {
-      if (account?.provider === "google") {
-        const { data: existingProfile, error } = await supabaseServer
-          .from("profiles")
-          .select("id, tipo")
-          .eq("id", user.id)
-          .single();
+      // Ensure user object has an id
+      if (!user?.id) return false;
 
-        if (error && error.code !== 'PGRST116') {
-            console.error("Error checking profile during Google sign-in:", error.message);
-            return false;
+      // --- Stripe Customer Creation/Retrieval ---
+      let stripeCustomerId: string | null = null;
+
+      try {
+        // Check if profile exists in Supabase
+        const { data: existingProfile, error: profileError } = await supabaseServer
+          .from("profiles")
+          .select("id, tipo, stripe_customer_id") // Select stripe_customer_id
+          .eq("id", user.id)
+          .maybeSingle(); // Use maybeSingle to handle not found gracefully
+
+        if (profileError) {
+          console.error("Error checking profile during sign-in:", profileError.message);
+          return false; // Block sign-in on profile fetch error
         }
 
         if (!existingProfile) {
-            console.log(`Creating profile for new Google user: ${user.id}`);
-            const { error: insertError } = await supabaseServer
-                .from('profiles')
-                .insert({
-                    id: user.id,
-                    nome: user.name,
-                    email: user.email,
-                    avatar_url: user.image,
-                    tipo: 'cliente'
-                });
-            if (insertError) {
-                console.error("Error creating profile for Google user:", insertError.message);
-                return false;
-            }
-            (user as any).tipo = 'cliente';
+          // --- Create Profile and Stripe Customer for NEW users (e.g., first Google sign-in) ---
+          console.log(`Creating profile and Stripe Customer for new user: ${user.id}`);
+
+          // Create Stripe Customer first
+          try {
+            const customer = await stripe.customers.create({
+              email: user.email || undefined,
+              name: user.name || undefined,
+              metadata: {
+                supabase_user_id: user.id,
+              },
+            });
+            stripeCustomerId = customer.id;
+            console.log(`Stripe Customer created: ${stripeCustomerId} for user ${user.id}`);
+          } catch (stripeError: any) {
+            console.error("Error creating Stripe Customer:", stripeError.message);
+            // Decide if sign-in should fail if Stripe Customer creation fails
+            return false; // Block sign-in if Stripe Customer creation fails
+          }
+
+          // Now create Supabase profile including the Stripe Customer ID
+          const { error: insertError } = await supabaseServer
+            .from("profiles")
+            .insert({
+              id: user.id,
+              nome: user.name,
+              email: user.email,
+              avatar_url: user.image,
+              tipo: "cliente", // Default new users to client
+              stripe_customer_id: stripeCustomerId, // Store Stripe Customer ID
+            });
+
+          if (insertError) {
+            console.error("Error creating Supabase profile:", insertError.message);
+            // Optional: Attempt to delete the created Stripe Customer if profile creation fails?
+            return false; // Block sign-in if profile creation fails
+          }
+          (user as any).tipo = "cliente"; // Add tipo to user object for JWT/Session
+
         } else {
-             (user as any).tipo = existingProfile.tipo ?? 'cliente';
+          // --- Existing User: Check/Create Stripe Customer ID ---
+          stripeCustomerId = existingProfile.stripe_customer_id;
+
+          if (!stripeCustomerId) {
+            console.log(`Stripe Customer ID missing for existing user ${user.id}. Creating now.`);
+            try {
+              const customer = await stripe.customers.create({
+                email: user.email || existingProfile.email || undefined,
+                name: user.name || existingProfile.nome || undefined,
+                metadata: {
+                  supabase_user_id: user.id,
+                },
+              });
+              stripeCustomerId = customer.id;
+              console.log(`Stripe Customer created: ${stripeCustomerId} for user ${user.id}`);
+
+              // Update profile with the new Stripe Customer ID
+              const { error: updateError } = await supabaseServer
+                .from("profiles")
+                .update({ stripe_customer_id: stripeCustomerId })
+                .eq("id", user.id);
+
+              if (updateError) {
+                console.error("Error updating profile with Stripe Customer ID:", updateError.message);
+                // Decide if sign-in should fail
+                return false;
+              }
+            } catch (stripeError: any) {
+              console.error("Error creating Stripe Customer for existing user:", stripeError.message);
+              // Decide if sign-in should fail
+              return false;
+            }
+          }
+          // Add existing tipo to user object for JWT/Session
+          (user as any).tipo = existingProfile.tipo ?? "cliente";
         }
+
+      } catch (e: any) {
+        console.error("Unexpected error during signIn callback:", e.message);
+        return false;
       }
+
+      // Add stripeCustomerId to the user object to pass it to the JWT callback
+      if (stripeCustomerId) {
+        (user as any).stripeCustomerId = stripeCustomerId;
+      }
+
+      // Allow sign-in if everything succeeded
       return true;
     },
 
@@ -163,6 +245,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.tipo = (user as any).tipo;
+        token.stripeCustomerId = (user as any).stripeCustomerId; // Add stripeCustomerId to token
       }
       return token;
     },
@@ -171,6 +254,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.tipo = token.tipo as string;
+        session.user.stripeCustomerId = token.stripeCustomerId as string; // Add stripeCustomerId to session
       }
       return session;
     },
