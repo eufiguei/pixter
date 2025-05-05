@@ -1,29 +1,23 @@
 /* ------------------------------------------------------------------
    src/lib/auth/options.ts
-   Full, Type-Safe version – fixes compile-time blocker on `email`
+   FULL TYPE-SAFE VERSION – GENERIC SIGNATURE FIXED
 -------------------------------------------------------------------*/
-
 import { NextAuthOptions, User } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { Stripe } from "stripe";
 
-// ──────────────────────────────────────────────────────────────────
-// Supabase helpers (server-side only)
 import {
   supabaseServer,
-  supabaseAdmin,
   formatPhoneNumber,
 } from "@/lib/supabase/client";
 
-// ──────────────────────────────────────────────────────────────────
-// Stripe initialisation  (ALWAYS use env vars in real prod)
+/* ──────────────────────────────────────────────────────────────── */
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_YOUR_KEY", {
   apiVersion: "2022-11-15",
 });
 
-// ──────────────────────────────────────────────────────────────────
-// Postgres row typing  – re-use everywhere you query `profiles`
+/* ---------- typed row for `profiles` --------- */
 export interface ProfileRow {
   id: string;
   nome: string | null;
@@ -41,13 +35,12 @@ export const authOptions: NextAuthOptions = {
      PROVIDERS
   ==================================================================*/
   providers: [
-    /* -------- Google OAuth -------- */
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
     }),
 
-    /* -------- E-mail + Senha (Supabase) -------- */
+    /* ---- Email + Senha ---- */
     CredentialsProvider({
       id: "email-password",
       name: "Email e Senha",
@@ -58,39 +51,31 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        // 1. Auth via Supabase
         const { data, error } = await supabaseServer.auth.signInWithPassword({
           email: credentials.email,
           password: credentials.password,
         });
-        if (error || !data.user) {
-          console.error("Email/Password Auth Error:", error?.message);
+        if (error || !data.user)
           throw new Error(error?.message || "Email ou senha inválidos.");
-        }
 
-        // 2. Fetch profile (typed)
         const { data: profile } = await supabaseServer
-          .from<ProfileRow>("profiles")
+          .from<"profiles", ProfileRow>("profiles")
           .select("*")
           .eq("id", data.user.id)
           .single();
 
-        // 3. Map to NextAuth-compatible object
         const user: User = {
           id: data.user.id,
           email: data.user.email,
           name: profile?.nome ?? data.user.email?.split("@")[0] ?? null,
           image: profile?.avatar_url ?? null,
         };
-
-        // Custom field forwarded via `any`
         (user as any).tipo = profile?.tipo ?? "cliente";
-
         return user;
       },
     }),
 
-    /* -------- Telefone + OTP (Supabase verifyOtp) -------- */
+    /* ---- Phone + OTP ---- */
     CredentialsProvider({
       id: "phone-otp",
       name: "Phone OTP",
@@ -102,10 +87,11 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.phone || !credentials?.code) return null;
 
-        const countryCode = credentials.countryCode || "55";
-        const formattedPhone = formatPhoneNumber(credentials.phone, countryCode);
+        const formattedPhone = formatPhoneNumber(
+          credentials.phone,
+          credentials.countryCode || "55"
+        );
 
-        // 1. Verify OTP
         const { data: verifyData, error: verifyError } =
           await supabaseServer.auth.verifyOtp({
             phone: formattedPhone,
@@ -114,29 +100,26 @@ export const authOptions: NextAuthOptions = {
           });
 
         if (verifyError || !verifyData?.user) {
-          console.error(`Supabase verifyOtp error for ${formattedPhone}:`, verifyError?.message);
-          let msg = "Código inválido ou expirado";
-          if (verifyError?.message.includes("expired"))
-            msg = "Código expirado. Por favor, solicite um novo.";
+          const msg = verifyError?.message.includes("expired")
+            ? "Código expirado. Por favor, solicite um novo."
+            : "Código inválido ou expirado";
           throw new Error(msg);
         }
 
-        // 2. Profile (typed, may be null)
         const userId = verifyData.user.id;
-        const { data: profileData } = await supabaseServer
-          .from<ProfileRow>("profiles")
+        const { data: profile } = await supabaseServer
+          .from<"profiles", ProfileRow>("profiles")
           .select("*")
           .eq("id", userId)
           .maybeSingle();
 
-        // 3. Assemble user object
         const user: User = {
           id: userId,
           email: verifyData.user.email,
-          name: profileData?.nome ?? null,
-          image: profileData?.avatar_url ?? null,
+          name: profile?.nome ?? null,
+          image: profile?.avatar_url ?? null,
         };
-        (user as any).tipo = profileData?.tipo ?? "cliente";
+        (user as any).tipo = profile?.tipo ?? "cliente";
         return user;
       },
     }),
@@ -146,26 +129,24 @@ export const authOptions: NextAuthOptions = {
      CALLBACKS
   ==================================================================*/
   callbacks: {
-    /* ------------- signIn ------------- */
     async signIn({ user }) {
       if (!user?.id) return false;
 
       let stripeCustomerId: string | null = null;
 
-      // 1. Lookup profile (now typed & includes email/nome)
-      const { data: existingProfile, error: profileError } = await supabaseServer
-        .from<ProfileRow>("profiles")
+      const { data: existing, error } = await supabaseServer
+        .from<"profiles", ProfileRow>("profiles")
         .select("id, nome, email, tipo, stripe_customer_id")
         .eq("id", user.id)
         .maybeSingle();
 
-      if (profileError) {
-        console.error("Error fetching profile:", profileError.message);
+      if (error) {
+        console.error("Profile fetch error:", error.message);
         return false;
       }
 
-      /* -------- New user (no profile) -------- */
-      if (!existingProfile) {
+      /* -------- New user -------- */
+      if (!existing) {
         try {
           const cust = await stripe.customers.create({
             email: user.email ?? undefined,
@@ -174,18 +155,19 @@ export const authOptions: NextAuthOptions = {
           });
           stripeCustomerId = cust.id;
 
-          // Create profile with Stripe ID
-          const { error: insertErr } = await supabaseServer.from("profiles").insert({
-            id: user.id,
-            nome: user.name ?? null,
-            email: user.email ?? null,
-            avatar_url: user.image ?? null,
-            tipo: "cliente",
-            stripe_customer_id: stripeCustomerId,
-          });
+          const { error: insertErr } = await supabaseServer
+            .from("profiles")
+            .insert({
+              id: user.id,
+              nome: user.name ?? null,
+              email: user.email ?? null,
+              avatar_url: user.image ?? null,
+              tipo: "cliente",
+              stripe_customer_id: stripeCustomerId,
+            });
           if (insertErr) throw insertErr;
         } catch (e: any) {
-          console.error("Account bootstrap error:", e.message);
+          console.error("Bootstrap error:", e.message);
           return false;
         }
         (user as any).tipo = "cliente";
@@ -193,37 +175,33 @@ export const authOptions: NextAuthOptions = {
 
       /* -------- Existing user -------- */
       else {
-        stripeCustomerId = existingProfile.stripe_customer_id;
-
+        stripeCustomerId = existing.stripe_customer_id;
         if (!stripeCustomerId) {
           try {
             const cust = await stripe.customers.create({
-              email: user.email ?? existingProfile.email ?? undefined,
-              name: user.name ?? existingProfile.nome ?? undefined,
+              email: user.email ?? existing.email ?? undefined,
+              name: user.name ?? existing.nome ?? undefined,
               metadata: { supabase_user_id: user.id },
             });
             stripeCustomerId = cust.id;
 
-            const { error: updateErr } = await supabaseServer
+            const { error: upd } = await supabaseServer
               .from("profiles")
               .update({ stripe_customer_id: stripeCustomerId })
               .eq("id", user.id);
-            if (updateErr) throw updateErr;
+            if (upd) throw upd;
           } catch (e: any) {
-            console.error("Stripe create error:", e.message);
+            console.error("Stripe error:", e.message);
             return false;
           }
         }
-
-        (user as any).tipo = existingProfile.tipo ?? "cliente";
+        (user as any).tipo = existing.tipo ?? "cliente";
       }
 
-      /* attach for later callbacks */
       (user as any).stripeCustomerId = stripeCustomerId;
       return true;
     },
 
-    /* ------------- jwt ------------- */
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
@@ -233,7 +211,6 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
 
-    /* ------------- session ------------- */
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
@@ -244,16 +221,8 @@ export const authOptions: NextAuthOptions = {
     },
   },
 
-  /* ================================================================
-     PAGES & STRATEGY
-  ==================================================================*/
   pages: { signIn: "/login", newUser: "/cadastro" },
 
-  session: {
-    strategy: "jwt",
-    maxAge: 24 * 60 * 60, // 1 day
-  },
-  jwt: {
-    maxAge: 24 * 60 * 60, // 1 day
-  },
+  session: { strategy: "jwt", maxAge: 24 * 60 * 60 },
+  jwt: { maxAge: 24 * 60 * 60 },
 };
