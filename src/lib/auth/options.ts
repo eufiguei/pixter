@@ -1,57 +1,22 @@
-/* ------------------------------------------------------------------
-   NEXTAUTH + SUPABASE + STRIPE  (v2025-05)
-   • Column in Supabase is `stripe_account_id`
-   • No deep generics   • `tipo` is required on User
--------------------------------------------------------------------*/
-import { NextAuthOptions, User } from "next-auth";
+// src/lib/auth/options.ts (Updated with Phone OTP Provider using Supabase verifyOtp)
+import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { Stripe } from "stripe";
-import { supabaseServer, formatPhoneNumber } from "@/lib/supabase/client";
-
-/* ---------- Row type for `profiles` ---------- */
-interface ProfileRow {
-  id: string;
-  nome: string | null;
-  email: string | null;
-  avatar_url: string | null;
-  tipo: string | null;
-  stripe_account_id: string | null;        // ← column name in Supabase
-}
-
-/* ---------- Stripe ---------- */
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2022-11-15",
-});
-
-/* ---------- Helper: fetch profile ---------- */
-async function getProfile(id: string): Promise<ProfileRow | null> {
-  const { data, error } = await supabaseServer
-    .from("profiles")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Profile fetch error:", error.message);
-    return null;
-  }
-  return data as ProfileRow | null;
-}
+// Import only server/admin clients and helpers needed server-side
+import { supabaseServer, supabaseAdmin, formatPhoneNumber } from "@/lib/supabase/client";
 
 /* ------------------------------------------------------------------
-   NextAuth configuration
+   NextAuth options - Defined and Exported Here
 -------------------------------------------------------------------*/
 export const authOptions: NextAuthOptions = {
-  /* ================= PROVIDERS ================= */
   providers: [
-    /* Google OAuth */
+    /* -------- Google -------- */
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
     }),
 
-    /* Email + Password */
+    /* ------ E-mail + senha (Supabase) ------ */
     CredentialsProvider({
       id: "email-password",
       name: "Email e Senha",
@@ -59,158 +24,173 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Senha", type: "password" },
       },
-      async authorize({ email, password }) {
-        if (!email || !password) return null;
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) return null;
 
+        // Use server client for sign-in
         const { data, error } = await supabaseServer.auth.signInWithPassword({
-          email,
-          password,
+          email: credentials.email,
+          password: credentials.password,
         });
-        if (error || !data.user)
-          throw new Error(error?.message || "Email ou senha inválidos.");
+        if (error || !data.user) {
+          console.error("Email/Password Auth Error:", error?.message);
+          throw new Error(error?.message || "Email ou senha inválidos."); // Throw error for feedback
+        }
 
-        const profile = await getProfile(data.user.id);
+        // Fetch profile using server client
+        const { data: profile } = await supabaseServer
+          .from("profiles")
+          .select("*")
+          .eq("id", data.user.id)
+          .single();
 
-        const user: User = {
+        if (!profile) {
+            console.warn(`Profile not found during Email/Password login for user: ${data.user.id}.`);
+            // Decide if login should be blocked if profile is mandatory
+            // throw new Error("Perfil não encontrado.");
+        }
+
+        // Return user object for NextAuth session
+        return {
           id: data.user.id,
           email: data.user.email,
-          name: profile?.nome ?? data.user.email?.split("@")[0] ?? null,
-          image: profile?.avatar_url ?? null,
-          tipo: profile?.tipo ?? "cliente", // required
+          name: profile?.nome || data.user.email?.split("@")[0],
+          image: profile?.avatar_url || null,
+          tipo: profile?.tipo || "cliente", // Default to client if not found
         };
-        return user;
       },
     }),
 
-    /* Phone + OTP */
+    /* ------ Phone + OTP (Custom - Using Supabase verifyOtp) ------ */
     CredentialsProvider({
       id: "phone-otp",
       name: "Phone OTP",
       credentials: {
         phone: { label: "Phone", type: "text" },
         code: { label: "Code", type: "text" },
-        countryCode: { label: "Country", type: "text", value: "55" },
+        countryCode: { label: "Country Code", type: "text", value: "55" },
       },
-      async authorize({ phone, code, countryCode }) {
-        if (!phone || !code) return null;
+      async authorize(credentials) {
+        if (!credentials?.phone || !credentials?.code) return null;
 
-        const formatted = formatPhoneNumber(phone, countryCode || "55");
+        const countryCode = credentials.countryCode || "55";
+        const formattedPhone = formatPhoneNumber(credentials.phone, countryCode);
 
-        const { data, error } = await supabaseServer.auth.verifyOtp({
-          phone: formatted,
-          token: code,
-          type: "sms",
+        // 1. Verify OTP using Supabase Auth verifyOtp
+        const { data: verifyData, error: verifyError } = await supabaseServer.auth.verifyOtp({
+          phone: formattedPhone,
+          token: credentials.code,
+          type: "sms", // or "whatsapp"
         });
-        if (error || !data?.user) {
-          throw new Error(
-            error?.message.includes("expired")
-              ? "Código expirado. Por favor, solicite um novo."
-              : "Código inválido ou expirado"
-          );
+
+        if (verifyError || !verifyData?.user) {
+          console.error(`Supabase verifyOtp error for ${formattedPhone}:`, verifyError?.message);
+          let errorMessage = "Código inválido ou expirado";
+          if (verifyError?.message.includes("expired")) {
+              errorMessage = "Código expirado. Por favor, solicite um novo.";
+          }
+          throw new Error(errorMessage);
         }
 
-        const profile = await getProfile(data.user.id);
+        // 2. Fetch profile
+        const userId = verifyData.user.id;
+        const { data: profileData, error: profileError } = await supabaseServer
+          .from("profiles")
+          .select("*")
+          .eq("id", userId)
+          .single();
 
-        const user: User = {
-          id: data.user.id,
-          email: data.user.email,
-          name: profile?.nome ?? null,
-          image: profile?.avatar_url ?? null,
-          tipo: profile?.tipo ?? "cliente",
+        if (profileError && profileError.code !== "PGRST116") {
+            console.error(`Error fetching profile for user ${userId} after OTP verify:`, profileError.message);
+            throw new Error("Erro ao buscar perfil do usuário.");
+        }
+
+        if (!profileData) {
+            console.warn(`Profile not found for user ${userId} during OTP login. Login allowed, but profile data missing.`);
+        }
+
+        // 3. Return user object
+        return {
+          id: userId,
+          email: verifyData.user.email,
+          name: profileData?.nome || null,
+          image: profileData?.avatar_url || null,
+          tipo: profileData?.tipo || "cliente",
         };
-        return user;
       },
     }),
+
   ],
 
-  /* ================= CALLBACKS ================= */
   callbacks: {
-    /* -------- signIn -------- */
-    async signIn({ user }) {
-      if (!user?.id) return false;
+    async signIn({ user, account, profile }) {
+      if (account?.provider === "google") {
+        const { data: existingProfile, error } = await supabaseServer
+          .from("profiles")
+          .select("id, tipo")
+          .eq("id", user.id)
+          .single();
 
-      let stripeCustomerId: string | null = null;
-      let profile = await getProfile(user.id);
+        if (error && error.code !== 'PGRST116') {
+            console.error("Error checking profile during Google sign-in:", error.message);
+            return false;
+        }
 
-      /* New user: create profile + Stripe customer */
-      if (!profile) {
-        try {
-          const cust = await stripe.customers.create({
-            email: user.email ?? undefined,
-            name: user.name ?? undefined,
-            metadata: { supabase_user_id: user.id },
-          });
-          stripeCustomerId = cust.id;
-
-          const { error } = await supabaseServer.from("profiles").insert({
-            id: user.id,
-            nome: user.name ?? null,
-            email: user.email ?? null,
-            avatar_url: user.image ?? null,
-            tipo: "cliente",
-            stripe_account_id: stripeCustomerId,
-          });
-          if (error) throw error;
-
-          profile = await getProfile(user.id); // refresh
-        } catch (e: any) {
-          console.error("Bootstrap error:", e.message);
-          return false;
+        if (!existingProfile) {
+            console.log(`Creating profile for new Google user: ${user.id}`);
+            const { error: insertError } = await supabaseServer
+                .from('profiles')
+                .insert({
+                    id: user.id,
+                    nome: user.name,
+                    email: user.email,
+                    avatar_url: user.image,
+                    tipo: 'cliente'
+                });
+            if (insertError) {
+                console.error("Error creating profile for Google user:", insertError.message);
+                return false;
+            }
+            (user as any).tipo = 'cliente';
+        } else {
+             (user as any).tipo = existingProfile.tipo ?? 'cliente';
         }
       }
-
-      /* Existing user: ensure Stripe ID */
-      if (profile && !profile.stripe_account_id) {
-        try {
-          const cust = await stripe.customers.create({
-            email: user.email ?? profile.email ?? undefined,
-            name: user.name ?? profile.nome ?? undefined,
-            metadata: { supabase_user_id: user.id },
-          });
-          stripeCustomerId = cust.id;
-
-          const { error } = await supabaseServer
-            .from("profiles")
-            .update({ stripe_account_id: stripeCustomerId })
-            .eq("id", user.id);
-          if (error) throw error;
-        } catch (e: any) {
-          console.error("Stripe create error:", e.message);
-          return false;
-        }
-      } else {
-        stripeCustomerId = profile?.stripe_account_id ?? null;
-      }
-
-      /* expose custom fields to later callbacks */
-      (user as any).stripeCustomerId = stripeCustomerId;
-      (user as any).tipo = profile?.tipo ?? "cliente";
       return true;
     },
 
-    /* -------- jwt -------- */
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         token.tipo = (user as any).tipo;
-        token.stripeCustomerId = (user as any).stripeCustomerId;
       }
       return token;
     },
 
-    /* -------- session -------- */
     async session({ session, token }) {
       if (session.user) {
-        const u = session.user as any; // cast once for custom props
-        u.id = token.id;
-        u.tipo = token.tipo;
-        u.stripeCustomerId = token.stripeCustomerId;
+        session.user.id = token.id as string;
+        session.user.tipo = token.tipo as string;
       }
       return session;
     },
   },
 
-  pages: { signIn: "/login", newUser: "/cadastro" },
-  session: { strategy: "jwt", maxAge: 86_400 },
-  jwt: { maxAge: 86_400 },
+  pages: {
+    signIn: "/login",
+    newUser: "/cadastro",
+  },
+
+  session: {
+    strategy: "jwt",
+    // Set session max age to 1 day for better security
+    maxAge: 24 * 60 * 60, // 1 day in seconds
+    // updateAge: 24 * 60 * 60, // Optional: Update expiry only once every 24 hours
+  },
+
+  jwt: {
+    // JWT max age remains 1 day (consistent with session maxAge)
+    maxAge: 24 * 60 * 60, // 1 day in seconds
+  },
 };
+
