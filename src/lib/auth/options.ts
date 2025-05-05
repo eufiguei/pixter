@@ -1,24 +1,14 @@
 /* ------------------------------------------------------------------
-   src/lib/auth/options.ts
-   FULL TYPE-SAFE VERSION – GENERIC SIGNATURE FIXED
+   NEXTAUTH + SUPABASE + STRIPE  (Generics trimmed for TS stability)
 -------------------------------------------------------------------*/
 import { NextAuthOptions, User } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { Stripe } from "stripe";
+import { supabaseServer, formatPhoneNumber } from "@/lib/supabase/client";
 
-import {
-  supabaseServer,
-  formatPhoneNumber,
-} from "@/lib/supabase/client";
-
-/* ──────────────────────────────────────────────────────────────── */
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_YOUR_KEY", {
-  apiVersion: "2022-11-15",
-});
-
-/* ---------- typed row for `profiles` --------- */
-export interface ProfileRow {
+/* ---------- Simple row type we’ll cast to ---------- */
+interface ProfileRow {
   id: string;
   nome: string | null;
   email: string | null;
@@ -27,20 +17,38 @@ export interface ProfileRow {
   stripe_customer_id: string | null;
 }
 
+/* ---------- Stripe ---------- */
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_YOUR_KEY", {
+  apiVersion: "2022-11-15",
+});
+
+/* ---------- Helper: load profile once ---------- */
+async function getProfile(id: string): Promise<ProfileRow | null> {
+  const { data, error } = await supabaseServer
+    .from("profiles")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Profile fetch error:", error.message);
+    return null;
+  }
+  return data as ProfileRow | null;
+}
+
 /* ------------------------------------------------------------------
    NextAuth configuration
 -------------------------------------------------------------------*/
 export const authOptions: NextAuthOptions = {
-  /* ================================================================
-     PROVIDERS
-  ==================================================================*/
   providers: [
+    /* ------------- Google ------------- */
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
     }),
 
-    /* ---- Email + Senha ---- */
+    /* ------------- Email + Senha ------------- */
     CredentialsProvider({
       id: "email-password",
       name: "Email e Senha",
@@ -48,21 +56,17 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Senha", type: "password" },
       },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+      async authorize({ email, password }) {
+        if (!email || !password) return null;
 
         const { data, error } = await supabaseServer.auth.signInWithPassword({
-          email: credentials.email,
-          password: credentials.password,
+          email,
+          password,
         });
         if (error || !data.user)
           throw new Error(error?.message || "Email ou senha inválidos.");
 
-        const { data: profile } = await supabaseServer
-          .from<"profiles", ProfileRow>("profiles")
-          .select("*")
-          .eq("id", data.user.id)
-          .single();
+        const profile = await getProfile(data.user.id);
 
         const user: User = {
           id: data.user.id,
@@ -75,47 +79,37 @@ export const authOptions: NextAuthOptions = {
       },
     }),
 
-    /* ---- Phone + OTP ---- */
+    /* ------------- Phone + OTP ------------- */
     CredentialsProvider({
       id: "phone-otp",
       name: "Phone OTP",
       credentials: {
         phone: { label: "Phone", type: "text" },
         code: { label: "Code", type: "text" },
-        countryCode: { label: "Country Code", type: "text", value: "55" },
+        countryCode: { label: "Country", type: "text", value: "55" },
       },
-      async authorize(credentials) {
-        if (!credentials?.phone || !credentials?.code) return null;
+      async authorize({ phone, code, countryCode }) {
+        if (!phone || !code) return null;
 
-        const formattedPhone = formatPhoneNumber(
-          credentials.phone,
-          credentials.countryCode || "55"
-        );
+        const formatted = formatPhoneNumber(phone, countryCode || "55");
 
-        const { data: verifyData, error: verifyError } =
-          await supabaseServer.auth.verifyOtp({
-            phone: formattedPhone,
-            token: credentials.code,
-            type: "sms",
-          });
-
-        if (verifyError || !verifyData?.user) {
-          const msg = verifyError?.message.includes("expired")
+        const { data, error } = await supabaseServer.auth.verifyOtp({
+          phone: formatted,
+          token: code,
+          type: "sms",
+        });
+        if (error || !data?.user) {
+          const msg = error?.message.includes("expired")
             ? "Código expirado. Por favor, solicite um novo."
             : "Código inválido ou expirado";
           throw new Error(msg);
         }
 
-        const userId = verifyData.user.id;
-        const { data: profile } = await supabaseServer
-          .from<"profiles", ProfileRow>("profiles")
-          .select("*")
-          .eq("id", userId)
-          .maybeSingle();
+        const profile = await getProfile(data.user.id);
 
         const user: User = {
-          id: userId,
-          email: verifyData.user.email,
+          id: data.user.id,
+          email: data.user.email,
           name: profile?.nome ?? null,
           image: profile?.avatar_url ?? null,
         };
@@ -125,28 +119,17 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
 
-  /* ================================================================
-     CALLBACKS
-  ==================================================================*/
+  /* ===================== CALLBACKS ===================== */
   callbacks: {
+    /* -------- signIn -------- */
     async signIn({ user }) {
       if (!user?.id) return false;
 
       let stripeCustomerId: string | null = null;
+      let profile = await getProfile(user.id);
 
-      const { data: existing, error } = await supabaseServer
-        .from<"profiles", ProfileRow>("profiles")
-        .select("id, nome, email, tipo, stripe_customer_id")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (error) {
-        console.error("Profile fetch error:", error.message);
-        return false;
-      }
-
-      /* -------- New user -------- */
-      if (!existing) {
+      /* ---- New user: create Stripe customer & profile ---- */
+      if (!profile) {
         try {
           const cust = await stripe.customers.create({
             email: user.email ?? undefined,
@@ -155,53 +138,52 @@ export const authOptions: NextAuthOptions = {
           });
           stripeCustomerId = cust.id;
 
-          const { error: insertErr } = await supabaseServer
-            .from("profiles")
-            .insert({
-              id: user.id,
-              nome: user.name ?? null,
-              email: user.email ?? null,
-              avatar_url: user.image ?? null,
-              tipo: "cliente",
-              stripe_customer_id: stripeCustomerId,
-            });
-          if (insertErr) throw insertErr;
+          const { error: insErr } = await supabaseServer.from("profiles").insert({
+            id: user.id,
+            nome: user.name ?? null,
+            email: user.email ?? null,
+            avatar_url: user.image ?? null,
+            tipo: "cliente",
+            stripe_customer_id: stripeCustomerId,
+          });
+          if (insErr) throw insErr;
+
+          profile = await getProfile(user.id); // reload
         } catch (e: any) {
           console.error("Bootstrap error:", e.message);
           return false;
         }
-        (user as any).tipo = "cliente";
       }
 
-      /* -------- Existing user -------- */
-      else {
-        stripeCustomerId = existing.stripe_customer_id;
-        if (!stripeCustomerId) {
-          try {
-            const cust = await stripe.customers.create({
-              email: user.email ?? existing.email ?? undefined,
-              name: user.name ?? existing.nome ?? undefined,
-              metadata: { supabase_user_id: user.id },
-            });
-            stripeCustomerId = cust.id;
+      /* ---- Existing user: ensure Stripe customer ---- */
+      if (profile && !profile.stripe_customer_id) {
+        try {
+          const cust = await stripe.customers.create({
+            email: user.email ?? profile.email ?? undefined,
+            name: user.name ?? profile.nome ?? undefined,
+            metadata: { supabase_user_id: user.id },
+          });
+          stripeCustomerId = cust.id;
 
-            const { error: upd } = await supabaseServer
-              .from("profiles")
-              .update({ stripe_customer_id: stripeCustomerId })
-              .eq("id", user.id);
-            if (upd) throw upd;
-          } catch (e: any) {
-            console.error("Stripe error:", e.message);
-            return false;
-          }
+          const { error: upErr } = await supabaseServer
+            .from("profiles")
+            .update({ stripe_customer_id: stripeCustomerId })
+            .eq("id", user.id);
+          if (upErr) throw upErr;
+        } catch (e: any) {
+          console.error("Stripe create error:", e.message);
+          return false;
         }
-        (user as any).tipo = existing.tipo ?? "cliente";
+      } else {
+        stripeCustomerId = profile?.stripe_customer_id ?? null;
       }
 
+      (user as any).tipo = profile?.tipo ?? "cliente";
       (user as any).stripeCustomerId = stripeCustomerId;
       return true;
     },
 
+    /* -------- jwt -------- */
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
@@ -211,6 +193,7 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
 
+    /* -------- session -------- */
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
@@ -223,6 +206,6 @@ export const authOptions: NextAuthOptions = {
 
   pages: { signIn: "/login", newUser: "/cadastro" },
 
-  session: { strategy: "jwt", maxAge: 24 * 60 * 60 },
-  jwt: { maxAge: 24 * 60 * 60 },
+  session: { strategy: "jwt", maxAge: 86_400 },
+  jwt: { maxAge: 86_400 },
 };
