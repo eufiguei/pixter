@@ -62,7 +62,7 @@ function PaymentForm({ onSuccess, onError }: any) {
         disabled={!stripe || isProcessing}
         className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-md disabled:opacity-50"
       >
-        {isProcessing ? 'Processando...' : 'Pagar'}
+        {isProcessing ? 'Processando...' : 'Pagar com Pix, Apple Pay ou Cartão'}
       </button>
       <p className="text-center text-xs text-gray-500 mt-2">
         Pagamento processado com segurança via Stripe
