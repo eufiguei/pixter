@@ -251,9 +251,9 @@ export default function MeusDadosPage() {
         <div>
           <label className="block text-sm font-medium text-gray-700">Avatar</label>
           <AvatarGridSelector
-            selectedAvatar={formState.avatar_url || ""}
+            currentAvatarUrl={formState.avatar_url}
             onSelect={(url) => handleChange({ target: { name: "avatar_url", value: url } })}
-            disabled={!isEditing || loading}
+            loading={!isEditing || loading}
           />
         </div>
 
