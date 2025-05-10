@@ -32,23 +32,6 @@ type StripeStatus = {
   } | null;
 };
 
-type Profile = {
-  id: string;
-  nome: string;
-  email: string;
-  celular: string;
-  profissao: string;
-  avatar_url: string | null;
-  stripe_account_id: string | null;
-  stripe_account_status: string | null;
-};
-
-type FormState = {
-  nome: string;
-  profissao: string;
-  avatar_url: string | null;
-};
-
 export default function MeusDadosPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -278,7 +261,9 @@ export default function MeusDadosPage() {
 
   if (loading && !profile) return <div className="p-6 text-center">Carregando dados...</div>;
   if (error && !profile) return <div className="p-6 text-red-500">Erro: {error}</div>;
-  if (!profile) return <div className="p-6">Não foi possível carregar o perfil.</div>;
+  if (!profile) {
+    return <div className="p-6">Não foi possível carregar o perfil.</div>;
+  }
 
   return (
     <div className="p-6 bg-white rounded-lg shadow-md max-w-2xl mx-auto">
@@ -458,68 +443,6 @@ export default function MeusDadosPage() {
                       </a>
                     )}
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Stripe Dashboard Link */}
-        {profile?.stripe_account_id && (
-          <div>
-            <button
-              onClick={getStripeLoginLink}
-              disabled={loadingStripeLink}
-              className="text-sm text-indigo-600 hover:text-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loadingStripeLink ? "Gerando link..." : "Acessar painel Stripe"}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Edit/Save Buttons */}
-      <div className="mt-6">
-        {isEditing ? (
-          <div className="flex space-x-3">
-            <button
-              onClick={handleUpdate}
-              disabled={loading}
-              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? "Salvando..." : "Salvar"}
-            </button>
-            <button
-              onClick={() => {
-                setIsEditing(false);
-                // Reset form state to current profile values
-                setFormState({
-                  nome: profile?.nome || "",
-                  profissao: profile?.profissao || "",
-                  avatar_url: profile?.avatar_url,
-                });
-              }}
-              disabled={loading}
-              className="border border-gray-300 px-4 py-2 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Cancelar
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setIsEditing(true)}
-            disabled={loading}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Editar
-          </button>
-                Resolver Pendências
-              </a>
-            )}
-          </div>
-        ) : (
-          <div className="bg-white p-4 rounded-lg border border-yellow-200">
-            <div className="flex items-center text-yellow-600 mb-4">
               <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
               </svg>
