@@ -45,6 +45,9 @@ type Profile = {
 
 type FormState = {
   nome: string;
+  profissao: string;
+  avatar_url: string | null;
+};
 
 export default function MeusDadosPage() {
   const router = useRouter();
