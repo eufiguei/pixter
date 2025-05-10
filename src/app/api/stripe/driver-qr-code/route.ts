@@ -31,11 +31,16 @@ export async function GET(request: NextRequest) {
     const paymentUrl = `${origin}/${formattedPhoneForUrl}`;
 
     // 3. Generate QR Code as Data URL
-    const qrCodeDataUrl = await QRCode.toDataURL(paymentUrl, {
-      errorCorrectionLevel: "H", // High error correction
-      type: "image/png",
-      margin: 1,
-      width: 200, // Adjust size as needed
+    const qrCodeDataUrl = await new Promise<string>((resolve, reject) => {
+      QRCode.toDataURL(paymentUrl, {
+        errorCorrectionLevel: "H", // High error correction
+        type: "image/png",
+        margin: 1,
+        width: 200, // Adjust size as needed
+      }, (err, url) => {
+        if (err) reject(err);
+        else resolve(url);
+      });
     });
 
     // 4. Return the QR Code Data URL
