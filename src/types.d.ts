@@ -73,6 +73,18 @@ declare module 'recharts' {
   export const Tooltip: ComponentType<TooltipProps>;
 }
 
+declare module 'next/navigation' {
+  export function useRouter(): {
+    push: (url: string) => void;
+    replace: (url: string) => void;
+    back: () => void;
+  };
+  
+  export function useSearchParams(): URLSearchParams;
+  export function usePathname(): string;
+  export function redirect(url: string): never;
+}
+
 declare module 'date-fns' {
   export function format(date: Date | number, format: string, options?: any): string;
   export function parse(dateString: string, format: string, baseDate: Date, options?: any): Date;
