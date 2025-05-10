@@ -1,17 +1,15 @@
-// src/app/login/page.tsx
-
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation' // Import useSearchParams
+import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn, useSession, signOut } from 'next-auth/react'
 
 export default function Login() {
   const router = useRouter()
-  const searchParams = useSearchParams() // Get query parameters
-  const callbackUrl = searchParams.get("callbackUrl") || "/cliente/dashboard"; // Get callbackUrl or default to client dashboard
-  const { data: session, status } = useSession(); // Get current session status
+  const searchParams = useSearchParams()
+  const callbackUrl = searchParams.get("callbackUrl") || "/cliente/dashboard"
+  const { data: session, status } = useSession()
 
   const [formData, setFormData] = useState({
     email: '',
@@ -40,35 +38,35 @@ export default function Login() {
       setLoading(true)
       setError("")
 
-      // Check if currently logged in as a driver
+      // Check if currently logged in as a driver and sign out if needed
       if (status === "authenticated" && session?.user?.tipo === "motorista") {
-        await signOut({ redirect: false }); // Sign out driver first
+        await signOut({ redirect: false })
       }
       
-      // Attempt client login
+      // Attempt login with email-password provider
       const result = await signIn("email-password", {
-        redirect: false, // We handle redirect manually
+        redirect: false,
         email: formData.email,
         password: formData.password,
-        callbackUrl: callbackUrl // Pass callbackUrl here
+        callbackUrl
       })
       
       if (result?.error) {
-        // Handle specific error cases
-        if (result.error === "CredentialsSignin") {
+        if (result.error.includes("CredentialsSignin") || result.error.includes("inválidos")) {
           setError("Email ou senha incorretos")
-        } else if (result.error === "Email not found") {
-          setError("Este email não está cadastrado")
         } else {
           setError(result.error || "Falha ao fazer login")
         }
-        setLoading(false);
-        return;
+        setLoading(false)
+        return
       }
       
-      // Redirect using the callbackUrl if login was successful
-      router.push(callbackUrl)
-      // No need to setLoading(false) here as we are navigating away
+      // Redirect if login was successful
+      if (result?.url) {
+        router.push(result.url)
+      } else {
+        router.push(callbackUrl)
+      }
       
     } catch (err) {
       console.error("Erro ao fazer login:", err)
@@ -82,15 +80,15 @@ export default function Login() {
       setLoading(true)
       setError("")
 
-      // Check if currently logged in as a driver
+      // Check if currently logged in as a driver and sign out if needed
       if (status === "authenticated" && session?.user?.tipo === "motorista") {
-        await signOut({ redirect: false }); // Sign out driver first
+        await signOut({ redirect: false })
       }
       
       // Use the determined callbackUrl for Google sign-in
-      await signIn("google", { callbackUrl: callbackUrl })
-      // signIn with redirect will handle navigation, no need for router.push
-      // setLoading(false) might not be reached if redirect happens quickly
+      await signIn("google", { 
+        callbackUrl 
+      })
       
     } catch (err) {
       console.error("Erro ao fazer login com Google:", err)
@@ -144,7 +142,7 @@ export default function Login() {
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-4">
             {error}
           </div>
-        ) }
+        )}
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

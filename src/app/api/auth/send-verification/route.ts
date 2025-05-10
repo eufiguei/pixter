@@ -27,9 +27,11 @@ export async function POST(request: Request) {
     // This tells Supabase to handle code generation and sending via its configured provider (e.g., Twilio)
     const { data, error } = await supabase.auth.signInWithOtp({
       phone: formattedPhone,
+
       // options: { shouldCreateUser: false } // Optional: prevent creating new users via OTP if they don't exist
     });
-
+    console.log("response from Supabase SignWithOTP:", data);
+    
     if (error) {
       console.error("Supabase signInWithOtp error:", error.message);
       // Provide a more generic error to the client
@@ -42,8 +44,10 @@ export async function POST(request: Request) {
     // IMPORTANT: Supabase handles the code generation and sending.
     // You NO LONGER need to generate a code manually or store it in `verification_codes`.
     console.log("Supabase OTP initiated for:", formattedPhone);
-    return NextResponse.json({ success: true, message: "Código enviado com sucesso! Verifique seu WhatsApp/SMS." });
-
+    return NextResponse.json({
+      success: true,
+      message: "Código enviado com sucesso! Verifique seu WhatsApp/SMS.",
+    });
   } catch (error: any) {
     console.error("Erro geral em send-verification:", error);
     return NextResponse.json(
@@ -52,4 +56,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

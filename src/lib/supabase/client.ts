@@ -93,10 +93,23 @@
    };
    
    /*──────────────── UTIL ────────────────────────────────*/
-   export const formatPhoneNumber = (phone: string, code = '55') => {
-     const p = phone.replace(/\D/g, '');
-     return p.startsWith(code) ? `+${p}` : `+${code}${p}`; // Ensure E.164 format
-   };
+  //  export const formatPhoneNumber = (phone: string, code = '55') => {
+  //    const p = phone.replace(/\D/g, '');
+  //    return p.startsWith(code) ? `+${p}` : `+${code}${p}`; // Ensure E.164 format
+  //  };
+
+  export const formatPhoneNumber = (phone: string, code = '92') => {
+    // Remove all non-digit characters
+    const digitsOnly = phone.replace(/\D/g, '');
+    
+    // Handle Pakistani numbers - remove leading zero if present
+    if (code === '92' && digitsOnly.startsWith('0')) {
+      return `+${code}${digitsOnly.substring(1)}`;
+    }
+    
+    // Original logic for other cases
+    return digitsOnly.startsWith(code) ? `+${digitsOnly}` : `+${code}${digitsOnly}`;
+  };
    
    /*──────────────── DRIVER via TELEFONE (Server-Side ONLY) ──*/
    // This function uses supabaseAdmin and should ONLY be called from secure server-side API routes.
@@ -164,7 +177,8 @@
        cpf: userData.cpf, // Add other fields from userData as needed
        email: emailProvided, // Store the real email if provided
        // created_at will be set by trigger or default
-       updated_at: new Date().toISOString()
+       updated_at: new Date().toISOString(),
+       verified:true
      };
    
      // Remove undefined fields from payload

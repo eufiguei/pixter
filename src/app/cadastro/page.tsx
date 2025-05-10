@@ -1,11 +1,10 @@
-
 'use client'
 
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { signIn } from 'next-auth/react' // Added import for signIn
-import Image from 'next/image'
+import { signIn } from 'next-auth/react'
+import { Eye, EyeOff, Mail, User, Lock, AlertCircle, Loader2 } from 'lucide-react'
 
 export default function ClientSignUp() {
   const router = useRouter()
@@ -17,7 +16,10 @@ export default function ClientSignUp() {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [successMessage, setSuccessMessage] = useState('') // State for success message from backend
+  const [successMessage, setSuccessMessage] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [termsAccepted, setTermsAccepted] = useState(false)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -26,7 +28,7 @@ export default function ClientSignUp() {
       [name]: value
     }))
     // Clear error when user types
-    if (error) setError('');
+    if (error) setError('')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -40,13 +42,18 @@ export default function ClientSignUp() {
       return
     }
     
-    if (formData.password.length < 8) { // Check password length
+    if (formData.password.length < 8) {
       setError('A senha deve ter no mínimo 8 caracteres')
       return
     }
 
     if (formData.password !== formData.confirmPassword) {
       setError('As senhas não coincidem')
+      return
+    }
+    
+    if (!termsAccepted) {
+      setError('Você precisa aceitar os Termos de Uso e Política de Privacidade')
       return
     }
     
@@ -75,20 +82,25 @@ export default function ClientSignUp() {
 
       // Check if backend indicated user already exists but resent confirmation
       if (data.success === true && data.message && data.message.includes('Um novo email de confirmação foi enviado')) {
-          setSuccessMessage(data.message); // Show the specific message from backend
-          // Optionally redirect to a confirmation pending page or stay here
-          router.push('/cadastro/confirmacao-pendente'); // Redirect to confirmation pending page
-          return; // Stop further execution
+        setSuccessMessage(data.message)
+        // Redirect to confirmation pending page with email parameter
+        router.push(`/cadastro/confirmacao-pendente?email=${encodeURIComponent(formData.email)}`)
+        return
       }
       
       // Signup successful, redirect to confirmation pending page
-      router.push('/cadastro/confirmacao-pendente') 
+      router.push(`/cadastro/confirmacao-pendente?email=${encodeURIComponent(formData.email)}`)
       
     } catch (err: any) {
       console.error('Erro ao criar conta:', err)
-      // Display specific error messages caught from backend or generic ones
-      setError(err.message || 'Falha ao criar conta')
-    } finally {
+      
+      // Handle common errors with friendly messages
+      if (err.message.includes('already registered') || err.message.includes('já registrado')) {
+        setError('Este email já está cadastrado. Tente fazer login ou use outro email.')
+      } else {
+        setError(err.message || 'Falha ao criar conta')
+      }
+      
       setLoading(false)
     }
   }
@@ -99,12 +111,12 @@ export default function ClientSignUp() {
       setError('')
       
       // Use next-auth/react signIn for Google
-      await signIn('google', { callbackUrl: '/cliente/dashboard' }) // Redirect to client dashboard after Google signin
+      await signIn('google', { callbackUrl: '/cliente/dashboard' })
       // setLoading(false) might not be reached if redirect happens
       
     } catch (err: any) {
       console.error('Erro ao fazer login com Google:', err)
-      setError(err.message || 'Falha ao fazer login com Google')
+      setError('Falha ao fazer login com Google')
       setLoading(false)
     }
   }
@@ -151,13 +163,16 @@ export default function ClientSignUp() {
         </div>
         
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-4">
-            {error}
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-4 flex items-start">
+            <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
+            <span>{error}</span>
           </div>
         )}
+        
         {successMessage && (
-           <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-md mb-4">
-             {successMessage}
+           <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-md mb-4 flex items-start">
+             <Mail className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
+             <span>{successMessage}</span>
            </div>
         )}
         
@@ -166,92 +181,157 @@ export default function ClientSignUp() {
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
               Nome completo
             </label>
-            <input
-              id="name"
-              name="name"
-              type="text"
-              autoComplete="name"
-              required
-              value={formData.name}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <User className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                id="name"
+                name="name"
+                type="text"
+                autoComplete="name"
+                required
+                value={formData.name}
+                onChange={handleChange}
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="Digite seu nome completo"
+              />
+            </div>
           </div>
           
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
               Email
             </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={formData.email}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Mail className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={formData.email}
+                onChange={handleChange}
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="seu@email.com"
+              />
+            </div>
           </div>
           
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
               Senha (mínimo 8 caracteres)
             </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={8} // Add minLength attribute for browser validation
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Lock className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                required
+                minLength={8}
+                value={formData.password}
+                onChange={handleChange}
+                className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="********"
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-5 w-5 text-gray-400" />
+                ) : (
+                  <Eye className="h-5 w-5 text-gray-400" />
+                )}
+              </button>
+            </div>
           </div>
           
           <div>
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
               Confirmar senha
             </label>
-            <input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              autoComplete="new-password"
-              required
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Lock className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type={showConfirmPassword ? "text" : "password"}
+                autoComplete="new-password"
+                required
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="********"
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                {showConfirmPassword ? (
+                  <EyeOff className="h-5 w-5 text-gray-400" />
+                ) : (
+                  <Eye className="h-5 w-5 text-gray-400" />
+                )}
+              </button>
+            </div>
+            {formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword && (
+              <p className="mt-1 text-sm text-red-600">As senhas não coincidem</p>
+            )}
           </div>
           
-          <div className="flex items-center">
-            <input
-              id="terms"
-              name="terms"
-              type="checkbox"
-              required
-              className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-            />
-            <label htmlFor="terms" className="ml-2 block text-sm text-gray-700">
-              Aceito os <a href="/termos" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:text-purple-800">Termos de Uso</a> e a <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:text-purple-800">Política de Privacidade</a>
-            </label>
+          <div className="flex items-start">
+            <div className="flex items-center h-5">
+              <input
+                id="terms"
+                name="terms"
+                type="checkbox"
+                checked={termsAccepted}
+                onChange={() => setTermsAccepted(!termsAccepted)}
+                required
+                className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+              />
+            </div>
+            <div className="ml-2 text-sm">
+              <label htmlFor="terms" className="text-gray-700">
+                Aceito os <a href="/termos" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:text-purple-800">Termos de Uso</a> e a <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:text-purple-800">Política de Privacidade</a>
+              </label>
+            </div>
           </div>
           
           <button
             type="submit"
             disabled={loading}
-            className={`w-full bg-purple-600 text-white py-3 px-4 rounded-md font-medium transition ${
+            className={`w-full bg-purple-600 text-white py-3 px-4 rounded-md font-medium transition flex items-center justify-center ${
               loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-purple-700'
             }`}
           >
-            {loading ? 'Criando conta...' : 'Criar conta'}
+            {loading ? (
+              <>
+                <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                Criando conta...
+              </>
+            ) : (
+              'Criar conta'
+            )}
           </button>
         </form>
+        
+        <div className="mt-6 text-center text-sm text-gray-500">
+          É motorista? <Link href="/motorista/cadastro" className="text-purple-600 hover:text-purple-800">Cadastre-se aqui</Link>
+        </div>
       </div>
     </main>
   )
 }
-

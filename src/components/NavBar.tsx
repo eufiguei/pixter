@@ -5,13 +5,26 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { signOut, useSession } from "next-auth/react";
-import { Menu, X } from "lucide-react";
+import {
+  Menu,
+  X,
+  ChevronDown,
+  User,
+  LogOut,
+  CreditCard,
+  History,
+  Settings,
+  ExternalLink,
+} from "lucide-react";
 
 // Define a type for the user object within the session for better type safety
 interface UserSession {
   id?: string;
-  tipo?: 'cliente' | 'motorista';
+  tipo?: "cliente" | "motorista";
   celular?: string; // Use celular for public page link
+  email?: string; // For displaying in profile dropdown
+  name?: string; // For displaying in profile dropdown
+  image?: string; // For avatar in profile dropdown
   // Add other user properties if available and needed
 }
 
@@ -22,39 +35,56 @@ interface SessionData {
 
 export default function NavBar() {
   // Use the specific type for the session data
-  const { data: session, status } = useSession() as { data: SessionData | null; status: 'loading' | 'authenticated' | 'unauthenticated' };
+  const { data: session, status } = useSession() as {
+    data: SessionData | null;
+    status: "loading" | "authenticated" | "unauthenticated";
+  };
   const router = useRouter();
   const pathname = usePathname() || "/";
   const searchParams = useSearchParams();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   const userType = session?.user?.tipo;
+  const user = session?.user || null; // Get user object from session
+  console.log("Session info in NavBar:", session, status, user);
+
   const isLoading = status === "loading";
   const isAuthenticated = status === "authenticated";
 
-  // --- Close mobile menu on route change --- 
+  // --- Close mobile menu on route change ---
   useEffect(() => {
     setIsMobileMenuOpen(false);
+    setIsProfileDropdownOpen(false);
   }, [pathname]);
 
-  // --- Close mobile menu when clicking outside --- 
+  // --- Close menus when clicking outside ---
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsMobileMenuOpen(false);
       }
+      if (
+        profileDropdownRef.current &&
+        !profileDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsProfileDropdownOpen(false);
+      }
     }
-    if (isMobileMenuOpen) {
+
+    if (isMobileMenuOpen || isProfileDropdownOpen) {
       document.addEventListener("mousedown", handleClickOutside);
     }
+
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [isMobileMenuOpen]);
+  }, [isMobileMenuOpen, isProfileDropdownOpen]);
 
-  // --- Redirection Logic --- 
+  // --- Redirection Logic ---
   useEffect(() => {
     if (isLoading) return;
 
@@ -77,7 +107,8 @@ export default function NavBar() {
       }
       if (pathname === "/") {
         if (userType === "cliente") router.replace("/cliente/dashboard");
-        if (userType === "motorista") router.replace("/motorista/dashboard/overview");
+        if (userType === "motorista")
+          router.replace("/motorista/dashboard/overview");
         return;
       }
       if (userType === "cliente" && pathname.startsWith("/motorista/")) {
@@ -85,18 +116,31 @@ export default function NavBar() {
         return;
       }
       // Allow driver to be on their own public page
-      const driverPublicPagePath = session?.user?.celular ? `/${session.user.celular.replace(/\D/g, "")}` : null;
-      if (userType === "motorista" && 
-          (pathname.startsWith("/cliente/") || pathname.startsWith("/dashboard") || pathname.startsWith("/payment-methods")) && 
-          pathname !== driverPublicPagePath) { 
+      const driverPublicPagePath = session?.user?.celular
+        ? `/${session.user.celular.replace(/\D/g, "")}`
+        : null;
+      if (
+        userType === "motorista" &&
+        (pathname.startsWith("/cliente/") ||
+          pathname.startsWith("/dashboard") ||
+          pathname.startsWith("/payment-methods")) &&
+        pathname !== driverPublicPagePath
+      ) {
         router.replace("/motorista/dashboard/overview");
         return;
       }
     }
 
-    if (status === 'unauthenticated') { // Only redirect if definitively unauthenticated
-      const callbackUrlParam = `?callbackUrl=${encodeURIComponent(pathname + searchParams.toString())}`;
-      if (pathname.startsWith("/cliente/") || pathname.startsWith("/dashboard") || pathname.startsWith("/payment-methods")) {
+    if (status === "unauthenticated") {
+      // Only redirect if definitively unauthenticated
+      const callbackUrlParam = `?callbackUrl=${encodeURIComponent(
+        pathname + searchParams.toString()
+      )}`;
+      if (
+        pathname.startsWith("/cliente/") ||
+        pathname.startsWith("/dashboard") ||
+        pathname.startsWith("/payment-methods")
+      ) {
         router.replace(`/login${callbackUrlParam}`);
         return;
       }
@@ -105,105 +149,170 @@ export default function NavBar() {
         return;
       }
     }
+  }, [
+    status,
+    userType,
+    pathname,
+    router,
+    searchParams,
+    isAuthenticated,
+    isLoading,
+    session?.user?.celular,
+  ]);
 
-  }, [status, userType, pathname, router, searchParams, isAuthenticated, isLoading, session?.user?.celular]);
-
-  // --- Sign-out Handler --- 
+  // --- Sign-out Handler ---
   const handleSignOut = async () => {
+    setIsProfileDropdownOpen(false);
     await signOut({ redirect: false });
     router.push("/");
   };
 
-  // --- Determine Logo Link --- 
+  // --- Determine Logo Link ---
   let logoHref = "/";
   if (isAuthenticated) {
     if (userType === "motorista") logoHref = "/motorista/dashboard/overview";
     else if (userType === "cliente") logoHref = "/cliente/dashboard";
   }
 
-  // --- Render Links based on context --- 
-  let linksConfig: { href?: string; text: string; onClick?: () => void }[] = [];
-  // Regex to specifically match /[phoneNumber] (assuming it's numeric) and not other root paths
-  const isPublicPaymentPage = /^\/\+?[0-9]{10,}$/.test(pathname);
-  const callbackUrlParam = `?callbackUrl=${encodeURIComponent(pathname + searchParams.toString())}`;
+  // --- Profile Menu Items ---
+  const getProfileMenuItems = () => {
+    // if (!isAuthenticated) return [];
 
-  // Determine if the simplified public view should be shown (Guests and Drivers on Public Page)
-  const showSimplifiedPublicView = isPublicPaymentPage && (!isAuthenticated || userType === 'motorista');
-
-  if (isLoading) {
-    // No links during loading
-  } else if (isPublicPaymentPage) {
-    // --- Public Payment Page --- 
-    if (isAuthenticated && userType === "cliente") {
-      // Logged-in Client on Public Page (Matches Situation 3)
-      linksConfig = [
-        { href: "/cliente/dashboard/historico", text: "Histórico Pagamentos" },
-        { href: "/cliente/payment-methods", text: "Wallet" },
-        { href: "/cliente/dashboard/dados", text: "Meus Dados" },
-        { onClick: handleSignOut, text: "Sair" },
+    if (userType === "cliente") {
+      return [
+        {
+          href: "/cliente/dashboard/dados",
+          text: "My Profile",
+          icon: <User className="w-4 h-4 mr-2" />,
+        },
+        {
+          href: "/cliente/dashboard/historico",
+          text: "Payment History",
+          icon: <History className="w-4 h-4 mr-2" />,
+        },
+        {
+          href: "/cliente/payment-methods",
+          text: "My Wallet",
+          icon: <CreditCard className="w-4 h-4 mr-2" />,
+        },
+        {
+          onClick: handleSignOut,
+          text: "Sign Out",
+          icon: <LogOut className="w-4 h-4 mr-2" />,
+        },
       ];
-    } else {
-      // Guest or Driver on Public Page (Matches Situation 1 & 2 for public page)
-      linksConfig = [
-        { href: `/login${callbackUrlParam}`, text: "Entrar" },
-        { href: `/cadastro${callbackUrlParam}`, text: "Criar Conta" },
+    } else if (userType === "motorista") {
+      const driverPublicPageLink = session?.user?.celular
+        ? `/${session.user.celular.replace(/\D/g, "")}`
+        : "#";
+      return [
+        {
+          href: "/motorista/dashboard/dados",
+          text: "My Profile",
+          icon: <User className="w-4 h-4 mr-2" />,
+        },
+        {
+          href: "/motorista/dashboard/overview",
+          text: "Dashboard",
+          icon: <Settings className="w-4 h-4 mr-2" />,
+        },
+        {
+          href: "/motorista/dashboard/pagamentos",
+          text: "Payments",
+          icon: <CreditCard className="w-4 h-4 mr-2" />,
+        },
+        {
+          href: driverPublicPageLink,
+          text: "My Public Page",
+          icon: <ExternalLink className="w-4 h-4 mr-2" />,
+          disabled: driverPublicPageLink === "#",
+        },
+        {
+          onClick: handleSignOut,
+          text: "Sign Out",
+          icon: <LogOut className="w-4 h-4 mr-2" />,
+        },
       ];
     }
-  } else if (isAuthenticated) {
-    // --- Authenticated User (Non-Public Page) --- 
-    if (userType === "motorista") {
-      // Logged-in Driver (Matches Situation 2 dashboard view)
-      // Use celular for the link, remove /pagamento prefix
-      const driverPublicPageLink = session?.user?.celular ? `/${session.user.celular.replace(/\D/g, "")}` : '#'; 
-      linksConfig = [
-        { href: "/motorista/dashboard/overview", text: "Visão Geral" },
-        { href: "/motorista/dashboard/pagamentos", text: "Pagamentos" },
-        { href: "/motorista/dashboard/dados", text: "Meus Dados" },
-        { href: driverPublicPageLink, text: "Minha Página Pública" }, // Updated link
-        { onClick: handleSignOut, text: "Sair" },
-      ];
-    } else if (userType === "cliente") {
-      // Logged-in Client (Matches Situation 3 dashboard view)
-      linksConfig = [
-        { href: "/cliente/dashboard/historico", text: "Histórico" },
-        { href: "/cliente/payment-methods", text: "Wallet" },
-        { href: "/cliente/dashboard/dados", text: "Meus Dados" },
-        { onClick: handleSignOut, text: "Sair" },
+
+    return [];
+  };
+
+  // --- Navigation Links ---
+  const getNavigationLinks = () => {
+    // Regex to specifically match /[phoneNumber] (assuming it's numeric) and not other root paths
+    const isPublicPaymentPage = /^\/\+?[0-9]{10,}$/.test(pathname);
+    const callbackUrlParam = `?callbackUrl=${encodeURIComponent(
+      pathname + searchParams.toString()
+    )}`;
+
+    if (isPublicPaymentPage) {
+      // Public payment page links
+      if (!isAuthenticated || userType === "motorista") {
+        return [
+          { href: `/login${callbackUrlParam}`, text: "Sign In" },
+          { href: `/cadastro${callbackUrlParam}`, text: "Create Account" },
+        ];
+      }
+      // No additional nav links for authenticated clients on public page (will use profile dropdown)
+      return [];
+    } else if (!isAuthenticated) {
+      // Unauthenticated user on non-public page
+      return [
+        { href: "/login", text: "Sign In" },
+        { href: "/cadastro", text: "Create Account" },
+        { href: "/motorista/login", text: "I'm a Driver" },
       ];
     }
-  } else {
-    // --- Guest (Non-Public Page, e.g., Homepage) (Matches Situation 1) --- 
-    linksConfig = [
-      { href: "/login", text: "Entrar" },
-      { href: "/cadastro", text: "Criar Conta" },
-      { href: "/motorista/login", text: "Sou Motorista" },
-    ];
-  }
+
+    // Authenticated user will use profile dropdown, no additional nav links needed
+    return [];
+  };
 
   // Helper to render link or button
-  const renderLink = (link: { href?: string; text: string; onClick?: () => void }, isMobile: boolean) => {
+  const renderLink = (
+    link: {
+      href?: string;
+      text: string;
+      onClick?: () => void;
+      icon?: React.ReactNode;
+      disabled?: boolean;
+    },
+    isMobile: boolean
+  ) => {
     const baseStyle = isMobile
-      ? "block px-4 py-2 text-base text-gray-700 hover:bg-gray-100"
+      ? "block px-4 py-2 text-base text-gray-700 hover:bg-gray-100 w-full text-left"
       : "text-sm font-medium text-gray-600 hover:text-gray-900";
-    const buttonStyle = isMobile ? "w-full text-left" : "";
-    
-    if (link.href) {
-      // Special case for disabled driver public page link
-      if (link.text === "Minha Página Pública" && link.href === '#') {
-        return (
-          <span key={link.text} className={`${baseStyle} opacity-50 cursor-not-allowed`}>
-            {link.text} (Indisponível)
-          </span>
-        );
-      }
+
+    if (link.href && !link.disabled) {
       return (
-        <Link key={link.text} href={link.href} className={baseStyle}>
+        <Link
+          key={link.text}
+          href={link.href}
+          className={`${baseStyle} flex items-center`}
+        >
+          {link.icon && link.icon}
           {link.text}
         </Link>
       );
+    } else if (link.href && link.disabled) {
+      return (
+        <span
+          key={link.text}
+          className={`${baseStyle} opacity-50 cursor-not-allowed flex items-center`}
+        >
+          {link.icon && link.icon}
+          {link.text} (Unavailable)
+        </span>
+      );
     } else if (link.onClick) {
       return (
-        <button key={link.text} onClick={link.onClick} className={`${baseStyle} ${buttonStyle}`}>
+        <button
+          key={link.text}
+          onClick={link.onClick}
+          className={`${baseStyle} flex items-center`}
+        >
+          {link.icon && link.icon}
           {link.text}
         </button>
       );
@@ -211,47 +320,97 @@ export default function NavBar() {
     return null;
   };
 
-  // --- Render NavBar --- 
+  // --- Render NavBar ---
+  // Determine if the simplified public view should be shown (Guests and Drivers on Public Page)
+  const isPublicPaymentPage = /^\/\+?[0-9]{10,}$/.test(pathname);
+  const showSimplifiedPublicView =
+    isPublicPaymentPage && (!isAuthenticated || userType === "motorista");
+
   return (
-    <header className={`sticky top-0 z-50 bg-white shadow-sm border-b border-gray-200 ${showSimplifiedPublicView ? 'border-none shadow-none' : ''}`}>
+    <header
+      className={`sticky top-0 z-50 bg-white shadow-sm border-b border-gray-200 ${
+        showSimplifiedPublicView ? "border-none shadow-none" : ""
+      }`}
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Simplified view for Guests/Drivers on Public Page */} 
+        {/* Simplified view for Guests/Drivers on Public Page */}
         {showSimplifiedPublicView ? (
-          <div className="flex items-center justify-center h-16 space-x-6"> {/* Centered links */} 
+          <div className="flex items-center justify-center h-16 space-x-6">
             {isLoading ? (
               <div className="h-6 w-40 bg-gray-200 animate-pulse rounded"></div>
             ) : (
-              linksConfig.map(link => renderLink(link, false))
+              getNavigationLinks().map((link) => renderLink(link, false))
             )}
           </div>
         ) : (
-          /* Standard view for all other cases */ 
+          /* Standard view for all other cases */
           <div className="flex items-center justify-between h-16">
-            {/* Logo - Hidden in simplified view */} 
+            {/* Logo - Hidden in simplified view */}
             <div className="flex-shrink-0">
               <Link href={logoHref} className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-purple-600 rounded flex items-center justify-center">
                   <span className="text-white font-bold text-lg">P</span>
                 </div>
-                <span className="font-semibold text-xl text-gray-800">Pixter</span>
+                <span className="font-semibold text-xl text-gray-800">
+                  Pixter
+                </span>
               </Link>
             </div>
 
-            {/* Desktop Links - Hidden in simplified view */} 
-            <div className="hidden md:flex md:items-center md:space-x-6"> {/* Increased spacing */} 
+            {/* Desktop Navigation */}
+            <div className="hidden md:flex md:items-center md:space-x-6">
               {isLoading ? (
                 <div className="h-6 w-24 bg-gray-200 animate-pulse rounded"></div>
+              ) : isAuthenticated ? (
+                <>
+                  
+                  {/* <span onClick={handleSignOut}>Logout</span> */}
+                  <div className="relative" ref={profileDropdownRef}>
+                    <button
+                      onClick={() =>
+                        setIsProfileDropdownOpen(!isProfileDropdownOpen)
+                      }
+                      className="flex items-center space-x-2 text-sm font-medium text-gray-700 hover:text-gray-900 focus:outline-none"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                        {session?.user?.image ? (
+                          <img
+                            src={session.user.image}
+                            alt="Profile"
+                            className="w-8 h-8 rounded-full"
+                          />
+                        ) : (
+                          <User className="w-4 h-4 text-purple-600" />
+                        )}
+                      </div>
+                      <span>
+                        {session?.user?.name || session?.user?.email || "User"}
+                      </span>
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+
+                    {/* Profile Dropdown Menu */}
+                    {isProfileDropdownOpen && (
+                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10 border border-gray-200">
+                        {getProfileMenuItems().map((item) =>
+                          renderLink(item, false)
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
               ) : (
-                linksConfig.map(link => renderLink(link, false))
+                // Regular links for unauthenticated users
+                getNavigationLinks().map((link) => renderLink(link, false))
               )}
             </div>
 
-            {/* Mobile Menu Button - Hidden in simplified view */} 
-            <div className="-mr-2 flex items-center md:hidden">
+            {/* Mobile Menu Button */}
+            <div className="flex items-center md:hidden">
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 type="button"
-                className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
+                className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-purple-500"
                 aria-controls="mobile-menu"
                 aria-expanded={isMobileMenuOpen}
               >
@@ -267,16 +426,49 @@ export default function NavBar() {
         )}
       </div>
 
-      {/* Mobile Menu, show/hide based on menu state. Only shown in standard view */} 
+      {/* Mobile Menu */}
       {!showSimplifiedPublicView && isMobileMenuOpen && (
-        <div ref={menuRef} className="md:hidden absolute top-16 inset-x-0 z-40 bg-white shadow-lg border-t border-gray-200" id="mobile-menu">
+        <div
+          ref={menuRef}
+          className="md:hidden absolute top-16 inset-x-0 z-40 bg-white shadow-lg border-t border-gray-200"
+          id="mobile-menu"
+        >
           <div className="pt-2 pb-3 space-y-1">
             {isLoading ? (
               <div className="px-4 py-2">
                 <div className="h-6 w-24 bg-gray-200 animate-pulse rounded"></div>
               </div>
+            ) : isAuthenticated ? (
+              // User profile section in mobile menu
+              <div className="px-4 py-2 border-b border-gray-200 mb-2">
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                    {session?.user?.image ? (
+                      <img
+                        src={session.user.image}
+                        alt="Profile"
+                        className="w-10 h-10 rounded-full"
+                      />
+                    ) : (
+                      <User className="w-5 h-5 text-purple-600" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="font-medium">
+                      {session?.user?.name || "User"}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {session?.user?.email || ""}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Profile menu items */}
+                {getProfileMenuItems().map((item) => renderLink(item, true))}
+              </div>
             ) : (
-              linksConfig.map(link => renderLink(link, true))
+              // Regular links for unauthenticated users
+              getNavigationLinks().map((link) => renderLink(link, true))
             )}
           </div>
         </div>

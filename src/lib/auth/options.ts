@@ -1,13 +1,62 @@
-// src/lib/auth/options.ts (Updated with Phone OTP Provider using Supabase verifyOtp)
-import { NextAuthOptions } from "next-auth";
+import { NextAuthOptions, User } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
-// Import only server/admin clients and helpers needed server-side
-import { supabaseServer, supabaseAdmin, formatPhoneNumber } from "@/lib/supabase/client";
+import {
+  supabaseServer,
+  supabaseAdmin,
+  formatPhoneNumber,
+} from "@/lib/supabase/client";
+import Stripe from "stripe";
 
-/* ------------------------------------------------------------------
-   NextAuth options - Defined and Exported Here
--------------------------------------------------------------------*/
+/* ---------- Row type for `profiles` ---------- */
+interface ProfileRow {
+  id: string;
+  nome: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  tipo: string | null;
+  stripe_account_id: string | null;
+  account: string | null;
+}
+
+/* ---------- Extended user type ---------- */
+interface ExtendedUser extends User {
+  tipo: string;
+  account?: string;
+}
+
+/* ---------- Stripe ---------- */
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2022-11-15",
+});
+
+/* ---------- Helper: fetch profile ---------- */
+
+/* ---------- Helper: get profile by email ---------- */
+async function getProfileByEmail(email: string): Promise<ProfileRow | null> {
+  console.log("Going to fetch profile by email:", email);
+
+  const { data, error } = await supabaseServer
+    .from("profiles")
+    .select("*")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      "Profile fetch by email error:",
+      error.message,
+      error.details
+    );
+    return null;
+  }
+  if (data) {
+    console.log("Profile fetched by email:", data);
+  }
+  return data as ProfileRow | null;
+}
+
+/* ---------- NextAuth options ---------- */
 export const authOptions: NextAuthOptions = {
   providers: [
     /* -------- Google -------- */
@@ -16,7 +65,7 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
     }),
 
-    /* ------ E-mail + senha (Supabase) ------ */
+    /* ------ Email + Password (Supabase) ------ */
     CredentialsProvider({
       id: "email-password",
       name: "Email e Senha",
@@ -27,41 +76,42 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        // Use server client for sign-in
-        const { data, error } = await supabaseServer.auth.signInWithPassword({
-          email: credentials.email,
-          password: credentials.password,
-        });
-        if (error || !data.user) {
-          console.error("Email/Password Auth Error:", error?.message);
-          throw new Error(error?.message || "Email ou senha inválidos."); // Throw error for feedback
+        try {
+          // Use server client for sign-in
+          const { data, error } = await supabaseServer.auth.signInWithPassword({
+            email: credentials.email,
+            password: credentials.password,
+          });
+
+          if (error || !data.user) {
+            console.error("Email/Password Auth Error:", error?.message);
+            return null; // Return null instead of throwing error
+          }
+
+          // Fetch profile using server client
+          const { data: profile } = await supabaseServer
+            .from("profiles")
+            .select("*")
+            .eq("id", data.user.id)
+            .single();
+
+          // Return user object for NextAuth session
+          return {
+            id: data.user.id,
+            email: data.user.email,
+            name: profile?.nome || data.user.email?.split("@")[0],
+            image: profile?.avatar_url || null,
+            tipo: profile?.tipo || "cliente",
+            account: "email",
+          };
+        } catch (err) {
+          console.error("Login error:", err);
+          return null;
         }
-
-        // Fetch profile using server client
-        const { data: profile } = await supabaseServer
-          .from("profiles")
-          .select("*")
-          .eq("id", data.user.id)
-          .single();
-
-        if (!profile) {
-            console.warn(`Profile not found during Email/Password login for user: ${data.user.id}.`);
-            // Decide if login should be blocked if profile is mandatory
-            // throw new Error("Perfil não encontrado.");
-        }
-
-        // Return user object for NextAuth session
-        return {
-          id: data.user.id,
-          email: data.user.email,
-          name: profile?.nome || data.user.email?.split("@")[0],
-          image: profile?.avatar_url || null,
-          tipo: profile?.tipo || "cliente", // Default to client if not found
-        };
       },
     }),
 
-    /* ------ Phone + OTP (Custom - Using Supabase verifyOtp) ------ */
+    /* ------ Phone + OTP (Supabase) ------ */
     CredentialsProvider({
       id: "phone-otp",
       name: "Phone OTP",
@@ -73,87 +123,153 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.phone || !credentials?.code) return null;
 
-        const countryCode = credentials.countryCode || "55";
-        const formattedPhone = formatPhoneNumber(credentials.phone, countryCode);
+        try {
+          const countryCode = credentials.countryCode || "55";
+          const formattedPhone = formatPhoneNumber(
+            credentials.phone,
+            countryCode
+          );
 
-        // 1. Verify OTP using Supabase Auth verifyOtp
-        const { data: verifyData, error: verifyError } = await supabaseServer.auth.verifyOtp({
-          phone: formattedPhone,
-          token: credentials.code,
-          type: "sms", // or "whatsapp"
-        });
+          // Verify OTP using Supabase Auth
+          const { data: verifyData, error: verifyError } =
+            await supabaseServer.auth.verifyOtp({
+              phone: formattedPhone,
+              token: credentials.code,
+              type: "sms",
+            });
 
-        if (verifyError || !verifyData?.user) {
-          console.error(`Supabase verifyOtp error for ${formattedPhone}:`, verifyError?.message);
-          let errorMessage = "Código inválido ou expirado";
-          if (verifyError?.message.includes("expired")) {
-              errorMessage = "Código expirado. Por favor, solicite um novo.";
+          if (verifyError || !verifyData?.user) {
+            console.error(
+              `Supabase verifyOtp error for ${formattedPhone}:`,
+              verifyError?.message
+            );
+            return null;
           }
-          throw new Error(errorMessage);
+
+          // Fetch profile
+          const userId = verifyData.user.id;
+          const { data: profileData } = await supabaseServer
+            .from("profiles")
+            .select("*")
+            .eq("id", userId)
+            .single();
+
+          // Return user object
+          return {
+            id: userId,
+            email: verifyData.user.email,
+            name: profileData?.nome || null,
+            image: profileData?.avatar_url || null,
+            tipo: profileData?.tipo || "motorista",
+            account: profileData?.account ?? "phone",
+          };
+          // return dummy = {
+          //   id: "dummy-id",
+          //   email: "dummy@dummy.com",
+          //     name:"dummy",
+          //   //   image: profileData?.avatar_url || null,
+          //   image: null,
+          //     tipo: "motorista",
+          //     account: "phone",
+
+          // }
+        } catch (err) {
+          console.error("Phone OTP verification error:", err);
+          return null;
         }
-
-        // 2. Fetch profile
-        const userId = verifyData.user.id;
-        const { data: profileData, error: profileError } = await supabaseServer
-          .from("profiles")
-          .select("*")
-          .eq("id", userId)
-          .single();
-
-        if (profileError && profileError.code !== "PGRST116") {
-            console.error(`Error fetching profile for user ${userId} after OTP verify:`, profileError.message);
-            throw new Error("Erro ao buscar perfil do usuário.");
-        }
-
-        if (!profileData) {
-            console.warn(`Profile not found for user ${userId} during OTP login. Login allowed, but profile data missing.`);
-        }
-
-        // 3. Return user object
-        return {
-          id: userId,
-          email: verifyData.user.email,
-          name: profileData?.nome || null,
-          image: profileData?.avatar_url || null,
-          tipo: profileData?.tipo || "cliente",
-        };
       },
     }),
-
   ],
 
   callbacks: {
+    // In src/lib/auth/options.ts, replace only the Google signIn part of the callback
+
     async signIn({ user, account, profile }) {
-      if (account?.provider === "google") {
-        const { data: existingProfile, error } = await supabaseServer
-          .from("profiles")
-          .select("id, tipo")
-          .eq("id", user.id)
-          .single();
+      // Google authentication flow
+      if (account?.provider === "google" && user.email) {
+        try {
+          console.log("Google auth flow started for email:", user.email);
 
-        if (error && error.code !== 'PGRST116') {
-            console.error("Error checking profile during Google sign-in:", error.message);
-            return false;
-        }
+          // 1. First check if profile exists by email
+          const existingProfile = await getProfileByEmail(user.email);
 
-        if (!existingProfile) {
-            console.log(`Creating profile for new Google user: ${user.id}`);
-            const { error: insertError } = await supabaseServer
-                .from('profiles')
-                .insert({
-                    id: user.id,
-                    nome: user.name,
-                    email: user.email,
-                    avatar_url: user.image,
-                    tipo: 'cliente'
-                });
-            if (insertError) {
-                console.error("Error creating profile for Google user:", insertError.message);
-                return false;
+          if (existingProfile) {
+            console.log("Using existing profile with ID:", existingProfile.id);
+            user.id = existingProfile.id;
+            (user as ExtendedUser).tipo = existingProfile.tipo || "cliente";
+            (user as ExtendedUser).account = "google";
+            return true;
+          }
+
+          // 2. For users that exist in Auth but don't have a profile:
+          // Instead of trying to create a user, just skip that step
+          // and create only the profile record
+
+          // To get the user ID, use the admin client to search for users by email
+          const { data: users, error: adminError } = await supabaseAdmin
+            .from("auth.users")
+            .select("id")
+            .eq("email", user.email)
+            .single();
+
+          if (adminError) {
+            console.error("Error checking for existing user:", adminError);
+
+            // Fall back to creating a new user
+            const { data: authUser, error: authError } =
+              await supabaseAdmin.auth.admin.createUser({
+                email: user.email,
+                email_confirm: true,
+                user_metadata: {
+                  nome: user.name || "",
+                  avatar_url: user.image || null,
+                },
+              });
+
+            if (authError) {
+              // If we still get an error, just use NextAuth's session
+              console.error("Auth user creation error:", authError);
+              console.log("Using NextAuth session without Supabase link");
+              return true;
             }
-            (user as any).tipo = 'cliente';
-        } else {
-             (user as any).tipo = existingProfile.tipo ?? 'cliente';
+
+            // Set user ID for profile creation
+            user.id = authUser.user.id;
+          } else {
+            // Found existing user in Supabase Auth
+            console.log("Found existing user in Supabase Auth:", users.id);
+            user.id = users.id;
+          }
+
+          // Create profile
+          try {
+            const { error: profileError } = await supabaseServer
+              .from("profiles")
+              .insert({
+                id: user.id,
+                nome: user.name || "",
+                email: user.email,
+                avatar_url: user.image || null,
+                tipo: "cliente",
+                account: "google",
+              });
+
+            if (profileError) {
+              console.error("Profile creation error:", profileError);
+            }
+          } catch (error) {
+            console.error("Exception during profile creation:", error);
+          }
+
+          // Set user type for NextAuth session
+          (user as ExtendedUser).tipo = "cliente";
+          (user as ExtendedUser).account = "google";
+
+          return true;
+        } catch (e) {
+          console.error("Google auth error:", e);
+          // If all else fails, just let NextAuth handle the session
+          return true;
         }
       }
       return true;
@@ -162,7 +278,8 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.tipo = (user as any).tipo;
+        token.tipo = (user as ExtendedUser).tipo;
+        token.account = (user as ExtendedUser).account;
       }
       return token;
     },
@@ -171,6 +288,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.tipo = token.tipo as string;
+        (session.user as any).account = token.account as string;
       }
       return session;
     },
@@ -183,14 +301,10 @@ export const authOptions: NextAuthOptions = {
 
   session: {
     strategy: "jwt",
-    // Set session max age to 1 day for better security
     maxAge: 24 * 60 * 60, // 1 day in seconds
-    // updateAge: 24 * 60 * 60, // Optional: Update expiry only once every 24 hours
   },
 
   jwt: {
-    // JWT max age remains 1 day (consistent with session maxAge)
     maxAge: 24 * 60 * 60, // 1 day in seconds
   },
 };
-

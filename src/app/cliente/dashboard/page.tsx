@@ -1,9 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
 
 export default function ClienteDashboard() {
+
+  
   // Dados simulados para o dashboard
   const pagamentos = [
     { data: '22/04/2025', valor: 'R$ 32,50', motorista: 'João', metodo: 'Pix' },
