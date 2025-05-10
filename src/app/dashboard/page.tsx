@@ -137,7 +137,7 @@ export default function ClientDashboard() {
         )}
         
         <div className="mb-6">
-          <h2 className="text-3xl font-bold text-gray-900">Olá, {session?.user?.name || 'Cliente'}!</h2>
+          <h2 className="text-3xl font-bold text-gray-900">Olá, {session?.user?.nome || 'Cliente'}!</h2>
         </div>
         
         {activeTab === 'payments' && (
@@ -278,7 +278,7 @@ export default function ClientDashboard() {
             <div className="space-y-4">
               <div>
                 <p className="text-sm font-medium text-gray-500">Nome</p>
-                <p className="text-base text-gray-900">{session?.user?.name}</p>
+                <p className="text-base text-gray-900">{session?.user?.nome}</p>
               </div>
               
               <div>
