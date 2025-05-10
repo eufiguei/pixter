@@ -76,12 +76,16 @@ export default function MotoristaLogin() {
         phone,
         code,
         countryCode,
+        callbackUrl: "/motorista/dashboard/overview"
       });
+
       if (result?.error) {
         setError(result.error);
-      } else {
+      } else if (result?.ok) {
         // always land on driver dashboard
-        router.push("/motorista/dashboard/overview"); // Corrected redirect path
+        router.push("/motorista/dashboard/overview");
+      } else {
+        setError("Erro ao verificar código");
       }
     } catch (e: any) {
       console.error(e);

@@ -168,6 +168,11 @@ export const authOptions: NextAuthOptions = {
             tipo: "motorista",
             account: "phone",
           };
+        } catch (err) {
+          console.error("Phone OTP verification error:", err);
+          return null;
+        }
+      },
           // return dummy = {
           //   id: "dummy-id",
           //   email: "dummy@dummy.com",

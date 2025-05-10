@@ -94,14 +94,12 @@
    
    /*──────────────── UTIL ────────────────────────────────*/
   //  export const formatPhoneNumber = (phone: string, code = '55') => {
-  //    const p = phone.replace(/\D/g, '');
-  //    return p.startsWith(code) ? `+${p}` : `+${code}${p}`; // Ensure E.164 format
-  //  };
-
-  export const formatPhoneNumber = (phone: string, code = '92') => {
+  export const formatPhoneNumber = (phone: string, code = '55') => {
     // Remove all non-digit characters
     const digitsOnly = phone.replace(/\D/g, '');
     
+    // Handle Brazilian numbers - remove leading zero if present
+    if (code === '55' && digitsOnly.startsWith('0')) {
     // Handle Pakistani numbers - remove leading zero if present
     if (code === '92' && digitsOnly.startsWith('0')) {
       return `+${code}${digitsOnly.substring(1)}`;
