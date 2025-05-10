@@ -203,72 +203,51 @@ export default function DriverPaymentPage({ params }: { params: { phoneNumber: s
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      {/* Ensure NavBar is rendered *before* main content if it's part of the layout */}
-      {/* <NavBar /> Assumed to be in RootLayout */}
       <main className="flex-grow flex flex-col items-center p-4 pt-8 md:pt-16">
         <div className="w-full max-w-md md:max-w-lg lg:max-w-xl bg-white rounded-lg shadow-md p-8 space-y-8">
           {/* Pixter Header Section */}
-          <header className="w-full py-4 border-b">
-            <div className="container mx-auto flex justify-between items-center px-4">
-              <div>
-                <Link href="/" className="text-xl font-bold">Pixter</Link>
-              </div>
-              <div className="space-x-4">
-                <Link 
-                  href="/login" 
-                  className="text-gray-600 hover:text-purple-600"
-                  onClick={(e) => {
-                    // Check if user is logged in as a driver
-                    const checkSessionAndLogout = async () => {
-                      try {
-                        const res = await fetch('/api/auth/session');
-                        const session = await res.json();
-                        
-                        // If user is logged in as a driver, sign them out
-                        if (session && session.user && session.user.tipo === 'motorista') {
-                          e.preventDefault();
-                          await fetch('/api/auth/signout', { method: 'POST' });
-                          window.location.href = '/login';
-                        }
-                      } catch (error) {
-                        console.error('Error checking session:', error);
-                      }
-                    };
-                    
-                    checkSessionAndLogout();
-                  }}
-                >
-                  Sign In
-                </Link>
-                <Link 
-                  href="/cadastro" 
-                  className="text-gray-600 hover:text-purple-600"
-                  onClick={(e) => {
-                    // Check if user is logged in as a driver
-                    const checkSessionAndLogout = async () => {
-                      try {
-                        const res = await fetch('/api/auth/session');
-                        const session = await res.json();
-                        
-                        // If user is logged in as a driver, sign them out
-                        if (session && session.user && session.user.tipo === 'motorista') {
-                          e.preventDefault();
-                          await fetch('/api/auth/signout', { method: 'POST' });
-                          window.location.href = '/cadastro';
-                        }
-                      } catch (error) {
-                        console.error('Error checking session:', error);
-                      }
-                    };
-                    
-                    checkSessionAndLogout();
-                  }}
-                >
-                  Create Account
-                </Link>
-              </div>
+          <div className="flex items-center justify-center">
+            <Link href="/" className="text-3xl font-bold text-center">Pixter</Link>
+          </div>
+          
+          <div className="flex justify-end w-full mt-2 mb-4">
+            <div className="space-x-4">
+              <Link 
+                href="/login" 
+                className="text-sm text-gray-600 hover:text-purple-600"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  // Always sign out current session
+                  try {
+                    await fetch('/api/auth/signout', { method: 'POST' });
+                    window.location.href = '/login';
+                  } catch (error) {
+                    console.error('Error signing out:', error);
+                    window.location.href = '/login';
+                  }
+                }}
+              >
+                Sign In
+              </Link>
+              <Link 
+                href="/cadastro" 
+                className="text-sm text-gray-600 hover:text-purple-600"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  // Always sign out current session
+                  try {
+                    await fetch('/api/auth/signout', { method: 'POST' });
+                    window.location.href = '/cadastro';
+                  } catch (error) {
+                    console.error('Error signing out:', error);
+                    window.location.href = '/cadastro';
+                  }
+                }}
+              >
+                Create Account
+              </Link>
             </div>
-          </header>
+          </div>
           {/* Driver Info - Access via profile object */}
           <div className="flex flex-col items-center space-y-2">
             <div className="w-24 h-24 rounded-full overflow-hidden relative">
@@ -302,15 +281,16 @@ export default function DriverPaymentPage({ params }: { params: { phoneNumber: s
             <>
               <h2 className="text-center text-3xl font-semibold">Qual valor pago?</h2>
               {/* Custom BRL Input */}
-              <input
-                type="text" // Use text to allow custom formatting display
-                inputMode="numeric" // Hint for mobile numeric keyboard
-                placeholder="R$ 0,00"
-                value={formatBRL(rawAmountDigits)} // Display formatted value
-                onChange={handleAmountInputChange} // Handle raw digit input
-                className="w-full text-center text-3xl py-3 border rounded focus:ring-purple-500"
-              />
-              {/* Removed the '0' that was previously showing here */}
+              <div className="relative w-full">
+                <input
+                  type="text" // Use text to allow custom formatting display
+                  inputMode="numeric" // Hint for mobile numeric keyboard
+                  placeholder="R$ 0,00"
+                  value={formatBRL(rawAmountDigits)} // Display formatted value
+                  onChange={handleAmountInputChange} // Handle raw digit input
+                  className="w-full text-center text-3xl py-3 border rounded focus:ring-purple-500"
+                />
+              </div>
 
               {error && <p className="text-sm text-red-600 text-center">{error}</p>}
 
