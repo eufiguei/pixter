@@ -133,10 +133,12 @@ export const authOptions: NextAuthOptions = {
 
         try {
           const countryCode = credentials.countryCode || "55";
-          const formattedPhone = formatPhoneNumber(
-            credentials.phone,
-            countryCode
-          );
+          // If phone already starts with +, use it directly
+          const formattedPhone = credentials.phone.startsWith("+") 
+            ? credentials.phone 
+            : formatPhoneNumber(credentials.phone, countryCode);
+
+          console.log('Formatted phone:', formattedPhone);
 
           // First verify the OTP
           const { data: verifyData, error: verifyError } =

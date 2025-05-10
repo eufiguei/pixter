@@ -98,6 +98,11 @@
    
    /*──────────────── UTIL ────────────────────────────────*/
 export const formatPhoneNumber = (phone: string, code = '55') => {
+    // If the phone number already starts with +, return it as is
+    if (phone.startsWith('+')) {
+      return phone;
+    }
+
     // Remove all non-digit characters
     const digitsOnly = phone.replace(/\D/g, '');
     
