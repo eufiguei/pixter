@@ -46,7 +46,7 @@ export default function Login() {
       }
       
       // Attempt client login
-      const result = await signIn("credentials", {
+      const result = await signIn("email-password", {
         redirect: false, // We handle redirect manually
         email: formData.email,
         password: formData.password,
@@ -54,14 +54,16 @@ export default function Login() {
       })
       
       if (result?.error) {
-        // Mensagens de erro específicas
-        if (result.error.includes("CredentialsSignin")) { // Check for specific error code
+        // Handle specific error cases
+        if (result.error === "CredentialsSignin") {
           setError("Email ou senha incorretos")
+        } else if (result.error === "Email not found") {
+          setError("Este email não está cadastrado")
         } else {
           setError(result.error || "Falha ao fazer login")
         }
-        setLoading(false); // Stop loading on error
-        return
+        setLoading(false);
+        return;
       }
       
       // Redirect using the callbackUrl if login was successful
