@@ -83,6 +83,7 @@ declare module 'next/navigation' {
   export function useSearchParams(): URLSearchParams;
   export function usePathname(): string;
   export function redirect(url: string): never;
+  export function useParams<T extends Record<string, string | string[]>>(): T;
 }
 
 declare module 'date-fns' {
