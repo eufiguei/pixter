@@ -176,30 +176,59 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
-          // If no profile exists, create one
+          // Try to find profile by phone number if no profile found by ID
           if (!existingProfile) {
-            console.log("No profile found, creating new driver profile...");
-            const { data: newProfile, error: createError } = await supabaseServer
+            console.log("No profile found by ID, checking by phone number...");
+            const { data: phoneProfile, error: phoneProfileError } = await supabaseServer
               .from("profiles")
-              .insert({
+              .select("*")
+              .eq("celular", formattedPhone)
+              .maybeSingle();
+
+            if (phoneProfileError) {
+              console.error("Error finding profile by phone:", phoneProfileError);
+            } else if (phoneProfile) {
+              console.log("Found profile by phone number:", phoneProfile.id);
+              profile = phoneProfile;
+              
+              // Update the auth user ID in the profile to match the authenticated user
+              const { error: updateError } = await supabaseServer
+                .from("profiles")
+                .update({ id: verifyData.user.id })
+                .eq("id", phoneProfile.id);
+              
+              if (updateError) {
+                console.error("Error updating profile ID:", updateError);
+              } else {
+                console.log("Profile ID updated successfully to:", verifyData.user.id);
+              }
+              
+              return {
                 id: verifyData.user.id,
-                nome: "Motorista",
-                email: verifyData.user.email,
-                tipo: "motorista",
-                account: "phone",
-              })
-              .select()
-              .single();
-
-            if (createError) {
-              console.error("Error creating profile:", createError);
-              return null;
+                email: phoneProfile.email || "",
+                name: phoneProfile.nome || "",
+                image: phoneProfile.avatar_url || "",
+                tipo: phoneProfile.tipo || "",
+                account: phoneProfile.account || "phone",
+              };
             }
+          }
 
-            console.log("New driver profile created successfully");
-            profile = newProfile;
+          // If no profile exists after checking both ID and phone, return null (don't create account)
+          if (!existingProfile && !profile) {
+            console.log("No profile found for phone number. User needs to register first.");
+            // Delete the authentication user since we don't want to keep auth entries without profiles
+            try {
+              await supabaseAdmin.auth.admin.deleteUser(verifyData.user.id);
+              console.log("Deleted auth user since no profile exists:", verifyData.user.id);
+            } catch (deleteErr) {
+              console.error("Error deleting auth user:", deleteErr);
+            }
+            
+            // Return null with a custom error that will be displayed to the user
+            throw new Error("Usuário não encontrado. Por favor, crie uma conta primeiro.");
           } else {
-            profile = existingProfile;
+            profile = existingProfile || profile;
           }
 
           // Verify the profile is a driver
