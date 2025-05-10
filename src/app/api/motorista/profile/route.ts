@@ -17,16 +17,42 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
   }
 
-  // 2) Fetch the profile from Supabase including stripe_account_status and avatar_url
+  // 2) Fetch the profile from Supabase
   const userId = session.user.id;
   const { data: profile, error } = await supabaseServer
     .from("profiles")
-    .select("id, nome, email, celular, tipo, profissao, stripe_account_id, stripe_account_status, avatar_url") // Added profissao, stripe_account_status, avatar_url
+    .select("id, nome, email, celular, tipo, profissao, stripe_account_id, stripe_account_status, avatar_url")
     .eq("id", userId)
     .eq("tipo", "motorista")
     .single();
 
   if (error) {
+    // If no profile exists yet, create one
+    if (error.code === 'PGRST116') {
+      // Create a basic profile
+      const { data: newProfile, error: createError } = await supabaseServer
+        .from("profiles")
+        .insert({
+          id: userId,
+          tipo: "motorista",
+          nome: session.user.name || "Motorista",
+          email: session.user.email,
+          stripe_account_status: "unconnected"
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        console.error("Erro ao criar perfil do motorista:", createError);
+        return NextResponse.json(
+          { error: "Erro ao criar perfil do motorista" },
+          { status: 500 }
+        );
+      }
+      
+      return NextResponse.json(newProfile);
+    }
+
     console.error("Erro ao buscar perfil do motorista:", error);
     return NextResponse.json(
       { error: "Erro ao buscar perfil do motorista" },
