@@ -1,21 +1,11 @@
 // src/app/api/motorista/payments/route.ts
-
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth/options";
 import { supabaseServer } from "@/lib/supabase/client";
 
-// Pre-defined response for when Stripe is not available or configured
-const DEFAULT_RESPONSE = {
-  balance: { 
-    available: [{ amount: "R$ 0,00", currency: "brl" }], 
-    pending: [{ amount: "R$ 0,00", currency: "brl" }] 
-  },
-  transactions: []
-};
-
-// Initialize Stripe client - we'll try/catch this to handle missing env variables
+// Initialize Stripe client
 let stripe: Stripe | null = null;
 try {
   if (process.env.STRIPE_SECRET_KEY) {
@@ -28,6 +18,15 @@ try {
 } catch (err) {
   console.error("Error initializing Stripe:", err);
 }
+
+// Default response for errors or empty state
+const DEFAULT_RESPONSE = {
+  balance: { 
+    available: [{ amount: "R$ 0,00", currency: "brl" }], 
+    pending: [{ amount: "R$ 0,00", currency: "brl" }] 
+  },
+  transactions: []
+};
 
 // Format amount from cents to readable currency
 function formatAmount(amount: number, currency: string): string {
@@ -136,12 +135,19 @@ export async function GET(request: Request) {
         throw accountError; // Let the outer catch block handle it
       }
       
-      // Attempt to fetch balance
-      const bal = await stripe.balance.retrieve(
-        {},
-        { stripeAccount: stripeAccountId }
-      );
-      console.log("Stripe balance retrieved successfully");
+      // Attempt to fetch balance - with extra logging and error handling
+      console.log("Attempting to fetch balance for account:", stripeAccountId);
+      let bal;
+      try {
+        bal = await stripe.balance.retrieve(
+          {},
+          { stripeAccount: stripeAccountId }
+        );
+        console.log("Stripe balance retrieved successfully:", JSON.stringify(bal, null, 2));
+      } catch (balanceError) {
+        console.error("Error retrieving balance:", balanceError);
+        throw balanceError; // Let the outer catch handle it
+      }
 
       // Set up filters for transactions
       const listParams: Stripe.BalanceTransactionListParams = { 
@@ -242,9 +248,31 @@ export async function GET(request: Request) {
         console.error('Error fetching pending transactions:', pendingErr);
       }
 
-      console.log('Balance data:', {
-        available: bal.available.map(b => ({ amount: b.amount, currency: b.currency })),
-        pending: bal.pending.map(b => ({ amount: b.amount, currency: b.currency }))
+      // Format balance data with proper defaults
+      console.log("Formatting balance data");
+      
+      // Default values in case of empty arrays
+      let available = [{ amount: formatAmount(0, "brl"), currency: "brl" }];
+      let pending = [{ amount: formatAmount(0, "brl"), currency: "brl" }];
+      
+      // Only override defaults if we have real data
+      if (bal.available && bal.available.length > 0) {
+        available = bal.available.map((b) => ({
+          amount: formatAmount(b.amount, b.currency),
+          currency: b.currency,
+        }));
+      }
+      
+      if (bal.pending && bal.pending.length > 0) {
+        pending = bal.pending.map((b) => ({
+          amount: formatAmount(b.amount, b.currency),
+          currency: b.currency,
+        }));
+      }
+      
+      console.log('Formatted balance data:', {
+        available,
+        pending
       });
 
       // Process balance transactions
@@ -322,13 +350,15 @@ export async function GET(request: Request) {
         }
       }
       
-      console.log(`Returning ${allTransactions.length} total transactions`);
-      
+      // Log stats about found transactions
+      console.log(`Found ${processedTransactions.length} balance transactions, ${pendingTxs.length} pending charges, and ${successfulTxs.length} successful charges`);
+      console.log(`After deduplication, total transactions: ${allTransactions.length}`);
+
       // Return everything, sorted by date (newest first)
       return NextResponse.json({
         balance: {
-          available: bal.available.map(b => ({ amount: b.amount, currency: b.currency })),
-          pending: bal.pending.map(b => ({ amount: b.amount, currency: b.currency }))
+          available,
+          pending,
         },
         transactions: allTransactions.sort((a, b) => {
           // Sort by date, newest first
@@ -359,4 +389,3 @@ export async function GET(request: Request) {
     return NextResponse.json(DEFAULT_RESPONSE);
   }
 }
-

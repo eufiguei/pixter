@@ -3,7 +3,9 @@
 /// <reference types="node" />
 /// <reference types="react-dom" />
 
-// Add type references for libraries without type declarations
+// Type declarations for modules that don't have TypeScript definitions
+// This file includes declarations for modules without built-in TypeScript support
+
 declare module 'recharts' {
   import { ComponentType, ReactNode } from 'react';
   

@@ -74,52 +74,76 @@ export default function DriverDashboardPage() {
       // 3) Fetch balance data
       try {
         const resp = await fetch(`/api/motorista/payments`, { credentials: "include" });
-          const data = await resp.json();
+        if (!resp.ok) {
+          throw new Error(`Payment API error: ${resp.status}`);
+        }
+        
+        const data = await resp.json();
           
-          // Check if the response has an error message (could be 200 OK with error details)
-          if (data.error) {
-            console.error("Payment API error:", data.error, data.code);
-            // Don't throw, just set an error message and continue with default values
-            setError(`Erro de pagamentos: ${data.error}`);
-            setBalance({
-              available: [{ amount: "R$ 0,00", currency: "brl" }],
-              pending: [{ amount: "R$ 0,00", currency: "brl" }]
-            });
+        // Check if the response has an error message (could be 200 OK with error details)
+        if (data.error) {
+          console.error("Payment API error:", data.error, data.errorDetails);
+          // Don't throw, just set an error message and continue with default values
+          setError(`Erro de pagamentos: ${data.error}`);
+          setBalance({
+            available: [{ amount: "R$ 0,00", currency: "brl" }],
+            pending: [{ amount: "R$ 0,00", currency: "brl" }]
+          });
+        }
+        // Handle response when Stripe account is not connected
+        else if (data.needsConnection) {
+          console.log("Stripe connection needed:", data.message);
+          // Set default empty values but continue rendering the page
+          setBalance({
+            available: [{ amount: "R$ 0,00", currency: "brl" }],
+            pending: [{ amount: "R$ 0,00", currency: "brl" }]
+          });
+          
+          // Set stripe status explicitly based on needsConnection flag
+          setStripeStatus(prevStatus => ({
+            ...prevStatus,
+            status: "needs_connection",
+          }));
+        } else {
+          // Normal case: Stripe is connected
+          console.log("Stripe balance data received:", data.balance);
+          
+          // Set balance data
+          if (data.balance) {
+            setBalance(data.balance);
           }
-          // Handle response when Stripe account is not connected
-          else if (data.needsConnection) {
-            console.log("Stripe connection needed:", data.message);
-            // Set default empty values but continue rendering the page
-            setBalance({
-              available: [{ amount: "R$ 0,00", currency: "brl" }],
-              pending: [{ amount: "R$ 0,00", currency: "brl" }]
-            });
-            
-            // Set stripe status explicitly based on needsConnection flag
-            setStripeStatus(prevStatus => ({
-              ...prevStatus,
-              status: "needs_connection",
-            }));
-          } else {
-            // Normal case: Stripe is connected
         }
 
-        // Set balance data
-        if (data.balance) setBalance(data.balance);
+        // Balance is set in the appropriate case above
       } catch (paymentErr: any) {
         console.error("Failed to load payments:", paymentErr);
         // Don't throw - let's still show profile info even if payments fail
         setError(paymentErr.message);
       }
 
-      // 4) Fetch Stripe status
-      const stripeResp = await fetch("/api/motorista/stripe", { credentials: "include" });
-      if (stripeResp.ok) {
+      // 4) Fetch Stripe status with enhanced error handling
+      try {
+        console.log("Fetching Stripe connection status...");
+        const stripeResp = await fetch("/api/motorista/stripe", { credentials: "include" });
+        if (!stripeResp.ok) {
+          console.error(`Stripe status API error: ${stripeResp.status}`);
+          throw new Error(`Erro ao verificar status do Stripe (${stripeResp.status})`);
+        }
+        
         const stripeData = await stripeResp.json();
+        console.log("Stripe status data received:", stripeData);
+        
+        // Prioritize the status from the API response, fallback to "pending" if it's null
+        const status = stripeData.status || "pending";
+        console.log(`Setting Stripe status to: ${status}`);
+        
         setStripeStatus({
-          status: stripeData.status,
+          status: status,
           accountLink: stripeData.accountLink || stripeData.loginLink
         });
+      } catch (stripeStatusError) {
+        console.error("Error fetching Stripe status:", stripeStatusError);
+        // Don't set error state, just log it
       }
     } catch (err: any) {
       console.error(err);

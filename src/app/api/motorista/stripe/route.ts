@@ -42,27 +42,38 @@ export async function GET() {
       });
     }
 
-    // Get Stripe account status
-    const account = await stripe.accounts.retrieve(profile.stripe_account_id);
-    console.log("Stripe account status:", {
+    // Get Stripe account status with expanded capabilities data
+    const account = await stripe.accounts.retrieve(profile.stripe_account_id, {
+      expand: ['capabilities']
+    });
+    console.log("Stripe account details:", {
+      id: account.id,
       charges_enabled: account.charges_enabled,
       payouts_enabled: account.payouts_enabled,
       disabled_reason: account.requirements?.disabled_reason,
-      capabilities: account.capabilities,
-      details_submitted: account.details_submitted
+      details_submitted: account.details_submitted,
+      capabilities_count: Object.keys(account.capabilities || {}).length
     });
     
-    // Determine status
+    // More detailed logging for troubleshooting
+    console.log("Requirements status:", JSON.stringify(account.requirements, null, 2));
+    console.log("Capabilities status:", JSON.stringify(account.capabilities, null, 2));
+    
+    // Determine status with more detailed checks
     let status: "pending" | "verified" | "restricted" | null = null;
-    if (account.charges_enabled && account.payouts_enabled) {
+    if (account.charges_enabled && account.payouts_enabled && account.details_submitted) {
       status = "verified";
-      console.log("Stripe account is VERIFIED");
-    } else if (account.requirements?.disabled_reason) {
+      console.log("Stripe account is VERIFIED - ready to accept payments");
+    } else if (account.requirements?.disabled_reason || 
+             (account.requirements?.errors && account.requirements.errors.length > 0)) {
       status = "restricted";
-      console.log("Stripe account is RESTRICTED");
+      console.log("Stripe account is RESTRICTED - issues detected");
+    } else if (account.details_submitted) {
+      status = "pending";
+      console.log("Stripe account is PENDING - verification in progress");
     } else {
       status = "pending";
-      console.log("Stripe account is PENDING");
+      console.log("Stripe account is PENDING - onboarding incomplete");
     }
     
     // If the database has a different status, update it
@@ -98,16 +109,24 @@ export async function GET() {
       }
     }
 
-    // Return a simplified response
+    // Return a response with more detailed information
     return NextResponse.json({
       status,
       accountLink: loginLink?.url || null, // We're now using loginLink as our primary link
+      loginLink: loginLink?.url || null, // Include both for backward compatibility
       requirements: account.requirements || null,
-      // Include additional details for debugging
+      // Include all relevant details for better diagnostics
       details: {
+        id: account.id,
         charges_enabled: account.charges_enabled,
         payouts_enabled: account.payouts_enabled,
-        details_submitted: account.details_submitted
+        details_submitted: account.details_submitted,
+        capabilities_status: Object.entries(account.capabilities || {})
+          .filter(([_, capability]) => capability.status === 'active')
+          .map(([name]) => name),
+        requirements_disabled_reason: account.requirements?.disabled_reason || null,
+        requirements_past_due: account.requirements?.past_due?.length || 0,
+        requirements_pending_verification: account.requirements?.pending_verification?.length || 0
       }
     });
   } catch (error: any) {
