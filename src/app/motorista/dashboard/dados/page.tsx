@@ -78,7 +78,7 @@ export default function MeusDadosPage() {
     const fetchProfile = async () => {
       try {
         setLoading(true);
-        const resp = await fetch("/api/profile");
+        const resp = await fetch("/api/motorista/profile");
         
         if (!resp.ok) {
           throw new Error("Erro ao buscar perfil");

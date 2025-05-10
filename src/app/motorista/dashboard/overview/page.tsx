@@ -109,7 +109,7 @@ export default function DriverDashboardPage() {
             });
             setTransactions([]);
             
-            // Set stripe status to indicate connection needed
+            // Set stripe status explicitly based on needsConnection flag
             setStripeStatus(prevStatus => ({
               ...prevStatus,
               status: "needs_connection",
@@ -119,6 +119,12 @@ export default function DriverDashboardPage() {
             const { balance: bal, transactions: txs } = data;
             setBalance(bal);
             setTransactions(txs);
+            
+            // Mark as verified if we got balance data successfully
+            setStripeStatus(prevStatus => ({
+              ...prevStatus,
+              status: "verified",
+            }));
           }
         } catch (error) {
           console.error("Error fetching payment data:", error);
@@ -291,13 +297,34 @@ export default function DriverDashboardPage() {
                 </div>
               ) : (
                 <div>
-                  <div className="flex items-center text-yellow-600 mb-4">
-                    <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                    </svg>
-                    Sua página está quase pronta!
-                  </div>
-                  <p className="text-sm text-gray-600 mb-4">Complete a verificação da sua conta Stripe para começar a receber pagamentos.</p>
+                  {profile?.stripe_account_id ? (
+                    <>
+                      <div className="flex items-center text-green-600 mb-4">
+                        <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        Sua página de pagamento está ativa!
+                      </div>
+                      <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                        <p className="text-sm text-gray-600 mb-2">Compartilhe este link com seus clientes:</p>
+                        <input
+                          readOnly
+                          value={paymentPageLink}
+                          className="w-full mb-2 px-3 py-2 border rounded text-center bg-white"
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center text-yellow-600 mb-4">
+                        <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                        </svg>
+                        Sua página está quase pronta!
+                      </div>
+                      <p className="text-sm text-gray-600 mb-4">Complete a verificação da sua conta Stripe para começar a receber pagamentos.</p>
+                    </>
+                  )}
                 </div>
               )}
               {stripeStatus.accountLink && (
