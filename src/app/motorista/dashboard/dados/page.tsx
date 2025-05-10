@@ -1,5 +1,3 @@
-// src/app/motorista/dashboard/dados/page.tsx
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -50,14 +48,13 @@ export default function MeusDadosPage() {
   });
   const [loadingStripeStatus, setLoadingStripeStatus] = useState(false);
   const [loadingStripeLink, setLoadingStripeLink] = useState(false);
-  const [stripeLoginLink, setStripeLoginLink] = useState<string | null>(null);
 
-  // Fetch Stripe status
+  // Fetch Stripe account status
   const fetchStripeStatus = async () => {
     if (!profile?.stripe_account_id) return;
     
-    setLoadingStripeStatus(true);
     try {
+      setLoadingStripeStatus(true);
       const resp = await fetch("/api/motorista/stripe");
       if (resp.ok) {
         const data = await resp.json();
@@ -66,9 +63,11 @@ export default function MeusDadosPage() {
           accountLink: data.accountLink || data.loginLink,
           requirements: data.requirements || null
         });
+      } else {
+        console.error("Erro ao buscar status do Stripe");
       }
     } catch (err) {
-      console.error("Error fetching Stripe status:", err);
+      console.error("Erro:", err);
     } finally {
       setLoadingStripeStatus(false);
     }
@@ -77,33 +76,29 @@ export default function MeusDadosPage() {
   // Fetch profile data
   useEffect(() => {
     const fetchProfile = async () => {
-      setLoading(true);
-      setError("");
       try {
-        const profileRes = await fetch("/api/motorista/profile");
-        if (!profileRes.ok) {
-          if (profileRes.status === 401) {
-            router.push("/motorista/login");
-            return;
-          }
-          const errorData = await profileRes.json().catch(() => ({})); // Try to parse error
-          throw new Error(errorData.error || `Erro ao carregar perfil (${profileRes.status})`);
+        setLoading(true);
+        const resp = await fetch("/api/profile");
+        
+        if (!resp.ok) {
+          throw new Error("Erro ao buscar perfil");
         }
-        const profileData: Profile = await profileRes.json();
-        setProfile(profileData);
-        // Initialize form state with fetched data
+        
+        const data = await resp.json();
+        setProfile(data);
         setFormState({
-          nome: profileData.nome || "",
-          profissao: profileData.profissao || "",
-          avatar_url: profileData.avatar_url || null,
+          nome: data.nome || "",
+          profissao: data.profissao || "",
+          avatar_url: data.avatar_url
         });
-      } catch (err: any) {
-        console.error("Erro ao carregar perfil:", err);
-        setError(err.message || "Não foi possível carregar seus dados.");
+      } catch (err) {
+        console.error("Erro:", err);
+        setError("Não foi possível carregar seu perfil. Tente novamente mais tarde.");
       } finally {
         setLoading(false);
       }
     };
+
     fetchProfile();
   }, [router]);
 
@@ -112,155 +107,136 @@ export default function MeusDadosPage() {
     if (profile?.stripe_account_id) {
       fetchStripeStatus();
     }
-  }, [profile?.stripe_account_id]);
+  }, [profile]);
 
-  // Handle profile updates (including avatar)
-  const handleUpdate = async () => {
+  // Handle form submission
+  const handleSubmit = async () => {
     if (!profile) return;
-    setLoading(true);
-    setError("");
+    
     try {
-      // Prepare only the fields that are being edited
-      const updates: { nome?: string; profissao?: string; avatar_url?: string | null } = {};
-      if (formState.nome !== profile.nome) {
-        updates.nome = formState.nome;
-      }
-      if (formState.profissao !== profile.profissao) {
-        updates.profissao = formState.profissao;
-      }
-      if (formState.avatar_url !== profile.avatar_url) {
-        updates.avatar_url = formState.avatar_url;
-      }
-
-      // Only send request if there are actual changes
-      if (Object.keys(updates).length === 0) {
-        setIsEditing(false);
-        setLoading(false);
-        return;
-      }
-
-      const response = await fetch("/api/motorista/profile", {
+      setLoading(true);
+      setError(null);
+      
+      const resp = await fetch("/api/profile", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates), // Send only changed fields
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          nome: formState.nome,
+          profissao: formState.profissao,
+          avatar_url: formState.avatar_url,
+        }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Falha ao atualizar perfil.");
+      
+      if (!resp.ok) {
+        throw new Error("Erro ao atualizar perfil");
       }
-
-      const result = await response.json();
-      if (result.success && result.profile) {
-        setProfile(result.profile); // Update profile state with returned data
-        // Update form state to match the saved profile
-        setFormState({
-          nome: result.profile.nome || "",
-          profissao: result.profile.profissao || "",
-          avatar_url: result.profile.avatar_url || null,
-        });
-      } else {
-        // Fallback: Re-fetch profile if PUT doesn't return full updated data
-        const profileRes = await fetch("/api/motorista/profile");
-        const profileData: Profile = await profileRes.json();
-        setProfile(profileData);
-        setFormState({
-          nome: profileData.nome || "",
-          profissao: profileData.profissao || "",
-          avatar_url: profileData.avatar_url || null,
-        });
-      }
+      
+      const updatedProfile = await resp.json();
+      setProfile(updatedProfile);
       setIsEditing(false);
-    } catch (err: any) {
-      setError(err.message || "Falha ao atualizar perfil.");
+    } catch (err) {
+      console.error("Erro:", err);
+      setError("Não foi possível atualizar seu perfil. Tente novamente mais tarde.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle input changes for text fields
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle input changes
+  const handleChange = (e) => {
     const { name, value } = e.target;
     setFormState((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Handle avatar selection from the grid
-  const handleAvatarSelect = (newAvatarUrl: string) => {
-    // Update the form state immediately when an avatar is selected
-    setFormState((prev) => ({ ...prev, avatar_url: newAvatarUrl }));
-    // If not in editing mode, switch to editing mode to allow saving
-    if (!isEditing) {
-        setIsEditing(true);
+  // Handle canceling edit mode
+  const handleCancel = () => {
+    setIsEditing(false);
+    
+    // Reset form to current profile values
+    if (profile) {
+      setFormState({
+        nome: profile.nome || "",
+        profissao: profile.profissao || "",
+        avatar_url: profile.avatar_url
+      });
     }
   };
 
-  // Get Stripe Login Link
+  // Get Stripe login link
   const getStripeLoginLink = async () => {
     if (!profile?.stripe_account_id) return;
-    setLoadingStripeLink(true);
-    setError("");
+    
     try {
-      const res = await fetch("/api/stripe/create-login-link");
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Falha ao obter link do Stripe.");
+      setLoadingStripeLink(true);
+      const resp = await fetch("/api/motorista/stripe/login");
+      
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.url) {
+          window.open(data.url, "_blank");
+        }
+      } else {
+        console.error("Erro ao gerar link do Stripe");
       }
-      const { url } = await res.json();
-      setStripeLoginLink(url);
-      if (url) {
-        window.open(url, "_blank");
-      }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      console.error("Erro:", err);
     } finally {
       setLoadingStripeLink(false);
     }
   };
 
-  // Stripe Status Display Logic (Uses stripe_account_status from profile)
-  const getStripeStatusDisplay = () => {
-    if (!profile?.stripe_account_id) {
+  // Status display helpers
+  const getStatusDisplay = () => {
+    if (!profile) return { text: "", color: "", icon: "" };
+    
+    if (!profile.stripe_account_id) {
       return {
-        text: "Não conectado",
-        color: "red",
-        icon: "warning",
+        text: "Conta não conectada",
+        color: "text-red-600",
+        icon: "⚠️",
       };
     }
-
-    if (!profile?.stripe_account_status) {
-      return {
-        text: "Verificando status...",
-        color: "yellow",
-        icon: "clock",
-      };
-    }
-
+    
     switch (profile.stripe_account_status) {
       case "verified":
         return {
           text: "Verificado",
-          color: "green",
-          icon: "check",
+          color: "text-green-600",
+          icon: "✅",
         };
       case "restricted":
         return {
-          text: "Restrito",
-          color: "red",
-          icon: "warning",
+          text: "Requer atenção",
+          color: "text-orange-600",
+          icon: "⚠️",
+        };
+      case "pending":
+        return {
+          text: "Verificação pendente",
+          color: "text-yellow-600",
+          icon: "⏳",
         };
       default:
         return {
-          text: "Pendente",
-          color: "yellow",
-          icon: "clock",
+          text: "Status desconhecido",
+          color: "text-gray-600",
+          icon: "❓",
         };
     }
   };
 
-  const statusDisplay = getStripeStatusDisplay();
+  const statusDisplay = getStatusDisplay();
 
-  if (loading && !profile) return <div className="p-6 text-center">Carregando dados...</div>;
-  if (error && !profile) return <div className="p-6 text-red-500">Erro: {error}</div>;
+  if (loading && !profile) {
+    return <div className="p-6 text-center">Carregando dados...</div>;
+  }
+  
+  if (error && !profile) {
+    return <div className="p-6 text-red-500">Erro: {error}</div>;
+  }
+  
   if (!profile) {
     return <div className="p-6">Não foi possível carregar o perfil.</div>;
   }
@@ -270,17 +246,18 @@ export default function MeusDadosPage() {
       <h1 className="text-2xl font-semibold mb-6">Meus Dados</h1>
       {error && <p className="text-red-500 mb-4">{error}</p>}
 
-      {/* Avatar Selection Section - Use AvatarGridSelector */}
-      {/* Show selector always, but disable interaction if not editing? Or show static image if not editing? */} 
-      {/* Let's show the grid selector always, but clicking only updates state if editing is enabled or triggers edit mode */}
-      <AvatarGridSelector
-        // Use formState.avatar_url to reflect selection before saving
-        currentAvatarUrl={formState.avatar_url}
-        onSelect={handleAvatarSelect}
-        loading={loading} // Disable grid clicks while saving
-      />
+      <div className="space-y-6">
+        {/* Avatar Section */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Avatar</label>
+          <AvatarGridSelector
+            selectedAvatar={formState.avatar_url || ""}
+            onSelect={(url) => handleChange({ target: { name: "avatar_url", value: url } })}
+            disabled={!isEditing || loading}
+          />
+        </div>
 
-      <div className="space-y-4">
+        {/* Name Field */}
         <div>
           <label className="block text-sm font-medium text-gray-700">Nome</label>
           {isEditing ? (
@@ -296,14 +273,20 @@ export default function MeusDadosPage() {
             <p className="text-gray-900 mt-1">{profile.nome || "-"}</p>
           )}
         </div>
+
+        {/* Email Field */}
         <div>
           <label className="block text-sm font-medium text-gray-700">Email</label>
           <p className="text-gray-900 mt-1">{profile.email || "-"}</p>
         </div>
+
+        {/* Phone Field */}
         <div>
           <label className="block text-sm font-medium text-gray-700">WhatsApp</label>
           <p className="text-gray-900 mt-1">{profile.celular}</p>
         </div>
+
+        {/* Profession Field */}
         <div>
           <label className="block text-sm font-medium text-gray-700">Profissão</label>
           {isEditing ? (
@@ -406,7 +389,7 @@ export default function MeusDadosPage() {
                       <div className="bg-red-50 p-4 rounded-lg mb-4">
                         <p className="font-medium text-red-800 mb-2">Pendências a resolver:</p>
                         <ul className="list-disc list-inside text-sm text-red-700">
-                          {stripeStatus.requirements.currently_due?.map((item: string) => (
+                          {stripeStatus.requirements.currently_due?.map((item) => (
                             <li key={item}>{item}</li>
                           ))}
                         </ul>
@@ -443,26 +426,55 @@ export default function MeusDadosPage() {
                       </a>
                     )}
                   </div>
-              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-              </svg>
-              <span className="font-medium">Verificação em andamento</span>
-            </div>
-            <p className="text-sm text-gray-600 mb-4">Complete a verificação da sua conta para começar a receber pagamentos.</p>
-            {stripeStatus.accountLink && (
-              <a
-                href={stripeStatus.accountLink}
-                className="block w-full text-center bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Completar Verificação
-              </a>
+                )}
+              </div>
             )}
           </div>
-        )}
+
+          {/* Stripe Dashboard Link */}
+          {profile?.stripe_account_id && (
+            <div className="mt-2 text-center">
+              <button
+                onClick={getStripeLoginLink}
+                disabled={loadingStripeLink}
+                className="text-sm text-indigo-600 hover:text-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loadingStripeLink ? "Gerando link..." : "Acessar painel Stripe"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="mt-6 flex justify-end">
+          {isEditing ? (
+            <div className="flex gap-4">
+              <button
+                onClick={handleCancel}
+                disabled={loading}
+                className="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={loading}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? "Salvando..." : "Salvar"}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsEditing(true)}
+              disabled={loading}
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Editar
+            </button>
+          )}
+        </div>
       </div>
-    )}
-  </div>
-</div>
-);
+    </div>
+  );
+}
