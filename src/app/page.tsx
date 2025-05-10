@@ -55,6 +55,7 @@ export default function Home() {
                   height={400}
                   className="w-full h-auto rounded-lg"
                   priority
+                  quality={75}
                 />
               </div>
             </div>
@@ -120,10 +121,10 @@ export default function Home() {
           </p>
           
           <div className="flex justify-center items-center space-x-8 mt-8">
-            <Image src="/images/logos/stripe.png" alt="Stripe" width={80} height={30} />
-            <Image src="/images/logos/pix.png" alt="Pix" width={60} height={30} />
-            <Image src="/images/logos/apple-pay.png" alt="Apple Pay" width={60} height={30} />
-            <Image src="/images/logos/visa.png" alt="Visa" width={60} height={30} />
+            <Image src="/images/logos/stripe.png" alt="Stripe" width={80} height={30} quality={75} />
+            <Image src="/images/logos/pix.png" alt="Pix" width={60} height={30} quality={75} />
+            <Image src="/images/logos/apple-pay.png" alt="Apple Pay" width={60} height={30} quality={75} />
+            <Image src="/images/logos/visa.png" alt="Visa" width={60} height={30} quality={75} />
           </div>
         </div>
       </section>

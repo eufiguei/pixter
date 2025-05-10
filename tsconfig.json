@@ -28,7 +28,8 @@
     /* ---------- Plugins ---------- */
     "plugins": [
       { "name": "next" }
-    ]
+    ],
+    "types": ["next"]
   },
 
   "include": [

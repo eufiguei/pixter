@@ -3,6 +3,8 @@ const nextConfig = {
   reactStrictMode: true,
   images: {
     domains: ['ffkqnjuobzoswrhpyxqj.supabase.co'],
+    path: '/_next/image',
+    loader: 'default',
     unoptimized: false,
     remotePatterns: [
       {
