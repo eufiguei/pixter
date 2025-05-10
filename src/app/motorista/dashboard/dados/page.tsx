@@ -5,10 +5,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-// import AvatarUpload from "@/components/AvatarUpload"; // Remove old component import
-import AvatarGridSelector from "@/components/AvatarGridSelector"; // Import the new grid selector
+import AvatarGridSelector from "@/components/AvatarGridSelector";
 
-// Define Profile type (ensure it matches the one used elsewhere)
+// Define Profile type
 type Profile = {
   id: string;
   nome?: string;
@@ -18,23 +17,40 @@ type Profile = {
   avatar_url?: string | null;
   stripe_account_id?: string | null;
   stripe_account_status?: "pending" | "verified" | "restricted" | null;
-  // Add other relevant fields
 };
 
-// --- MeusDadosView Component Logic (adapted for page context) ---
+// Define form state type
+type FormState = {
+  nome: string;
+  profissao: string;
+  avatar_url: string | null;
+};
+
+// Define stripe status type
+type StripeStatus = {
+  status: string | null;
+  accountLink: string | null;
+  requirements: {
+    currently_due?: string[];
+  } | null;
+};
+
 export default function MeusDadosPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isEditing, setIsEditing] = useState(false);
-  // Include avatar_url in form state to track changes
-  const [formState, setFormState] = useState({ nome: "", profissao: "", avatar_url: null as string | null });
-  const [stripeStatus, setStripeStatus] = useState<{
-    status: string | null;
-    accountLink: string | null;
-    requirements: any;
-  }>({ status: null, accountLink: null, requirements: null });
+  const [formState, setFormState] = useState<FormState>({ 
+    nome: "", 
+    profissao: "", 
+    avatar_url: null 
+  });
+  const [stripeAccountStatus, setStripeAccountStatus] = useState<StripeStatus>({ 
+    status: null, 
+    accountLink: null, 
+    requirements: null 
+  });
   const [loadingStripeStatus, setLoadingStripeStatus] = useState(false);
 
   // Fetch Stripe status
@@ -46,10 +62,10 @@ export default function MeusDadosPage() {
       const resp = await fetch("/api/motorista/stripe");
       if (resp.ok) {
         const data = await resp.json();
-        setStripeStatus({
+        setStripeAccountStatus({
           status: data.status,
           accountLink: data.accountLink || data.loginLink,
-          requirements: data.requirements
+          requirements: data.requirements || null
         });
       }
     } catch (err) {
@@ -98,7 +114,6 @@ export default function MeusDadosPage() {
       fetchStripeStatus();
     }
   }, [profile?.stripe_account_id]);
-  }, [router]);
 
   // Handle profile updates (including avatar)
   const handleUpdate = async () => {
@@ -205,26 +220,45 @@ export default function MeusDadosPage() {
 
   // Stripe Status Display Logic (Uses stripe_account_status from profile)
   const getStripeStatusDisplay = () => {
-    if (!profile) return { text: "Carregando...", color: "text-gray-500", icon: "⚪" };
+    if (!profile?.stripe_account_id) {
+      return {
+        text: "Não conectado",
+        color: "red",
+        icon: "warning",
+      };
+    }
 
-    if (!profile.stripe_account_id) {
-      return { text: "Não conectada", color: "text-red-600", icon: "🔴" };
+    if (!profile?.stripe_account_status) {
+      return {
+        text: "Verificando status...",
+        color: "yellow",
+        icon: "clock",
+      };
     }
 
     switch (profile.stripe_account_status) {
       case "verified":
-        return { text: "Verificada", color: "text-green-600", icon: "🟢" };
-      case "pending":
-        return { text: "Pendente", color: "text-yellow-600", icon: "🟡" };
+        return {
+          text: "Verificado",
+          color: "green",
+          icon: "check",
+        };
       case "restricted":
-        return { text: "Restrita", color: "text-red-600", icon: "🔴" };
+        return {
+          text: "Restrito",
+          color: "red",
+          icon: "warning",
+        };
       default:
-        // Treat null or unknown status as 'Verificando...'
-        return { text: "Verificando...", color: "text-yellow-600", icon: "🟡" };
+        return {
+          text: "Pendente",
+          color: "yellow",
+          icon: "clock",
+        };
     }
   };
 
-  const stripeStatus = getStripeStatusDisplay();
+  const statusDisplay = getStripeStatusDisplay();
 
   if (loading && !profile) return <div className="p-6 text-center">Carregando dados...</div>;
   if (error && !profile) return <div className="p-6 text-red-500">Erro: {error}</div>;
@@ -302,36 +336,15 @@ export default function MeusDadosPage() {
               className="text-sm text-indigo-600 hover:text-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loadingStripeLink ? "Gerando link..." : "Acessar painel Stripe"}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Edit/Save Buttons */}
-      <div className="mt-6">
         {isEditing ? (
-          <div className="flex space-x-3">
-            <button
-              onClick={handleUpdate}
-              disabled={loading}
-              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-            >
-              {loading ? "Salvando..." : "Salvar Alterações"}
-            </button>
-            <button
-              onClick={() => {
-                setIsEditing(false);
-                // Reset form state to original profile data if canceling
-                setFormState({
-                  nome: profile.nome || "",
-                  profissao: profile.profissao || "",
-                  avatar_url: profile.avatar_url || null,
-                });
-              }}
-              disabled={loading}
-              className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Cancelar
+          <input
+            type="text"
+            name="nome"
+            value={formState.nome}
+            onChange={handleChange}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            disabled={loading}
+          />
         ) : (
           <p className="text-gray-900 mt-1">{profile.nome || "-"}</p>
         )}
@@ -414,7 +427,7 @@ export default function MeusDadosPage() {
             </div>
             ) : (
               <div>
-                {stripeStatus.status === "verified" ? (
+                {stripeAccountStatus.status === "verified" ? (
                   <div className="bg-white p-4 rounded-lg border border-green-200">
                     <div className="flex items-center text-green-600 mb-4">
                       <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -434,7 +447,7 @@ export default function MeusDadosPage() {
                       </a>
                     )}
                   </div>
-                ) : stripeStatus.status === "restricted" ? (
+                ) : stripeAccountStatus.status === "restricted" ? (
                   <div className="bg-white p-4 rounded-lg border border-red-200">
                     <div className="flex items-center text-red-600 mb-4">
                       <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -442,11 +455,11 @@ export default function MeusDadosPage() {
                       </svg>
                       <span className="font-medium">Atenção: Sua conta precisa de atualizações</span>
                     </div>
-                    {stripeStatus.requirements && (
+                    {stripeAccountStatus.requirements && (
                       <div className="bg-red-50 p-4 rounded-lg mb-4">
                         <p className="font-medium text-red-800 mb-2">Pendências a resolver:</p>
                         <ul className="list-disc list-inside text-sm text-red-700">
-                          {stripeStatus.requirements.currently_due?.map((item: string) => (
+                          {stripeAccountStatus.requirements.currently_due?.map((item: string) => (
                             <li key={item}>{item}</li>
                           ))}
                         </ul>
