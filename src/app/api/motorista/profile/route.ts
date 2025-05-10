@@ -87,6 +87,10 @@ export async function GET(request: Request) {
       
       // If no existing profile found, create a new one
       console.log("No existing profile found, creating new one");
+      
+      // Get phone number from user if available (added as custom field in NextAuth)
+      const userPhone = (session.user as any).phone || '';
+      
       const { data: newProfile, error: createError } = await supabaseServer
         .from("profiles")
         .insert({
@@ -94,7 +98,7 @@ export async function GET(request: Request) {
           tipo: "motorista",
           nome: session.user.name || "Motorista",
           email: session.user.email,
-          celular: session.user.phone,
+          celular: userPhone, // Use properly typed variable
           stripe_account_status: "unconnected"
         })
         .select()
