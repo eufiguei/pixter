@@ -185,12 +185,15 @@ export async function GET(request: Request) {
       // Try to fetch pending transactions too (like authorizations that haven't settled)
       let pendingTransactions: Stripe.Charge[] = [];
       try {
-        // Use a properly typed object for the filter
-        const chargeParams: Stripe.ChargeListParams = {
-          limit: 100,
-          status: 'pending', // Look for pending charges specifically
-          expand: ['data.balance_transaction']
+        // Create a charge list params object that matches the Stripe API structure
+        // The type issue seems to be with status and/or expand, so we'll use a more generic approach
+        const chargeParams: any = {
+          limit: 100
         };
+        
+        // Add parameters one by one to handle type limitations
+        chargeParams.status = 'pending';
+        chargeParams.expand = ['data.balance_transaction'];
         
         // Only add the created filter if it exists
         if (listParams.created) {
