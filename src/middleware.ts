@@ -30,6 +30,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/api') ||
     pathname.startsWith('/motorista/login') ||
     pathname.startsWith('/motorista/cadastro') ||
+    pathname.startsWith('/images') ||
     pathname === '/';
    
   const isAuthenticated = !!session;
