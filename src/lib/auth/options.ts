@@ -22,8 +22,12 @@ interface ProfileRow {
 
 /* ---------- Extended user type ---------- */
 interface ExtendedUser extends User {
+  id: string;
+  email: string;
   tipo: string;
   account?: string;
+  name?: string;
+  image?: string;
 }
 
 /* ---------- Stripe ---------- */
@@ -191,100 +195,11 @@ export const authOptions: NextAuthOptions = {
   ],
 
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account, profile }: { user: ExtendedUser, account: any, profile: any }) {
       // Google authentication flow
       if (account?.provider === "google" && user.email) {
         try {
           console.log("Google auth flow started for email:", user.email);
-          const profile = await getProfileByEmail(user.email);
-
-          if (!profile) {
-            console.log("No profile found, creating new one...");
-            // Create new profile
-            const { error: createError } = await supabaseServer
-              .from("profiles")
-              .insert({
-                id: user.id,
-                nome: user.email?.split("@")[0],
-                email: user.email,
-                tipo: "cliente",
-                account: "google",
-              });
-
-            if (createError) {
-              console.error("Error creating profile:", createError);
-              return false;
-            }
-
-            console.log("New profile created successfully");
-            return true;
-          }
-
-          console.log("Profile found:", profile);
-          return true;
-        } catch (err) {
-          console.error("Error in Google auth flow:", err);
-          return false;
-        }
-      }
-
-      // For other providers (email-password, phone-otp)
-      if (user && user.email) {
-        try {
-          const profile = await getProfileByEmail(user.email);
-          if (profile) {
-            console.log("Profile found for user:", profile);
-            return true;
-          }
-          console.log("No profile found for user:", user);
-          return false;
-        } catch (err) {
-          console.error("Error checking profile:", err);
-          return false;
-        }
-      }
-
-      console.log("No user or email in signIn callback");
-      return false;
-    },
-
-    async jwt({ token, user }) {
-      if (user) {
-        token.tipo = user.tipo;
-        token.account = user.account;
-      }
-      return token;
-    },
-
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.tipo = token.tipo as string;
-        session.user.account = token.account as string;
-      }
-      return session;
-    },
-  },
-
-  pages: {
-    signIn: "/login",
-    newUser: "/cadastro",
-    error: "/login",
-  },
-        }
-      },
-    }),
-  ],
-
-  callbacks: {
-    // In src/lib/auth/options.ts, replace only the Google signIn part of the callback
-
-    async signIn({ user, account, profile }) {
-      // Google authentication flow
-      if (account?.provider === "google" && user.email) {
-        try {
-          console.log("Google auth flow started for email:", user.email);
-
-          // 1. First check if profile exists by email
           const existingProfile = await getProfileByEmail(user.email);
 
           if (existingProfile) {
