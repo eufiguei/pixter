@@ -179,10 +179,18 @@ export const authOptions: NextAuthOptions = {
           // Try to find profile by phone number if no profile found by ID
           if (!existingProfile) {
             console.log("No profile found by ID, checking by phone number...");
+            
+            // Get both formats of the phone number for checking
+            const phoneWithPlus = formattedPhone.startsWith("+") ? formattedPhone : `+${formattedPhone}`;
+            const phoneWithoutPlus = formattedPhone.startsWith("+") ? formattedPhone.substring(1) : formattedPhone;
+            
+            console.log("Checking for phone formats:", { phoneWithPlus, phoneWithoutPlus });
+            
+            // Check for profile with either phone format
             const { data: phoneProfile, error: phoneProfileError } = await supabaseServer
               .from("profiles")
               .select("*")
-              .eq("celular", formattedPhone)
+              .or(`celular.eq.${phoneWithPlus},celular.eq.${phoneWithoutPlus}`)
               .maybeSingle();
 
             if (phoneProfileError) {
