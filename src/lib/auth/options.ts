@@ -114,10 +114,10 @@ export const authOptions: NextAuthOptions = {
     /* ------ Phone + OTP (Supabase) ------ */
     CredentialsProvider({
       id: "phone-otp",
-      name: "Phone OTP",
+      name: "Telefone",
       credentials: {
-        phone: { label: "Phone", type: "text" },
-        code: { label: "Code", type: "text" },
+        phone: { label: "Telefone", type: "text" },
+        code: { label: "Código", type: "text" },
         countryCode: { label: "Country Code", type: "text", value: "55" },
       },
       async authorize(credentials) {
@@ -130,7 +130,7 @@ export const authOptions: NextAuthOptions = {
             countryCode
           );
 
-          // Verify OTP using Supabase Auth
+          // First verify the OTP
           const { data: verifyData, error: verifyError } =
             await supabaseServer.auth.verifyOtp({
               phone: formattedPhone,
@@ -138,7 +138,7 @@ export const authOptions: NextAuthOptions = {
               type: "sms",
             });
 
-          if (verifyError || !verifyData?.user) {
+          if (verifyError) {
             console.error(
               `Supabase verifyOtp error for ${formattedPhone}:`,
               verifyError?.message
@@ -146,22 +146,27 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
-          // Fetch profile
-          const userId = verifyData.user.id;
-          const { data: profileData } = await supabaseServer
+          // Then find the profile
+          const { data: profileData, error: profileError } = await supabaseServer
             .from("profiles")
             .select("*")
-            .eq("id", userId)
+            .eq("id", verifyData.user.id)
+            .eq("tipo", "motorista")
             .single();
+
+          if (profileError) {
+            console.error("Error finding profile:", profileError);
+            return null;
+          }
 
           // Return user object
           return {
-            id: userId,
+            id: verifyData.user.id,
             email: verifyData.user.email,
-            name: profileData?.nome || null,
+            name: profileData?.nome || "Motorista",
             image: profileData?.avatar_url || null,
-            tipo: profileData?.tipo || "motorista",
-            account: profileData?.account ?? "phone",
+            tipo: "motorista",
+            account: "phone",
           };
           // return dummy = {
           //   id: "dummy-id",
