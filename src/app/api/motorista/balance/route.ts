@@ -10,7 +10,14 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function GET(request: Request) {
   // 1) Ensure we have an authenticated motorista
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(authOptions) as {
+    user?: {
+      id: string;
+      tipo?: string;
+      email?: string;
+    }
+  } | null;
+
   if (!session?.user?.id || session.user.tipo !== "motorista") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }

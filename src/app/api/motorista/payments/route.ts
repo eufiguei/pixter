@@ -82,7 +82,14 @@ export async function GET(request: Request) {
     }
 
     // Get the authenticated user session
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as {
+      user?: {
+        id: string;
+        tipo?: string;
+        email?: string;
+      }
+    } | null;
+    
     if (!session?.user?.id || session.user.tipo !== "motorista") {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
