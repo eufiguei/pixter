@@ -29,7 +29,7 @@
     "plugins": [
       { "name": "next" }
     ],
-    "types": ["next"]
+    "types": ["next", "node"]
   },
 
   "include": [

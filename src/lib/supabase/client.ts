@@ -5,9 +5,13 @@
    import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'; // Import Auth Helper
    
    /*──────────────── VARIÁVEIS DE AMBIENTE ───────────────*/
-   const supabaseUrl        = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-   const supabaseAnonKey    = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!; // Make sure this is defined in your server environment variables
+   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY; // Make sure this is defined in your server environment variables
+
+   if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
+     throw new Error('Missing Supabase environment variables');
+   }
    
    /*──────────────── CLIENTES ────────────────────────────*/
    // Client-side instance (safe for browser) - REMOVED to use Auth Helpers
@@ -93,21 +97,18 @@
    };
    
    /*──────────────── UTIL ────────────────────────────────*/
-  //  export const formatPhoneNumber = (phone: string, code = '55') => {
-  export const formatPhoneNumber = (phone: string, code = '55') => {
+export const formatPhoneNumber = (phone: string, code = '55') => {
     // Remove all non-digit characters
     const digitsOnly = phone.replace(/\D/g, '');
     
     // Handle Brazilian numbers - remove leading zero if present
     if (code === '55' && digitsOnly.startsWith('0')) {
-    // Handle Pakistani numbers - remove leading zero if present
-    if (code === '92' && digitsOnly.startsWith('0')) {
       return `+${code}${digitsOnly.substring(1)}`;
     }
     
     // Original logic for other cases
     return digitsOnly.startsWith(code) ? `+${digitsOnly}` : `+${code}${digitsOnly}`;
-  };
+};
    
    /*──────────────── DRIVER via TELEFONE (Server-Side ONLY) ──*/
    // This function uses supabaseAdmin and should ONLY be called from secure server-side API routes.
