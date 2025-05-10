@@ -12,6 +12,7 @@ import Stripe from "stripe";
 interface ProfileRow {
   id: string;
   nome: string | null;
+  name: string | null;
   email: string | null;
   avatar_url: string | null;
   tipo: string | null;
@@ -121,7 +122,10 @@ export const authOptions: NextAuthOptions = {
         countryCode: { label: "Country Code", type: "text", value: "55" },
       },
       async authorize(credentials) {
-        if (!credentials?.phone || !credentials?.code) return null;
+        if (!credentials?.phone || !credentials?.code) {
+          console.error("Missing phone or code in credentials");
+          return null;
+        }
 
         try {
           const countryCode = credentials.countryCode || "55";
@@ -146,6 +150,11 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
+          if (!verifyData?.user) {
+            console.error("No user data returned from verifyOtp");
+            return null;
+          }
+
           // Then find the profile
           const { data: profileData, error: profileError } = await supabaseServer
             .from("profiles")
@@ -156,6 +165,11 @@ export const authOptions: NextAuthOptions = {
 
           if (profileError) {
             console.error("Error finding profile:", profileError);
+            return null;
+          }
+
+          if (!profileData) {
+            console.error("No profile found for user ID:", verifyData.user.id);
             return null;
           }
 
@@ -173,19 +187,89 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
       },
-          // return dummy = {
-          //   id: "dummy-id",
-          //   email: "dummy@dummy.com",
-          //     name:"dummy",
-          //   //   image: profileData?.avatar_url || null,
-          //   image: null,
-          //     tipo: "motorista",
-          //     account: "phone",
+    }),
+  ],
 
-          // }
+  callbacks: {
+    async signIn({ user, account, profile }) {
+      // Google authentication flow
+      if (account?.provider === "google" && user.email) {
+        try {
+          console.log("Google auth flow started for email:", user.email);
+          const profile = await getProfileByEmail(user.email);
+
+          if (!profile) {
+            console.log("No profile found, creating new one...");
+            // Create new profile
+            const { error: createError } = await supabaseServer
+              .from("profiles")
+              .insert({
+                id: user.id,
+                nome: user.email?.split("@")[0],
+                email: user.email,
+                tipo: "cliente",
+                account: "google",
+              });
+
+            if (createError) {
+              console.error("Error creating profile:", createError);
+              return false;
+            }
+
+            console.log("New profile created successfully");
+            return true;
+          }
+
+          console.log("Profile found:", profile);
+          return true;
         } catch (err) {
-          console.error("Phone OTP verification error:", err);
-          return null;
+          console.error("Error in Google auth flow:", err);
+          return false;
+        }
+      }
+
+      // For other providers (email-password, phone-otp)
+      if (user && user.email) {
+        try {
+          const profile = await getProfileByEmail(user.email);
+          if (profile) {
+            console.log("Profile found for user:", profile);
+            return true;
+          }
+          console.log("No profile found for user:", user);
+          return false;
+        } catch (err) {
+          console.error("Error checking profile:", err);
+          return false;
+        }
+      }
+
+      console.log("No user or email in signIn callback");
+      return false;
+    },
+
+    async jwt({ token, user }) {
+      if (user) {
+        token.tipo = user.tipo;
+        token.account = user.account;
+      }
+      return token;
+    },
+
+    async session({ session, token }) {
+      if (session.user) {
+        session.user.tipo = token.tipo as string;
+        session.user.account = token.account as string;
+      }
+      return session;
+    },
+  },
+
+  pages: {
+    signIn: "/login",
+    newUser: "/cadastro",
+    error: "/login",
+  },
         }
       },
     }),
