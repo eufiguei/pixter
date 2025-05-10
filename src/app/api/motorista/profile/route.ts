@@ -31,6 +31,9 @@ export async function GET(request: Request) {
     if (error.code === 'PGRST116') {
       console.log("Profile not found by ID, checking by phone/email before creating");
       
+      // Get phone number from user if available (added as custom field in NextAuth)
+      const userPhone = (session.user as any).phone || '';
+      
       // First check if there's already a profile with the same email/phone
       let existingProfile = null;
       
@@ -47,8 +50,7 @@ export async function GET(request: Request) {
         }
       }
       
-      // Get phone number from user if available (added as custom field in NextAuth)
-      const userPhone = (session.user as any).phone || '';
+      // Check if profile exists by phone number
       
       if (!existingProfile && userPhone) {
         // Get phone with and without plus for checking
@@ -90,9 +92,6 @@ export async function GET(request: Request) {
       
       // If no existing profile found, create a new one
       console.log("No existing profile found, creating new one");
-      
-      // Get phone number from user if available (added as custom field in NextAuth)
-      const userPhone = (session.user as any).phone || '';
       
       const { data: newProfile, error: createError } = await supabaseServer
         .from("profiles")
