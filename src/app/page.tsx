@@ -120,10 +120,10 @@ export default function Home() {
           </p>
           
           <div className="flex justify-center items-center space-x-8 mt-8">
-            <Image src="/images/logos/stripe.png" alt="Stripe" width={80} height={30} unoptimized />
-            <Image src="/images/logos/pix.png" alt="Pix" width={60} height={30} unoptimized />
-            <Image src="/images/logos/apple-pay.png" alt="Apple Pay" width={60} height={30} unoptimized />
-            <Image src="/images/logos/visa.png" alt="Visa" width={60} height={30} unoptimized />
+            <Image src="images/logos/stripe.png" alt="Stripe" width={80} height={30} unoptimized />
+            <Image src="images/logos/pix.png" alt="Pix" width={60} height={30} unoptimized />
+            <Image src="images/logos/apple-pay.png" alt="Apple Pay" width={60} height={30} unoptimized />
+            <Image src="images/logos/visa.png" alt="Visa" width={60} height={30} unoptimized />
           </div>
         </div>
       </section>
