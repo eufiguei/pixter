@@ -164,31 +164,58 @@ export const authOptions: NextAuthOptions = {
           }
 
           // Then find the profile
-          const { data: profileData, error: profileError } = await supabaseServer
+          let profile;
+          const { data: existingProfile, error: profileError } = await supabaseServer
             .from("profiles")
             .select("*")
             .eq("id", verifyData.user.id)
-            .eq("tipo", "motorista")
-            .single();
+            .maybeSingle();
 
           if (profileError) {
             console.error("Error finding profile:", profileError);
             return null;
           }
 
-          if (!profileData) {
-            console.error("No profile found for user ID:", verifyData.user.id);
+          // If no profile exists, create one
+          if (!existingProfile) {
+            console.log("No profile found, creating new driver profile...");
+            const { data: newProfile, error: createError } = await supabaseServer
+              .from("profiles")
+              .insert({
+                id: verifyData.user.id,
+                nome: "Motorista",
+                email: verifyData.user.email,
+                tipo: "motorista",
+                account: "phone",
+              })
+              .select()
+              .single();
+
+            if (createError) {
+              console.error("Error creating profile:", createError);
+              return null;
+            }
+
+            console.log("New driver profile created successfully");
+            profile = newProfile;
+          } else {
+            profile = existingProfile;
+          }
+
+          // Verify the profile is a driver
+          if (profile.tipo !== "motorista") {
+            console.error("User exists but is not a driver:", verifyData.user.id);
             return null;
           }
 
           // Return user object
           return {
-            id: verifyData.user.id,
-            email: verifyData.user.email,
-            name: profileData?.nome || "Motorista",
-            image: profileData?.avatar_url || null,
-            tipo: "motorista",
-            account: "phone",
+            id: profile.id,
+            email: profile.email || "",
+            name: profile.nome || "",
+            image: profile.avatar_url || "",
+            tipo: profile.tipo || "",
+            account: profile.account || "phone",
           };
         } catch (err) {
           console.error("Phone OTP verification error:", err);
