@@ -47,10 +47,13 @@ export async function GET(request: Request) {
         }
       }
       
-      if (!existingProfile && session.user.phone) {
+      // Get phone number from user if available (added as custom field in NextAuth)
+      const userPhone = (session.user as any).phone || '';
+      
+      if (!existingProfile && userPhone) {
         // Get phone with and without plus for checking
-        const phoneWithPlus = session.user.phone.startsWith("+") ? session.user.phone : `+${session.user.phone}`;
-        const phoneWithoutPlus = session.user.phone.startsWith("+") ? session.user.phone.substring(1) : session.user.phone;
+        const phoneWithPlus = userPhone.startsWith("+") ? userPhone : `+${userPhone}`;
+        const phoneWithoutPlus = userPhone.startsWith("+") ? userPhone.substring(1) : userPhone;
         
         const { data: phoneProfile } = await supabaseServer
           .from("profiles")
