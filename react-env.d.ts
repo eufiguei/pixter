@@ -7,6 +7,27 @@
 declare namespace React {
   // Make sure all React types are properly recognized
   export * from 'react';
+  
+  // Add common event types
+  export interface ChangeEvent<T = Element> {
+    target: T & {
+      value: string;
+      name?: string;
+      type?: string;
+      checked?: boolean;
+    };
+  }
+  
+  export interface FormEvent<T = Element> {
+    preventDefault(): void;
+    target: T;
+  }
+  
+  export interface MouseEvent<T = Element, E = NativeMouseEvent> {
+    preventDefault(): void;
+    stopPropagation(): void;
+    target: T;
+  }
 }
 
 declare module "*.svg" {

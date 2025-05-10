@@ -13,17 +13,28 @@ declare module 'recharts' {
     children?: ReactNode;
   }
   
-  export interface LineChartProps {
+  export interface BaseChartProps {
     data?: any[];
     margin?: { top?: number; right?: number; bottom?: number; left?: number };
     children?: ReactNode;
   }
+  
+  export interface LineChartProps extends BaseChartProps {}
+  export interface BarChartProps extends BaseChartProps {}
   
   export interface LineProps {
     type?: string;
     dataKey?: string;
     stroke?: string;
     strokeWidth?: number;
+  }
+  
+  export interface BarProps {
+    dataKey: string;
+    fill?: string;
+    stackId?: string;
+    barSize?: number;
+    radius?: number | [number, number, number, number];
   }
   
   export interface XAxisProps {
@@ -49,7 +60,9 @@ declare module 'recharts' {
   
   export const ResponsiveContainer: ComponentType<ResponsiveContainerProps>;
   export const LineChart: ComponentType<LineChartProps>;
+  export const BarChart: ComponentType<BarChartProps>;
   export const Line: ComponentType<LineProps>;
+  export const Bar: ComponentType<BarProps>;
   export const XAxis: ComponentType<XAxisProps>;
   export const YAxis: ComponentType<YAxisProps>;
   export const CartesianGrid: ComponentType<CartesianGridProps>;
