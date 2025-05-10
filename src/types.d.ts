@@ -41,16 +41,20 @@ declare module 'recharts' {
     dataKey?: string;
     axisLine?: boolean;
     tickLine?: boolean;
+    fontSize?: number;
   }
   
   export interface YAxisProps {
     axisLine?: boolean;
     tickLine?: boolean;
     tickFormatter?: (value: any) => string;
+    fontSize?: number;
   }
   
   export interface CartesianGridProps {
     strokeDasharray?: string;
+    vertical?: boolean;
+    horizontal?: boolean;
   }
   
   export interface TooltipProps {
