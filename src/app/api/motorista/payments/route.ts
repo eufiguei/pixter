@@ -61,11 +61,22 @@ export async function GET(request: Request) {
     .eq("tipo", "motorista")
     .single();
 
-  if (profileError || !profile?.stripe_account_id) {
+  if (profileError) {
     return NextResponse.json(
-      { error: "Conta Stripe não configurada." },
-      { status: 404 }
+      { error: "Erro ao buscar perfil." },
+      { status: 500 }
     );
+  }
+  
+  // If no Stripe account is connected, return an empty data set with a needsConnection flag
+  // This is better than returning an error status
+  if (!profile?.stripe_account_id) {
+    return NextResponse.json({
+      needsConnection: true,
+      balance: { available: 0, pending: 0, currency: "brl" },
+      transactions: [],
+      message: "Conta Stripe não configurada"
+    });
   }
   const stripeAccountId = profile.stripe_account_id;
 

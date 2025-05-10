@@ -89,13 +89,31 @@ export default function DriverDashboardPage() {
           const err = await resp.json();
           throw new Error(err.error || `Erro ao carregar pagamentos (${resp.status})`);
         }
-        const { balance: bal, transactions: txs }: {
-          balance: { available: BalanceEntry[]; pending: BalanceEntry[] };
-          transactions: Transaction[];
-        } = await resp.json();
-
-        setBalance(bal);
-        setTransactions(txs);
+        
+        const data = await resp.json();
+        
+        // Handle response when Stripe account is not connected
+        if (data.needsConnection) {
+          // Set default empty values but continue rendering the page
+          setBalance({
+            available: [{ amount: "R$ 0,00", currency: "brl" }],
+            pending: [{ amount: "R$ 0,00", currency: "brl" }]
+          });
+          setTransactions([]);
+          
+          // Set stripe status to indicate connection needed
+          setStripeStatus(prevStatus => ({
+            ...prevStatus,
+            status: "needs_connection",
+          }));
+          
+          // Continue with rest of page load (don't throw error)
+        } else {
+          // Normal case: Stripe is connected
+          const { balance: bal, transactions: txs } = data;
+          setBalance(bal);
+          setTransactions(txs);
+        }
 
         // 4) Fetch Stripe status
         const stripeResp = await fetch("/api/motorista/stripe", { credentials: "include" });
