@@ -15,6 +15,7 @@ export async function GET(request: Request) {
       id: string;
       tipo?: string;
       email?: string;
+      name?: string;
     }
   } | null;
 
