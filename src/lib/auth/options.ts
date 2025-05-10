@@ -140,11 +140,13 @@ export const authOptions: NextAuthOptions = {
 
           // First verify the OTP
           const { data: verifyData, error: verifyError } =
-            await supabaseServer.auth.verifyOtp({
+            await supabaseAdmin.auth.verifyOtp({
               phone: formattedPhone,
               token: credentials.code,
               type: "sms",
             });
+          
+          console.log('OTP verification response:', { verifyData, verifyError });
 
           if (verifyError) {
             console.error(

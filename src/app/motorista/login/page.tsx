@@ -71,6 +71,8 @@ export default function MotoristaLogin() {
     setSuccess("");
 
     try {
+      console.log('Attempting phone OTP sign in with:', { phone, code, countryCode });
+      
       const result = await signIn("phone-otp", {
         redirect: false,
         phone,
@@ -79,8 +81,15 @@ export default function MotoristaLogin() {
         callbackUrl: "/motorista/dashboard/overview"
       });
 
+      console.log('Sign in result:', result);
+
       if (result?.error) {
-        setError(result.error);
+        console.error('Sign in error:', result.error);
+        if (result.error === 'CredentialsSignin') {
+          setError('Código inválido ou expirado. Por favor, tente novamente.');
+        } else {
+          setError(result.error);
+        }
       } else if (result?.ok) {
         // always land on driver dashboard
         router.push("/motorista/dashboard/overview");

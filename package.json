@@ -29,9 +29,11 @@
   },
   "devDependencies": {
     "@types/next": "^8.0.7",
-    "@types/node": "20.8.10",
+    "@types/next-auth": "^3.13.0",
+    "@types/node": "^20.8.10",
     "@types/react": "18.2.33",
     "@types/react-dom": "18.2.14",
+    "@types/stripe": "^8.0.416",
     "autoprefixer": "10.4.16",
     "eslint": "8.52.0",
     "eslint-config-next": "14.0.4",
