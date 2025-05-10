@@ -144,7 +144,11 @@ export async function GET(request: Request) {
       console.log("Stripe balance retrieved successfully");
 
       // Set up filters for transactions
-      const listParams: Stripe.BalanceTransactionListParams = { limit: 100 };
+      const listParams: Stripe.BalanceTransactionListParams = { 
+        limit: 100,
+        expand: ['data.source']
+      };
+      
       if (startDate || endDate) {
         listParams.created = {};
         if (startDate) {
@@ -158,6 +162,13 @@ export async function GET(request: Request) {
           listParams.created.lt = Math.floor(end.getTime() / 1000);
         }
       }
+      
+      console.log('Date filter params:', { 
+        startDate: startDate ? new Date(startDate).toISOString() : null,
+        endDate: endDate ? new Date(endDate).toISOString() : null,
+        unixStartTime: listParams.created?.gte,
+        unixEndTime: listParams.created?.lt
+      });
 
       // Fetch transactions list
       const txList = await stripe.balanceTransactions.list(
@@ -165,6 +176,22 @@ export async function GET(request: Request) {
         { stripeAccount: stripeAccountId }
       );
       console.log(`Retrieved ${txList.data.length} transactions`);
+      
+      // Try to fetch pending transactions too (like authorizations that haven't settled)
+      let pendingTransactions: Stripe.Charge[] = [];
+      try {
+        const pendingCharges = await stripe.charges.list({
+          limit: 100,
+          status: 'pending', // Look for pending charges specifically
+          created: listParams.created,
+          expand: ['data.balance_transaction']
+        }, { stripeAccount: stripeAccountId });
+        
+        pendingTransactions = pendingCharges.data;
+        console.log(`Retrieved ${pendingTransactions.length} pending charges`);
+      } catch (pendingErr) {
+        console.error('Error fetching pending transactions:', pendingErr);
+      }
 
       // Format balance data
       const available = bal.available.map((b) => ({
@@ -175,9 +202,14 @@ export async function GET(request: Request) {
         amount: formatAmount(b.amount, b.currency),
         currency: b.currency,
       }));
+      
+      console.log('Balance data:', {
+        available: bal.available.map(b => ({ amount: b.amount, currency: b.currency })),
+        pending: bal.pending.map(b => ({ amount: b.amount, currency: b.currency }))
+      });
 
       // Process transactions
-      const transactions = await Promise.all(
+      const processedTransactions = await Promise.all(
         txList.data.map(async (t) => {
           const details = await getPaymentDetails(t, stripeAccountId);
           return {
@@ -191,13 +223,39 @@ export async function GET(request: Request) {
             metodo: details.metodo,
             cliente: details.cliente,
             fee: t.fee ? formatAmount(t.fee, t.currency) : undefined,
+            status: 'completed'
           };
         })
       );
+      
+      // Add pending transactions
+      const pendingTxs = pendingTransactions.map(charge => ({
+        id: charge.id,
+        chargeId: charge.id,
+        amount: formatAmount(charge.amount, charge.currency),
+        currency: charge.currency,
+        description: charge.description || "Pagamento pendente",
+        created: new Date(charge.created * 1000).toISOString(),
+        type: 'charge',
+        metodo: charge.payment_method_details?.type || 'card',
+        cliente: charge.receipt_email || charge.billing_details?.email || "Não informado",
+        fee: charge.application_fee_amount ? formatAmount(charge.application_fee_amount, charge.currency) : undefined,
+        status: 'pending'
+      }));
+      
+      // Combine completed and pending transactions
+      const transactions = [...processedTransactions, ...pendingTxs];
 
       return NextResponse.json({
         balance: { available, pending },
-        transactions,
+        transactions: transactions.sort((a, b) => {
+          // Sort by date, newest first
+          return new Date(b.created).getTime() - new Date(a.created).getTime();
+        }),
+        dateRange: {
+          start: startDate ? new Date(startDate).toISOString() : null,
+          end: endDate ? new Date(endDate).toISOString() : null
+        }
       });
     } catch (stripeError: any) {
       console.error("Stripe API error:", stripeError?.message || stripeError);

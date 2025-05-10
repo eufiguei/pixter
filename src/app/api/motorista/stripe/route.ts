@@ -44,15 +44,30 @@ export async function GET() {
 
     // Get Stripe account status
     const account = await stripe.accounts.retrieve(profile.stripe_account_id);
+    console.log("Stripe account status:", {
+      charges_enabled: account.charges_enabled,
+      payouts_enabled: account.payouts_enabled,
+      disabled_reason: account.requirements?.disabled_reason,
+      capabilities: account.capabilities,
+      details_submitted: account.details_submitted
+    });
     
     // Determine status
     let status: "pending" | "verified" | "restricted" | null = null;
     if (account.charges_enabled && account.payouts_enabled) {
       status = "verified";
+      console.log("Stripe account is VERIFIED");
     } else if (account.requirements?.disabled_reason) {
       status = "restricted";
+      console.log("Stripe account is RESTRICTED");
     } else {
       status = "pending";
+      console.log("Stripe account is PENDING");
+    }
+    
+    // If the database has a different status, update it
+    if (profile.stripe_account_status !== status) {
+      console.log(`Updating Stripe status in database from ${profile.stripe_account_status} to ${status}`);
     }
 
     // Update profile with latest status
@@ -61,28 +76,39 @@ export async function GET() {
       .update({ stripe_account_status: status })
       .eq("id", session.user.id);
 
-    // Create account link if not verified
-    let accountLink = null;
-    if (status !== "verified") {
-      accountLink = await stripe.accountLinks.create({
-        account: profile.stripe_account_id,
-        refresh_url: `${process.env.NEXT_PUBLIC_URL}/motorista/dashboard/dados`,
-        return_url: `${process.env.NEXT_PUBLIC_URL}/motorista/dashboard/dados`,
-        type: "account_onboarding",
-      });
-    }
-
-    // Create login link for verified accounts
+    // Always try to create a login link - helpful for both verified and pending accounts
     let loginLink = null;
-    if (status === "verified") {
+    try {
       loginLink = await stripe.accounts.createLoginLink(profile.stripe_account_id);
+      console.log("Created Stripe login link successfully");
+    } catch (loginError) {
+      console.error("Error creating login link:", loginError);
+      // If login link fails, try to create an account link for onboarding
+      try {
+        const accountLink = await stripe.accountLinks.create({
+          account: profile.stripe_account_id,
+          refresh_url: `${process.env.NEXT_PUBLIC_URL || 'https://pixter-mu.vercel.app'}/motorista/dashboard/dados`,
+          return_url: `${process.env.NEXT_PUBLIC_URL || 'https://pixter-mu.vercel.app'}/motorista/dashboard/dados`,
+          type: "account_onboarding",
+        });
+        console.log("Created Stripe account link for onboarding");
+        loginLink = { url: accountLink.url };
+      } catch (accountLinkError) {
+        console.error("Error creating account link:", accountLinkError);
+      }
     }
 
+    // Return a simplified response
     return NextResponse.json({
       status,
-      accountLink: accountLink?.url || null,
-      loginLink: loginLink?.url || null,
+      accountLink: loginLink?.url || null, // We're now using loginLink as our primary link
       requirements: account.requirements || null,
+      // Include additional details for debugging
+      details: {
+        charges_enabled: account.charges_enabled,
+        payouts_enabled: account.payouts_enabled,
+        details_submitted: account.details_submitted
+      }
     });
   } catch (error: any) {
     console.error("Stripe API error:", error);

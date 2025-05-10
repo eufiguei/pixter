@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import QRCode from "qrcode";
+import { format, subDays, subMonths, startOfWeek, endOfWeek, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 type BalanceEntry = {
   amount: string;     // e.g. "R$ 500,00"
@@ -45,18 +47,25 @@ export default function DriverDashboardPage() {
   const qrCodeRef = useRef<HTMLCanvasElement>(null);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [stripeStatus, setStripeStatus] = useState<{ status: string | null; accountLink: string | null; }>({ status: null, accountLink: null });
+  
+  // Date selection and view mode states
+  const [viewMode, setViewMode] = useState<"weekly" | "monthly">("weekly");
+  const [startDate, setStartDate] = useState<Date>(subDays(new Date(), 7)); // Default to 7 days ago
+  const [endDate, setEndDate] = useState<Date>(new Date()); // Default to today
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
-  useEffect(() => {
+  // Define fetchAll outside useEffect so it can be called from date picker
+  const fetchAll = async () => {
     if (sessionStatus !== "authenticated") {
       if (sessionStatus === "unauthenticated") {
         router.push("/motorista/login");
       }
       return;
     }
-
-    const fetchAll = async () => {
-      setLoading(true);
-      setError("");
+    
+    setLoading(true);
+    setError("");
+    setShowDatePicker(false);
 
       try {
         // 1) Load driver profile
@@ -83,9 +92,14 @@ export default function DriverDashboardPage() {
         });
         QRCode.toCanvas(qrCodeRef.current!, link, { errorCorrectionLevel: "H", margin: 2, width: 200 }, () => {});
 
-        // 3) Fetch balance and transactions
+        // 3) Fetch balance and transactions with date range
         try {
-          const resp = await fetch("/api/motorista/payments", { credentials: "include" });
+          const dateParams = new URLSearchParams({
+            startDate: format(startDate, 'yyyy-MM-dd'),
+            endDate: format(endDate, 'yyyy-MM-dd')
+          }).toString();
+          
+          const resp = await fetch(`/api/motorista/payments?${dateParams}`, { credentials: "include" });
           const data = await resp.json();
           
           // Check if the response has an error message (could be 200 OK with error details)
@@ -151,10 +165,12 @@ export default function DriverDashboardPage() {
       } finally {
         setLoading(false);
       }
-    };
+  };
 
+  useEffect(() => {
     fetchAll();
-  }, [sessionStatus, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionStatus]); // Remove router dependency to avoid lint warnings
 
   if (loading) {
     return <div className="p-6 text-center">Carregando dashboard...</div>;
@@ -180,18 +196,132 @@ export default function DriverDashboardPage() {
 
       {/* Saldo Disponível */}
       <section className="bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-xl font-semibold mb-2">Saldo Disponível</h2>
-        <p className="text-4xl font-bold text-gray-900">{formattedAvailable}</p>
-        {formattedPending && (
-          <p className="mt-1 text-sm text-gray-500">
-            (Pendente: {formattedPending})
-          </p>
-        )}
+        <div className="flex justify-between items-start">
+          <div>
+            <h2 className="text-xl font-semibold mb-2">Saldo Disponível</h2>
+            <p className="text-4xl font-bold text-gray-900">{formattedAvailable}</p>
+            {formattedPending && (
+              <p className="mt-1 text-sm text-gray-500">
+                (Pendente: {formattedPending})
+              </p>
+            )}
+          </div>
+          <div className="text-right">
+            <h2 className="text-xl font-semibold mb-2">Últimos Meses</h2>
+            <p className="text-4xl font-bold text-gray-900">{formattedAvailable}</p>
+            <p className="mt-1 text-xs text-gray-500">Últimos 30 dias</p>
+          </div>
+        </div>
       </section>
 
+      {/* Faturamento Chart */}
+      <section className="bg-white p-4 rounded-lg shadow-md">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Faturamento por {viewMode === "weekly" ? "Semana" : "Mês"}</h2>
+          <div className="flex space-x-2">
+            <button 
+              onClick={() => setViewMode("weekly")} 
+              className={`px-3 py-1 text-sm rounded-md ${viewMode === "weekly" ? "bg-purple-600 text-white" : "bg-gray-200 text-gray-700"}`}
+            >
+              Semanal
+            </button>
+            <button 
+              onClick={() => setViewMode("monthly")} 
+              className={`px-3 py-1 text-sm rounded-md ${viewMode === "monthly" ? "bg-purple-600 text-white" : "bg-gray-200 text-gray-700"}`}
+            >
+              Mensal
+            </button>
+          </div>
+        </div>
+        
+        {/* Simple Chart Placeholder */}
+        <div className="h-40 w-full bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center text-gray-400">
+          {viewMode === "weekly" ? "Gráfico de faturamento semanal" : "Gráfico de faturamento mensal"}
+        </div>
+      </section>
+      
+      {/* Date Range Selector */}
+      <section className="bg-white p-4 rounded-lg shadow-md">
+        <div className="flex justify-between items-center mb-2">
+          <h2 className="text-xl font-semibold">Período</h2>
+          <button 
+            onClick={() => setShowDatePicker(!showDatePicker)}
+            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md flex items-center"
+          >
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            Selecionar Datas
+          </button>
+        </div>
+        
+        <div className="flex justify-center my-2">
+          <div className="text-center bg-gray-100 py-2 px-4 rounded-lg">
+            {format(startDate, 'dd/MM/yyyy')} → {format(endDate, 'dd/MM/yyyy')}
+          </div>
+        </div>
+        
+        {showDatePicker && (
+          <div className="bg-white border rounded-md p-4 shadow-lg mb-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Data Inicial</label>
+                <input 
+                  type="date" 
+                  value={format(startDate, 'yyyy-MM-dd')}
+                  onChange={(e) => setStartDate(e.target.value ? new Date(e.target.value) : subDays(new Date(), 7))}
+                  className="w-full border rounded-md px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Data Final</label>
+                <input 
+                  type="date" 
+                  value={format(endDate, 'yyyy-MM-dd')}
+                  onChange={(e) => setEndDate(e.target.value ? new Date(e.target.value) : new Date())}
+                  className="w-full border rounded-md px-3 py-2"
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end space-x-2">
+              <button 
+                onClick={() => {
+                  // Set to last 7 days
+                  setStartDate(subDays(new Date(), 7));
+                  setEndDate(new Date());
+                }}
+                className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md"
+              >
+                Última Semana
+              </button>
+              <button 
+                onClick={() => {
+                  // Set to last 30 days
+                  setStartDate(subDays(new Date(), 30));
+                  setEndDate(new Date());
+                }}
+                className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md"
+              >
+                Último Mês
+              </button>
+              <button 
+                onClick={() => {
+                  setShowDatePicker(false);
+                  // Reload data with new date range
+                  fetchAll();
+                }}
+                className="px-3 py-1 text-sm bg-purple-600 text-white hover:bg-purple-700 rounded-md"
+              >
+                Aplicar
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+      
       {/* Movimentações / Transactions */}
       <section className="bg-white p-4 rounded-lg shadow-md">
-        <h2 className="text-xl font-semibold mb-4">Movimentações</h2>
+        <h2 className="text-xl font-semibold mb-4">Pagamentos</h2>
         {transactions.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">

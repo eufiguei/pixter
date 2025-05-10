@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import AvatarGridSelector from "@/components/AvatarGridSelector";
 
 type Profile = {
@@ -36,6 +37,7 @@ export default function MeusDadosPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [showAvatarSelector, setShowAvatarSelector] = useState(false);
   const [formState, setFormState] = useState<FormState>({ 
     nome: "", 
     profissao: "", 
@@ -116,8 +118,9 @@ export default function MeusDadosPage() {
     try {
       setLoading(true);
       setError(null);
+      setShowAvatarSelector(false);
       
-      const resp = await fetch("/api/profile", {
+      const resp = await fetch("/api/motorista/profile", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -250,11 +253,58 @@ export default function MeusDadosPage() {
         {/* Avatar Section */}
         <div>
           <label className="block text-sm font-medium text-gray-700">Avatar</label>
-          <AvatarGridSelector
-            currentAvatarUrl={formState.avatar_url}
-            onSelect={(url) => handleChange({ target: { name: "avatar_url", value: url } })}
-            loading={!isEditing || loading}
-          />
+          
+          {!showAvatarSelector ? (
+            <div className="flex items-center mt-2">
+              <div className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-gray-200">
+                {formState.avatar_url ? (
+                  <Image 
+                    src={formState.avatar_url} 
+                    alt="Avatar do motorista"
+                    width={96}
+                    height={96}
+                    className="object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400">
+                    <svg className="w-12 h-12" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+              
+              {isEditing && (
+                <button
+                  type="button"
+                  onClick={() => setShowAvatarSelector(true)}
+                  className="ml-4 inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  disabled={loading}
+                >
+                  Alterar Avatar
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="mt-2">
+              <AvatarGridSelector
+                currentAvatarUrl={formState.avatar_url}
+                onSelect={(url) => {
+                  handleChange({ target: { name: "avatar_url", value: url } });
+                  setShowAvatarSelector(false);
+                }}
+                loading={loading}
+              />
+              
+              <button
+                type="button"
+                onClick={() => setShowAvatarSelector(false)}
+                className="mt-2 inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Name Field */}
