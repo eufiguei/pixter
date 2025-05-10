@@ -45,34 +45,6 @@ type Profile = {
 
 type FormState = {
   nome: string;
-  profissao: string;
-  avatar_url: string | null;
-};
-
-type StripeStatus = {
-  status: string | null;
-  nome?: string;
-  email?: string;
-  celular: string;
-  profissao?: string;
-  avatar_url?: string | null;
-  stripe_account_id?: string | null;
-  stripe_account_status?: "pending" | "verified" | "restricted" | null;
-};
-
-type FormState = {
-  nome: string;
-  profissao: string;
-  avatar_url: string | null;
-};
-
-type StripeStatus = {
-  status: string | null;
-  accountLink: string | null;
-  requirements: {
-    currently_due?: string[];
-  } | null;
-};
 
 export default function MeusDadosPage() {
   const router = useRouter();
