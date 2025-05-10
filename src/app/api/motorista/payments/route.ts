@@ -175,58 +175,79 @@ export async function GET(request: Request) {
         unixEndTime: typeof listParams.created === 'object' ? (listParams.created as any).lt : null
       });
 
-      // Fetch transactions list
+      // Fetch transactions list with expanded details
       const txList = await stripe.balanceTransactions.list(
-        listParams,
+        {
+          ...listParams,
+          expand: ['data.source']
+        },
         { stripeAccount: stripeAccountId }
       );
       console.log(`Retrieved ${txList.data.length} transactions`);
       
-      // Try to fetch pending transactions too (like authorizations that haven't settled)
+      // Log raw data for debugging
+      if (txList.data.length > 0) {
+        console.log('First transaction sample:', JSON.stringify(txList.data[0], null, 2));
+      } else {
+        console.log('No transactions found in the specified date range');
+      }
+      
+      // Try to fetch both pending and succeeded transactions too
       let pendingTransactions: Stripe.Charge[] = [];
+      let successfulCharges: Stripe.Charge[] = [];
       try {
         // Create a charge list params object that matches the Stripe API structure
-        // The type issue seems to be with status and/or expand, so we'll use a more generic approach
-        const chargeParams: any = {
-          limit: 100
+        const baseChargeParams: any = {
+          limit: 100,
+          expand: ['data.balance_transaction']
         };
-        
-        // Add parameters one by one to handle type limitations
-        chargeParams.status = 'pending';
-        chargeParams.expand = ['data.balance_transaction'];
         
         // Only add the created filter if it exists
         if (listParams.created) {
-          chargeParams.created = listParams.created;
+          baseChargeParams.created = listParams.created;
         }
         
+        // Fetch pending charges
         const pendingCharges = await stripe.charges.list(
-          chargeParams,
+          {
+            ...baseChargeParams,
+            status: 'pending'
+          },
           { stripeAccount: stripeAccountId }
         );
-        
         pendingTransactions = pendingCharges.data;
         console.log(`Retrieved ${pendingTransactions.length} pending charges`);
+        
+        // Fetch successful charges
+        const successfulChargesResponse = await stripe.charges.list(
+          {
+            ...baseChargeParams,
+            status: 'succeeded'
+          },
+          { stripeAccount: stripeAccountId }
+        );
+        successfulCharges = successfulChargesResponse.data;
+        console.log(`Retrieved ${successfulCharges.length} succeeded charges`);
+        
+        // Log sample data if available
+        if (pendingTransactions.length > 0 || successfulCharges.length > 0) {
+          if (pendingTransactions.length > 0) {
+            console.log('Sample pending charge:', JSON.stringify(pendingTransactions[0], null, 2));
+          }
+          if (successfulCharges.length > 0) {
+            console.log('Sample succeeded charge:', JSON.stringify(successfulCharges[0], null, 2));
+          }
+        }
       } catch (pendingErr) {
         console.error('Error fetching pending transactions:', pendingErr);
       }
 
-      // Format balance data
-      const available = bal.available.map((b) => ({
-        amount: formatAmount(b.amount, b.currency),
-        currency: b.currency,
-      }));
-      const pending = bal.pending.map((b) => ({
-        amount: formatAmount(b.amount, b.currency),
-        currency: b.currency,
-      }));
-      
       console.log('Balance data:', {
         available: bal.available.map(b => ({ amount: b.amount, currency: b.currency })),
         pending: bal.pending.map(b => ({ amount: b.amount, currency: b.currency }))
       });
 
-      // Process transactions
+      // Process balance transactions
       const processedTransactions = await Promise.all(
         txList.data.map(async (t) => {
           const details = await getPaymentDetails(t, stripeAccountId);
@@ -236,7 +257,7 @@ export async function GET(request: Request) {
             amount: formatAmount(t.amount, t.currency),
             currency: t.currency,
             description: t.description || "-",
-            created: new Date(t.created * 1000).toISOString(),
+            data: new Date(t.created * 1000).toISOString(), // Note: Using "data" as the field name to match frontend
             type: t.type,
             metodo: details.metodo,
             cliente: details.cliente,
@@ -246,29 +267,72 @@ export async function GET(request: Request) {
         })
       );
       
-      // Add pending transactions
+      // Process pending transactions
       const pendingTxs = pendingTransactions.map(charge => ({
         id: charge.id,
         chargeId: charge.id,
         amount: formatAmount(charge.amount, charge.currency),
         currency: charge.currency,
-        description: charge.description || "Pagamento pendente",
-        created: new Date(charge.created * 1000).toISOString(),
-        type: 'charge',
-        metodo: charge.payment_method_details?.type || 'card',
-        cliente: charge.receipt_email || charge.billing_details?.email || "Não informado",
-        fee: charge.application_fee_amount ? formatAmount(charge.application_fee_amount, charge.currency) : undefined,
+        description: charge.description || "-",
+        data: new Date(charge.created * 1000).toISOString(), // Note: Using "data" as the field name to match frontend
+        type: "charge",
+        metodo: charge.payment_method_details?.type || "card",
+        cliente: charge.receipt_email || charge.billing_details?.email || "-",
         status: 'pending'
       }));
       
-      // Combine completed and pending transactions
-      const transactions = [...processedTransactions, ...pendingTxs];
-
+      // Process successful charges that might not be in the balance transactions
+      const successfulTxs = successfulCharges.map(charge => ({
+        id: charge.id,
+        chargeId: charge.id,
+        amount: formatAmount(charge.amount, charge.currency),
+        currency: charge.currency,
+        description: charge.description || "-",
+        data: new Date(charge.created * 1000).toISOString(), // Note: Using "data" as the field name to match frontend
+        type: "charge",
+        metodo: charge.payment_method_details?.type || "card",
+        cliente: charge.receipt_email || charge.billing_details?.email || "-",
+        status: 'succeeded'
+      }));
+      
+      // Combine all transactions, making sure to avoid duplicates
+      // Create a Set of IDs to track which transactions we've already added
+      const transactionIds = new Set<string>();
+      const allTransactions = [];
+      
+      // First add balance transactions (most reliable source)
+      for (const tx of processedTransactions) {
+        transactionIds.add(tx.id);
+        allTransactions.push(tx);
+      }
+      
+      // Then add pending transactions if they're not already included
+      for (const tx of pendingTxs) {
+        if (!transactionIds.has(tx.id)) {
+          transactionIds.add(tx.id);
+          allTransactions.push(tx);
+        }
+      }
+      
+      // Finally add succeeded charges that weren't in balance transactions
+      for (const tx of successfulTxs) {
+        if (!transactionIds.has(tx.id)) {
+          transactionIds.add(tx.id);
+          allTransactions.push(tx);
+        }
+      }
+      
+      console.log(`Returning ${allTransactions.length} total transactions`);
+      
+      // Return everything, sorted by date (newest first)
       return NextResponse.json({
-        balance: { available, pending },
-        transactions: transactions.sort((a, b) => {
+        balance: {
+          available: bal.available.map(b => ({ amount: b.amount, currency: b.currency })),
+          pending: bal.pending.map(b => ({ amount: b.amount, currency: b.currency }))
+        },
+        transactions: allTransactions.sort((a, b) => {
           // Sort by date, newest first
-          return new Date(b.created).getTime() - new Date(a.created).getTime();
+          return new Date(b.data).getTime() - new Date(a.data).getTime();
         }),
         dateRange: {
           start: startDate ? new Date(startDate).toISOString() : null,
