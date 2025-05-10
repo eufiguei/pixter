@@ -1,9 +1,5 @@
-// Type declarations for modules without built-in type definitions
-declare module 'react' {
-  import * as React from 'react';
-  export = React;
-  export as namespace React;
-}
+// This file provides types for libraries that don't have proper TypeScript definitions
+// Note: We don't need to define React types since @types/react is installed
 
 declare module 'next/navigation' {
   export function useRouter(): {
