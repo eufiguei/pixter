@@ -15,6 +15,24 @@ const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY 
 // Fallback avatar
 const defaultAvatar = "/images/avatars/avatar_1.png";
 
+// Format phone number to (XX) XXXXXXXXX format
+const formatPhoneNumber = (phone: string) => {
+  // Remove any non-digit characters
+  const digits = phone.replace(/\D/g, '');
+  
+  // Remove country code if present
+  const nationalNumber = digits.startsWith('55') ? digits.substring(2) : digits;
+  
+  // Format as (XX) XXXXXXXXX
+  if (nationalNumber.length >= 10) {
+    const areaCode = nationalNumber.substring(0, 2);
+    const number = nationalNumber.substring(2);
+    return `(${areaCode}) ${number}`;
+  }
+  
+  return nationalNumber;
+};
+
 function PaymentForm({ onSuccess, onError }: any) {
   const stripe = useStripe();
   const elements = useElements();
@@ -190,16 +208,67 @@ export default function DriverPaymentPage({ params }: { params: { phoneNumber: s
       <main className="flex-grow flex flex-col items-center p-4 pt-8 md:pt-16">
         <div className="w-full max-w-md md:max-w-lg lg:max-w-xl bg-white rounded-lg shadow-md p-8 space-y-8">
           {/* Pixter Header Section */}
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center space-x-3 mb-2">
-              <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-2xl">P</span>
+          <header className="w-full py-4 border-b">
+            <div className="container mx-auto flex justify-between items-center px-4">
+              <div>
+                <Link href="/" className="text-xl font-bold">Pixter</Link>
               </div>
-              <span className="font-bold text-3xl text-gray-800">Pixter</span>
+              <div className="space-x-4">
+                <Link 
+                  href="/login" 
+                  className="text-gray-600 hover:text-purple-600"
+                  onClick={(e) => {
+                    // Check if user is logged in as a driver
+                    const checkSessionAndLogout = async () => {
+                      try {
+                        const res = await fetch('/api/auth/session');
+                        const session = await res.json();
+                        
+                        // If user is logged in as a driver, sign them out
+                        if (session && session.user && session.user.tipo === 'motorista') {
+                          e.preventDefault();
+                          await fetch('/api/auth/signout', { method: 'POST' });
+                          window.location.href = '/login';
+                        }
+                      } catch (error) {
+                        console.error('Error checking session:', error);
+                      }
+                    };
+                    
+                    checkSessionAndLogout();
+                  }}
+                >
+                  Sign In
+                </Link>
+                <Link 
+                  href="/cadastro" 
+                  className="text-gray-600 hover:text-purple-600"
+                  onClick={(e) => {
+                    // Check if user is logged in as a driver
+                    const checkSessionAndLogout = async () => {
+                      try {
+                        const res = await fetch('/api/auth/session');
+                        const session = await res.json();
+                        
+                        // If user is logged in as a driver, sign them out
+                        if (session && session.user && session.user.tipo === 'motorista') {
+                          e.preventDefault();
+                          await fetch('/api/auth/signout', { method: 'POST' });
+                          window.location.href = '/cadastro';
+                        }
+                      } catch (error) {
+                        console.error('Error checking session:', error);
+                      }
+                    };
+                    
+                    checkSessionAndLogout();
+                  }}
+                >
+                  Create Account
+                </Link>
+              </div>
             </div>
-            <p className="text-gray-600">Você no controle de pagar no cartão</p>
-          </div>
-
+          </header>
           {/* Driver Info - Access via profile object */}
           <div className="flex flex-col items-center space-y-2">
             <div className="w-24 h-24 rounded-full overflow-hidden relative">
@@ -209,11 +278,23 @@ export default function DriverPaymentPage({ params }: { params: { phoneNumber: s
                 fill
                 style={{ objectFit: 'cover' }}
                 onError={e => (e.currentTarget.src = defaultAvatar)}
+                priority
               />
             </div>
             <h1 className="text-2xl font-bold">{profile.nome || 'Driver'}</h1>
             {profile.profissao && <p className="text-sm text-gray-600">{profile.profissao}</p>}
-            {profile.celular && <p className="text-sm text-gray-500">{profile.celular}</p>}
+            {/* Make phone number clickable and properly formatted */}
+            {profile.celular && (
+              <a 
+                href={`tel:${profile.celular}`} 
+                className="text-sm text-gray-500 hover:text-purple-600 flex items-center justify-center gap-1"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+                {formatPhoneNumber(profile.celular)}
+              </a>
+            )}
           </div>
 
           {/* amount input */}
@@ -229,6 +310,7 @@ export default function DriverPaymentPage({ params }: { params: { phoneNumber: s
                 onChange={handleAmountInputChange} // Handle raw digit input
                 className="w-full text-center text-3xl py-3 border rounded focus:ring-purple-500"
               />
+              {/* Removed the '0' that was previously showing here */}
 
               {error && <p className="text-sm text-red-600 text-center">{error}</p>}
 

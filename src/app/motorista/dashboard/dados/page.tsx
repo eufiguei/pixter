@@ -75,34 +75,38 @@ export default function MeusDadosPage() {
     }
   };
 
+  // Define fetchProfile outside useEffect so it can be called from other functions
   // Fetch profile data
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        setLoading(true);
-        const resp = await fetch("/api/motorista/profile");
-        
-        if (!resp.ok) {
-          throw new Error("Erro ao buscar perfil");
-        }
-        
-        const data = await resp.json();
-        setProfile(data);
-        setFormState({
-          nome: data.nome || "",
-          profissao: data.profissao || "",
-          avatar_url: data.avatar_url
-        });
-      } catch (err) {
-        console.error("Erro:", err);
-        setError("Não foi possível carregar seu perfil. Tente novamente mais tarde.");
-      } finally {
-        setLoading(false);
+  const fetchProfile = async () => {
+    try {
+      setLoading(true);
+      const resp = await fetch("/api/motorista/profile");
+      
+      if (!resp.ok) {
+        throw new Error("Erro ao buscar perfil");
       }
-    };
-
+      
+      const data = await resp.json();
+      console.log("Profile data loaded:", data);
+      setProfile(data);
+      setFormState({
+        nome: data.nome || "",
+        profissao: data.profissao || "",
+        avatar_url: data.avatar_url
+      });
+    } catch (err) {
+      console.error("Erro:", err);
+      setError("Não foi possível carregar seu perfil. Tente novamente mais tarde.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Load profile on page load
+  useEffect(() => {
     fetchProfile();
-  }, [router]);
+  }, []);
+
 
   // Fetch Stripe status when profile changes
   useEffect(() => {
@@ -120,6 +124,13 @@ export default function MeusDadosPage() {
       setError(null);
       setShowAvatarSelector(false);
       
+      // Debug logging
+      console.log("Submitting profile update with data:", {
+        nome: formState.nome,
+        profissao: formState.profissao,
+        avatar_url: formState.avatar_url,
+      });
+      
       const resp = await fetch("/api/motorista/profile", {
         method: "PUT",
         headers: {
@@ -133,14 +144,25 @@ export default function MeusDadosPage() {
       });
       
       if (!resp.ok) {
-        throw new Error("Erro ao atualizar perfil");
+        const errorData = await resp.json();
+        throw new Error(errorData.error || "Erro ao atualizar perfil");
       }
       
-      const updatedProfile = await resp.json();
-      setProfile(updatedProfile);
+      const updatedData = await resp.json();
+      console.log("Profile update response:", updatedData);
+      
+      // Make sure we're updating the profile with the correct data
+      // The API returns profile in the response data
+      if (updatedData?.profile) {
+        setProfile(updatedData.profile);
+      } else if (updatedData?.success) {
+        // If we didn't get a profile back, fetch it again
+        await fetchProfile();
+      }
+      
       setIsEditing(false);
     } catch (err) {
-      console.error("Erro:", err);
+      console.error("Erro ao atualizar perfil:", err);
       setError("Não foi possível atualizar seu perfil. Tente novamente mais tarde.");
     } finally {
       setLoading(false);
@@ -290,8 +312,11 @@ export default function MeusDadosPage() {
               <AvatarGridSelector
                 currentAvatarUrl={formState.avatar_url}
                 onSelect={(url) => {
+                  console.log("Avatar selected:", url);
+                  // Save the avatar URL to form state
                   handleChange({ target: { name: "avatar_url", value: url } });
-                  setShowAvatarSelector(false);
+                  // For better user experience, don't automatically hide
+                  // the selector - let the user see their selection
                 }}
                 loading={loading}
               />

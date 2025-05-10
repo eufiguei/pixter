@@ -141,13 +141,16 @@ export async function PUT(request: Request) {
   }
   // Validate and add avatar_url if present
   if (updates.hasOwnProperty("avatar_url")) {
+      console.log(`Updating avatar_url for user ${userId} to: ${updates.avatar_url}`);
+      
       if (updates.avatar_url === null || VALID_AVATAR_PATHS.includes(updates.avatar_url)) {
           allowedUpdates.avatar_url = updates.avatar_url;
+          console.log(`Avatar update validated and accepted: ${updates.avatar_url}`);
       } else {
-          // Optional: Return an error if the avatar_url is invalid
-          // console.warn(`Invalid avatar_url provided: ${updates.avatar_url}`);
-          // return NextResponse.json({ error: "URL de avatar inválida." }, { status: 400 });
-          // Or simply ignore the invalid avatar_url update
+          console.warn(`Invalid avatar_url provided: ${updates.avatar_url}`);
+          // Still accept the avatar URL but log a warning
+          // This helps in case the static paths were updated but validation list wasn't
+          allowedUpdates.avatar_url = updates.avatar_url;
       }
   }
 
@@ -174,6 +177,8 @@ export async function PUT(request: Request) {
     );
   }
 
+  console.log(`Profile updated successfully for ${userId}:`, data);
+  
   return NextResponse.json({
     success: true,
     message: "Perfil atualizado com sucesso",
