@@ -69,25 +69,10 @@ export async function GET(request: Request) {
         }
       }
       
-      // If we found an existing profile, update it with the new user ID and return it
+      // If we found an existing profile, just return it (no need to update IDs)
       if (existingProfile) {
-        console.log("Updating existing profile with new user ID");
-        const { data: updatedProfile, error: updateError } = await supabaseServer
-          .from("profiles")
-          .update({ id: userId })
-          .eq("id", existingProfile.id)
-          .select()
-          .single();
-          
-        if (updateError) {
-          console.error("Error updating profile with new ID:", updateError);
-          return NextResponse.json(
-            { error: "Erro ao atualizar perfil existente" },
-            { status: 500 }
-          );
-        }
-        
-        return NextResponse.json(updatedProfile);
+        console.log("Found existing profile, returning it directly");
+        return NextResponse.json(existingProfile);
       }
       
       // If no existing profile found, create a new one
