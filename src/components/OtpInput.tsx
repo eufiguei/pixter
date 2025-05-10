@@ -37,8 +37,26 @@ export default function OTPInput({ length, onChange }: OTPInputProps) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent, idx: number) => {
-    if (e.key === "Backspace" && !values[idx]) {
+    if (e.key === "Backspace") {
+      e.preventDefault(); // Prevent default backspace behavior
+      const newVals = [...values];
+      
+      if (values[idx]) {
+        // If current box has a value, clear it
+        newVals[idx] = "";
+        setValues(newVals);
+      } else {
+        // If current box is empty, clear previous box and move focus there
+        if (idx > 0) {
+          newVals[idx - 1] = "";
+          setValues(newVals);
+          focusPrev(idx);
+        }
+      }
+    } else if (e.key === "ArrowLeft") {
       focusPrev(idx);
+    } else if (e.key === "ArrowRight") {
+      focusNext(idx);
     }
   };
 
