@@ -149,25 +149,30 @@ export async function GET(request: Request) {
         expand: ['data.source']
       };
       
+      // Create date filters using the correct type syntax
       if (startDate || endDate) {
-        listParams.created = {};
+        const createdFilter: { gte?: number; lt?: number } = {};
+        
         if (startDate) {
-          listParams.created.gte = Math.floor(
-            new Date(startDate).getTime() / 1000
-          );
+          createdFilter.gte = Math.floor(new Date(startDate).getTime() / 1000);
         }
+        
         if (endDate) {
           const end = new Date(endDate);
           end.setDate(end.getDate() + 1);
-          listParams.created.lt = Math.floor(end.getTime() / 1000);
+          createdFilter.lt = Math.floor(end.getTime() / 1000);
         }
+        
+        // Assign the properly typed object to listParams.created
+        listParams.created = createdFilter;
       }
       
+      // Log with explicit type casting for safer logging
       console.log('Date filter params:', { 
         startDate: startDate ? new Date(startDate).toISOString() : null,
         endDate: endDate ? new Date(endDate).toISOString() : null,
-        unixStartTime: listParams.created?.gte,
-        unixEndTime: listParams.created?.lt
+        unixStartTime: typeof listParams.created === 'object' ? (listParams.created as any).gte : null,
+        unixEndTime: typeof listParams.created === 'object' ? (listParams.created as any).lt : null
       });
 
       // Fetch transactions list
@@ -180,12 +185,22 @@ export async function GET(request: Request) {
       // Try to fetch pending transactions too (like authorizations that haven't settled)
       let pendingTransactions: Stripe.Charge[] = [];
       try {
-        const pendingCharges = await stripe.charges.list({
+        // Use a properly typed object for the filter
+        const chargeParams: Stripe.ChargeListParams = {
           limit: 100,
           status: 'pending', // Look for pending charges specifically
-          created: listParams.created,
           expand: ['data.balance_transaction']
-        }, { stripeAccount: stripeAccountId });
+        };
+        
+        // Only add the created filter if it exists
+        if (listParams.created) {
+          chargeParams.created = listParams.created;
+        }
+        
+        const pendingCharges = await stripe.charges.list(
+          chargeParams,
+          { stripeAccount: stripeAccountId }
+        );
         
         pendingTransactions = pendingCharges.data;
         console.log(`Retrieved ${pendingTransactions.length} pending charges`);
