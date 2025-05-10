@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import {
-  BarChart,
+  BarChart as RechartBarChart,
   Bar,
   XAxis,
   YAxis,
@@ -293,13 +293,13 @@ export default function MeusPagamentosPage() {
         <div className="md:col-span-2 bg-white p-4 rounded-lg shadow">
           <div style={{ width: "100%", height: 170 }}>
             <ResponsiveContainer>
-              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+              <RechartBarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="label" axisLine={false} tickLine={false} fontSize={12} />
                 <YAxis axisLine={false} tickLine={false} fontSize={12} />
                 <Tooltip formatter={(value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)} />
                 <Bar dataKey="value" fill="#d8b4fe" radius={[4, 4, 0, 0]} />
-              </BarChart>
+              </RechartBarChart>
             </ResponsiveContainer>
           </div>
         </div>
