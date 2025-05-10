@@ -75,6 +75,78 @@ declare module 'recharts' {
   export const Tooltip: ComponentType<TooltipProps>;
 }
 
+declare module 'react' {
+  export default any;
+}
+
+declare module 'qrcode' {
+  export function toDataURL(text: string, options: any, callback: (error: Error | null, url: string) => void): void;
+  export function toCanvas(canvas: HTMLCanvasElement | null, text: string, options: any, callback: (error: Error | null) => void): void;
+}
+
+declare module 'next/server' {
+  export interface NextRequest extends Request {
+    cookies: Map<string, string>;
+    nextUrl: URL;
+  }
+  
+  export class NextResponse extends Response {
+    static json(body: any, init?: ResponseInit): NextResponse;
+    static redirect(url: string | URL, init?: ResponseInit): NextResponse;
+  }
+}
+
+declare module 'next-auth' {
+  export interface Session {
+    user?: {
+      name?: string | null;
+      email?: string | null;
+      image?: string | null;
+      id?: string | null;
+    };
+    expires: string;
+  }
+
+  export interface User {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+    image?: string | null;
+  }
+}
+
+declare module 'next-auth/react' {
+  export function useSession(): {
+    data: import('next-auth').Session | null;
+    status: "loading" | "authenticated" | "unauthenticated";
+  };
+  export function signIn(provider?: string, options?: any): Promise<any>;
+  export function signOut(options?: any): Promise<any>;
+}
+
+declare module 'stripe' {
+  export default class Stripe {
+    constructor(apiKey: string, options?: any);
+    accounts: {
+      retrieve(id: string, options?: any): Promise<any>;
+      createLoginLink(id: string): Promise<any>;
+      createExternalAccount(id: string, data: any): Promise<any>;
+    };
+    balance: {
+      retrieve(options?: any, requestOptions?: any): Promise<any>;
+    };
+    balanceTransactions: {
+      list(options?: any, requestOptions?: any): Promise<any>;
+    };
+    charges: {
+      list(options?: any, requestOptions?: any): Promise<any>;
+    };
+    accountLinks: {
+      create(options: any): Promise<any>;
+    };
+  }
+}
+
 declare module 'next/navigation' {
   export function useRouter(): {
     push: (url: string) => void;
