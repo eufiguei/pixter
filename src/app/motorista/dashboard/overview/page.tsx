@@ -84,35 +84,50 @@ export default function DriverDashboardPage() {
         QRCode.toCanvas(qrCodeRef.current!, link, { errorCorrectionLevel: "H", margin: 2, width: 200 }, () => {});
 
         // 3) Fetch balance and transactions
-        const resp = await fetch("/api/motorista/payments", { credentials: "include" });
-        if (!resp.ok) {
-          const err = await resp.json();
-          throw new Error(err.error || `Erro ao carregar pagamentos (${resp.status})`);
-        }
-        
-        const data = await resp.json();
-        
-        // Handle response when Stripe account is not connected
-        if (data.needsConnection) {
-          // Set default empty values but continue rendering the page
+        try {
+          const resp = await fetch("/api/motorista/payments", { credentials: "include" });
+          const data = await resp.json();
+          
+          // Check if the response has an error message (could be 200 OK with error details)
+          if (data.error) {
+            console.error("Payment API error:", data.error, data.code);
+            // Don't throw, just set an error message and continue with default values
+            setError(`Erro de pagamentos: ${data.error}`);
+            setBalance({
+              available: [{ amount: "R$ 0,00", currency: "brl" }],
+              pending: [{ amount: "R$ 0,00", currency: "brl" }]
+            });
+            setTransactions([]);
+          }
+          // Handle response when Stripe account is not connected
+          else if (data.needsConnection) {
+            console.log("Stripe connection needed:", data.message);
+            // Set default empty values but continue rendering the page
+            setBalance({
+              available: [{ amount: "R$ 0,00", currency: "brl" }],
+              pending: [{ amount: "R$ 0,00", currency: "brl" }]
+            });
+            setTransactions([]);
+            
+            // Set stripe status to indicate connection needed
+            setStripeStatus(prevStatus => ({
+              ...prevStatus,
+              status: "needs_connection",
+            }));
+          } else {
+            // Normal case: Stripe is connected
+            const { balance: bal, transactions: txs } = data;
+            setBalance(bal);
+            setTransactions(txs);
+          }
+        } catch (error) {
+          console.error("Error fetching payment data:", error);
+          setError("Erro ao carregar dados de pagamento. Por favor, tente novamente.");
           setBalance({
             available: [{ amount: "R$ 0,00", currency: "brl" }],
             pending: [{ amount: "R$ 0,00", currency: "brl" }]
           });
           setTransactions([]);
-          
-          // Set stripe status to indicate connection needed
-          setStripeStatus(prevStatus => ({
-            ...prevStatus,
-            status: "needs_connection",
-          }));
-          
-          // Continue with rest of page load (don't throw error)
-        } else {
-          // Normal case: Stripe is connected
-          const { balance: bal, transactions: txs } = data;
-          setBalance(bal);
-          setTransactions(txs);
         }
 
         // 4) Fetch Stripe status

@@ -88,6 +88,44 @@ export async function GET(request: Request) {
   const endDate = url.searchParams.get("endDate");
 
   try {
+    console.log("Attempting to fetch balance for Stripe account:", stripeAccountId);
+    
+    // Validate that Stripe secret key is set up correctly
+    if (!process.env.STRIPE_SECRET_KEY) {
+      console.error("STRIPE_SECRET_KEY is not configured in environment variables");
+      return NextResponse.json({ error: "Stripe API não configurada." }, { status: 500 });
+    }
+    
+    // First verify that the Stripe account exists
+    try {
+      const account = await stripe.accounts.retrieve(stripeAccountId);
+      console.log("Retrieved Stripe account:", account.id, "Charges enabled:", account.charges_enabled);
+    } catch (accountError: any) {
+      console.error("Error retrieving Stripe account:", accountError.message);
+      
+      // If the account doesn't exist or is invalid, return a specific error
+      if (accountError.code === 'account_invalid' || accountError.statusCode === 404) {
+        // Update the user's profile to remove the invalid Stripe account ID
+        await supabaseServer
+          .from("profiles")
+          .update({ stripe_account_id: null })
+          .eq("id", userId);
+          
+        return NextResponse.json({
+          needsConnection: true,
+          balance: { 
+            available: [{ amount: "R$ 0,00", currency: "brl" }], 
+            pending: [{ amount: "R$ 0,00", currency: "brl" }] 
+          },
+          transactions: [],
+          message: "Conta Stripe inválida. Por favor, reconecte sua conta."
+        });
+      }
+      
+      throw accountError; // Let main catch block handle other errors
+    }
+    
+    // Now try to fetch the balance
     const bal = await stripe.balance.retrieve(
       {},
       { stripeAccount: stripeAccountId }
@@ -146,9 +184,30 @@ export async function GET(request: Request) {
       transactions,
     });
   } catch (err: any) {
-    console.error("Stripe balance error:", err);
+    console.error("Stripe balance error:", err.message);
+    console.error("Error type:", err.type);
+    console.error("Error code:", err.code);
+    console.error("Error stack:", err.stack);
+    
+    // Handle common Stripe errors
+    if (err.code === 'account_invalid' || err.code === 'invalid_request_error') {
+      return NextResponse.json({
+        needsConnection: true,
+        balance: { 
+          available: [{ amount: "R$ 0,00", currency: "brl" }], 
+          pending: [{ amount: "R$ 0,00", currency: "brl" }] 
+        },
+        transactions: [],
+        message: "Erro na conta Stripe: " + (err.message || "Por favor, reconecte sua conta.")
+      });
+    }
+    
+    // Generic error response
     return NextResponse.json(
-      { error: "Erro ao recuperar saldo/transações." },
+      { 
+        error: "Erro ao recuperar saldo/transações: " + (err.message || "Erro desconhecido"),
+        code: err.code || "unknown_error" 
+      },
       { status: 500 }
     );
   }
