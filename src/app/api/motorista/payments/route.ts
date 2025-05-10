@@ -73,7 +73,10 @@ export async function GET(request: Request) {
   if (!profile?.stripe_account_id) {
     return NextResponse.json({
       needsConnection: true,
-      balance: { available: 0, pending: 0, currency: "brl" },
+      balance: { 
+        available: [{ amount: "R$ 0,00", currency: "brl" }], 
+        pending: [{ amount: "R$ 0,00", currency: "brl" }] 
+      },
       transactions: [],
       message: "Conta Stripe não configurada"
     });
