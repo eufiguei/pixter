@@ -54,7 +54,7 @@ export default function Home() {
                   width={500}
                   height={400}
                   unoptimized
-                  className="w-full h-auto rounded-lg"
+                  className="w-full h-auto rounded-lg "
                 />
               </div>
             </div>
