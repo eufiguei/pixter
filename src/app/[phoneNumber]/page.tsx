@@ -2,7 +2,8 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import * as React from 'react';
+const { useState, useEffect, useRef } = React;
 import Image from 'next/image';
 import Link from 'next/link';
 import { loadStripe } from '@stripe/stripe-js';

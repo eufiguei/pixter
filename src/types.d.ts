@@ -75,8 +75,11 @@ declare module 'recharts' {
   export const Tooltip: ComponentType<TooltipProps>;
 }
 
+// This handles React hooks import issues
 declare module 'react' {
-  export default any;
+  // Re-export all the React hooks and components correctly
+  export * from 'react';
+  export default React;
 }
 
 declare module 'qrcode' {

@@ -251,29 +251,56 @@ export async function GET(request: Request) {
       // Format balance data with proper defaults
       console.log("Formatting balance data");
       
-      // Default values in case of empty arrays
-      let available = [{ amount: formatAmount(0, "brl"), currency: "brl" }];
-      let pending = [{ amount: formatAmount(0, "brl"), currency: "brl" }];
+      // Format balance info for the frontend with enhanced error handling and logging
+      const formattedBalance = {
+        available: [] as { amount: string; currency: string }[],
+        pending: [] as { amount: string; currency: string }[]
+      };
       
-      // Only override defaults if we have real data
-      if (bal.available && bal.available.length > 0) {
-        available = bal.available.map((b) => ({
-          amount: formatAmount(b.amount, b.currency),
-          currency: b.currency,
-        }));
+      console.log("Raw balance data from Stripe:", JSON.stringify(bal, null, 2));
+      
+      // Format available balance with careful error checking
+      if (bal && bal.available && Array.isArray(bal.available) && bal.available.length > 0) {
+        console.log("Processing available balance:", bal.available);
+        formattedBalance.available = bal.available.map(fund => {
+          // Guard against malformed data
+          if (typeof fund.amount !== 'number') {
+            console.error("Invalid amount in available balance:", fund);
+            return { amount: "R$ 0,00", currency: "brl" };
+          }
+          return {
+            amount: formatAmount(fund.amount, fund.currency),
+            currency: fund.currency
+          };
+        });
+      } else {
+        console.warn("No available balance found, using default");
+        // Provide a default if no available balance
+        formattedBalance.available = [{ amount: "R$ 0,00", currency: "brl" }];
       }
       
-      if (bal.pending && bal.pending.length > 0) {
-        pending = bal.pending.map((b) => ({
-          amount: formatAmount(b.amount, b.currency),
-          currency: b.currency,
-        }));
+      // Format pending balance with careful error checking
+      if (bal && bal.pending && Array.isArray(bal.pending) && bal.pending.length > 0) {
+        console.log("Processing pending balance:", bal.pending);
+        formattedBalance.pending = bal.pending.map(fund => {
+          // Guard against malformed data
+          if (typeof fund.amount !== 'number') {
+            console.error("Invalid amount in pending balance:", fund);
+            return { amount: "R$ 0,00", currency: "brl" };
+          }
+          return {
+            amount: formatAmount(fund.amount, fund.currency),
+            currency: fund.currency
+          };
+        });
+      } else {
+        console.warn("No pending balance found, using default");
+        // Provide a default if no pending balance
+        formattedBalance.pending = [{ amount: "R$ 0,00", currency: "brl" }];
       }
       
-      console.log('Formatted balance data:', {
-        available,
-        pending
-      });
+      // Log the formatted balance we're sending back
+      console.log("Formatted balance data being returned:", JSON.stringify(formattedBalance, null, 2));
 
       // Process balance transactions
       const processedTransactions = await Promise.all(
@@ -356,10 +383,7 @@ export async function GET(request: Request) {
 
       // Return everything, sorted by date (newest first)
       return NextResponse.json({
-        balance: {
-          available,
-          pending,
-        },
+        balance: formattedBalance,
         transactions: allTransactions.sort((a, b) => {
           // Sort by date, newest first
           return new Date(b.data).getTime() - new Date(a.data).getTime();
