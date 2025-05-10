@@ -27,9 +27,66 @@ export async function GET(request: Request) {
     .single();
 
   if (error) {
-    // If no profile exists yet, create one
+    // If no profile exists yet, check by phone or email before creating
     if (error.code === 'PGRST116') {
-      // Create a basic profile
+      console.log("Profile not found by ID, checking by phone/email before creating");
+      
+      // First check if there's already a profile with the same email/phone
+      let existingProfile = null;
+      
+      if (session.user.email) {
+        const { data: emailProfile } = await supabaseServer
+          .from("profiles")
+          .select("*")
+          .eq("email", session.user.email)
+          .maybeSingle();
+          
+        if (emailProfile) {
+          console.log("Found existing profile by email:", emailProfile.id);
+          existingProfile = emailProfile;
+        }
+      }
+      
+      if (!existingProfile && session.user.phone) {
+        // Get phone with and without plus for checking
+        const phoneWithPlus = session.user.phone.startsWith("+") ? session.user.phone : `+${session.user.phone}`;
+        const phoneWithoutPlus = session.user.phone.startsWith("+") ? session.user.phone.substring(1) : session.user.phone;
+        
+        const { data: phoneProfile } = await supabaseServer
+          .from("profiles")
+          .select("*")
+          .or(`celular.eq.${phoneWithPlus},celular.eq.${phoneWithoutPlus}`)
+          .maybeSingle();
+          
+        if (phoneProfile) {
+          console.log("Found existing profile by phone:", phoneProfile.id);
+          existingProfile = phoneProfile;
+        }
+      }
+      
+      // If we found an existing profile, update it with the new user ID and return it
+      if (existingProfile) {
+        console.log("Updating existing profile with new user ID");
+        const { data: updatedProfile, error: updateError } = await supabaseServer
+          .from("profiles")
+          .update({ id: userId })
+          .eq("id", existingProfile.id)
+          .select()
+          .single();
+          
+        if (updateError) {
+          console.error("Error updating profile with new ID:", updateError);
+          return NextResponse.json(
+            { error: "Erro ao atualizar perfil existente" },
+            { status: 500 }
+          );
+        }
+        
+        return NextResponse.json(updatedProfile);
+      }
+      
+      // If no existing profile found, create a new one
+      console.log("No existing profile found, creating new one");
       const { data: newProfile, error: createError } = await supabaseServer
         .from("profiles")
         .insert({
@@ -37,6 +94,7 @@ export async function GET(request: Request) {
           tipo: "motorista",
           nome: session.user.name || "Motorista",
           email: session.user.email,
+          celular: session.user.phone,
           stripe_account_status: "unconnected"
         })
         .select()
