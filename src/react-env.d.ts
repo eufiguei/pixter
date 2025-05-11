@@ -6,6 +6,20 @@ declare module 'react' {
   // Re-export all the types from React
   export * from 'react/index';
   
+  // Explicitly declare common types
+  export type { 
+    ChangeEvent, 
+    ClipboardEvent, 
+    ReactNode, 
+    ReactElement,
+    ComponentType,
+    RefObject,
+    MutableRefObject,
+    HTMLAttributes,
+    InputHTMLAttributes,
+    ButtonHTMLAttributes
+  } from 'react';
+  
   // Explicitly declare hooks
   export const useState: any;
   export const useEffect: any;
