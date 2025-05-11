@@ -231,7 +231,7 @@ export default function VendedorLogin() {
                   autoComplete="tel"
                   required
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, 	xt.slice(0,11)))} // Allow only digits, max 11 for BR phone
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, 	text.slice(0,11)))} // Allow only digits, max 11 for BR phone
                   disabled={loading}
                   placeholder="11987654321"
                   className={`flex-1 block w-full border-gray-300 rounded-r-md px-3 py-2.5 text-base shadow-sm focus:ring-purple-500 focus:border-purple-500 sm:text-sm ${loading ? "bg-gray-100" : ""}`}
