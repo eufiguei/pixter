@@ -45,5 +45,6 @@ declare module 'lucide-react' {
   export const History: any;
   export const Settings: any;
   export const ExternalLink: any;
+  export const LogOut: any;
   // Add any other icons you're using
 }
