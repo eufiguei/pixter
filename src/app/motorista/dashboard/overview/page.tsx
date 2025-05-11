@@ -1,12 +1,12 @@
 // src/app/vendedor/dashboard/overview/page.tsx
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react"; // Added useMemo
+import React, { useState, useEffect, useRef, useMemo } from "react"; // Added React import
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import QRCode from "qrcode";
-import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, parseISO } from "date-fns"; // Added more date-fns functions
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   BarChart,
@@ -17,7 +17,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend
-} from "recharts"; // Added recharts components
+} from "recharts";
 
 // Type for individual transaction/payment item
 interface TransactionItem {
@@ -68,7 +68,6 @@ export default function VendedorDashboardPage() {
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
 
   const [viewMode, setViewMode] = useState<"weekly" | "monthly">("weekly");
-  // Default to last 7 days for weekly, current month for monthly upon mode switch
   const [startDate, setStartDate] = useState<Date>(subDays(new Date(), 6)); 
   const [endDate, setEndDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -83,7 +82,6 @@ export default function VendedorDashboardPage() {
     
     setLoading(true);
     setError("");
-    // setShowDatePicker(false); // Keep date picker open if it was
 
       try {
         const pr = await fetch("/api/vendedor/profile", { credentials: "include" });
@@ -159,7 +157,6 @@ export default function VendedorDashboardPage() {
 
   useEffect(() => {
     if (sessionStatus === "authenticated") {
-      // Initial fetch with default dates
       let initialStartDate = subDays(new Date(), 6);
       let initialEndDate = new Date();
       if (viewMode === "monthly") {
@@ -172,12 +169,12 @@ export default function VendedorDashboardPage() {
     } else if (sessionStatus === "unauthenticated") {
       router.push("/vendedor/login");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionStatus, viewMode]); // Re-fetch when viewMode changes to set default dates for that mode
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionStatus, viewMode]);
 
   const handleDateFilterApply = () => {
     setShowDatePicker(false);
-    fetchAll(startDate, endDate); // Fetch with current startDate and endDate
+    fetchAll(startDate, endDate);
   }
 
   const chartData = useMemo(() => {
@@ -185,7 +182,7 @@ export default function VendedorDashboardPage() {
 
     const dailySums: { [key: string]: number } = {};
     transactions.forEach(tx => {
-      if (tx.status === "completed" || tx.status === "succeeded") { // Consider only completed transactions for revenue
+      if (tx.status === "completed" || tx.status === "succeeded") {
         const date = format(parseISO(tx.created), "yyyy-MM-dd");
         dailySums[date] = (dailySums[date] || 0) + parseCurrencyToFloat(tx.amount);
       }
@@ -196,7 +193,6 @@ export default function VendedorDashboardPage() {
         intervalDays = eachDayOfInterval({ start: startDate, end: endDate });
     } catch (e) {
         console.error("Error creating date interval for chart:", e);
-        // Fallback to a smaller, safer interval or return empty if dates are invalid
         const today = new Date();
         intervalDays = eachDayOfInterval({ start: subDays(today, 6), end: today });
     }
@@ -206,15 +202,15 @@ export default function VendedorDashboardPage() {
         name: format(day, "dd/MM", { locale: ptBR }),
         Faturamento: dailySums[format(day, "yyyy-MM-dd")] || 0,
       }));
-    } else { // monthly view aggregates daily sums within the selected range
+    } else {
         return intervalDays.map(day => ({
-            name: format(day, "dd/MM", { locale: ptBR }), // Still show daily for selected month range
+            name: format(day, "dd/MM", { locale: ptBR }),
             Faturamento: dailySums[format(day, "yyyy-MM-dd")] || 0,
         }));
     }
   }, [transactions, startDate, endDate, viewMode]);
 
-  if (sessionStatus === "loading" || (loading && !profile)) { // Show loading if session is loading OR main data is loading and profile isn't set yet
+  if (sessionStatus === "loading" || (loading && !profile)) {
     return <div className="p-6 text-center">Carregando dashboard...</div>;
   }
   
@@ -344,9 +340,12 @@ export default function VendedorDashboardPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  {["Data", "Valor", "Status", "Método", "Cliente", "Descrição"].map((th) => (
-                    <th key={th} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{th}</th>
-                  ))}
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Método</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
