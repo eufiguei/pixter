@@ -87,8 +87,8 @@ export async function GET() {
       try {
         const accountLink = await stripe.accountLinks.create({
           account: profile.stripe_account_id,
-          refresh_url: `${process.env.NEXT_PUBLIC_URL || 'https://pixter-mu.vercel.app'}/motorista/dashboard/dados`,
-          return_url: `${process.env.NEXT_PUBLIC_URL || 'https://pixter-mu.vercel.app'}/motorista/dashboard/dados`,
+          refresh_url: `${process.env.NEXT_PUBLIC_URL || 'https://pixter-mu.vercel.app'}/vendedor/dashboard/dados`,
+          return_url: `${process.env.NEXT_PUBLIC_URL || 'https://pixter-mu.vercel.app'}/vendedor/dashboard/dados`,
           type: "account_onboarding",
         });
         console.log("Created Stripe account link for onboarding");
@@ -175,8 +175,8 @@ export async function POST() {
     // Create account link
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
-      refresh_url: `${process.env.NEXT_PUBLIC_URL}/motorista/dashboard/dados`,
-      return_url: `${process.env.NEXT_PUBLIC_URL}/motorista/dashboard/dados`,
+      refresh_url: `${process.env.NEXT_PUBLIC_URL}/vendedor/dashboard/dados`,
+      return_url: `${process.env.NEXT_PUBLIC_URL}/vendedor/dashboard/dados`,
       type: "account_onboarding",
     });
 

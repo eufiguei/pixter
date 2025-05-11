@@ -28,8 +28,8 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/cadastro') ||
     pathname.startsWith('/public') ||
     pathname.startsWith('/api') ||
-    pathname.startsWith('/motorista/login') ||
-    pathname.startsWith('/motorista/cadastro') ||
+    pathname.startsWith('/vendedor/login') ||
+    pathname.startsWith('/vendedor/cadastro') ||
     pathname.startsWith('/images') ||
     pathname === '/';
    
@@ -41,8 +41,8 @@ export async function middleware(req: NextRequest) {
     const loginUrl = req.nextUrl.clone();
          
     // Determine the right login page based on the path
-    if (pathname.startsWith('/motorista')) {
-      loginUrl.pathname = '/motorista/login';
+    if (pathname.startsWith('/vendedor')) {
+      loginUrl.pathname = '/vendedor/login';
     } else {
       loginUrl.pathname = '/login';
     }
@@ -58,19 +58,19 @@ export async function middleware(req: NextRequest) {
       pathname === '/login' || 
       pathname === '/cadastro';
     
-    const isMotoristaLoginPage = 
-      pathname === '/motorista/login' || 
-      pathname === '/motorista/cadastro';
+    const isVendedorLoginPage = 
+      pathname === '/vendedor/login' || 
+      pathname === '/vendedor/cadastro';
     
     // Get user type from session token
     const userType = session.tipo as string || 'cliente';
     
     // Redirect to appropriate dashboard based on user type
-    if (isLoginPage || (isMotoristaLoginPage && userType === 'cliente')) {
+    if (isLoginPage || (isVendedorLoginPage && userType === 'cliente')) {
       const dashboardUrl = new URL('/cliente/dashboard', req.url);
       return NextResponse.redirect(dashboardUrl);
-    } else if (isMotoristaLoginPage && userType === 'motorista') {
-      const dashboardUrl = new URL('/motorista/dashboard', req.url);
+    } else if (isVendedorLoginPage && userType === 'vendedor') {
+      const dashboardUrl = new URL('/vendedor/dashboard', req.url);
       return NextResponse.redirect(dashboardUrl);
     }
   }

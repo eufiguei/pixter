@@ -1,4 +1,4 @@
-// src/app/motorista/stripe-success/page.tsx
+// src/app/vendedor/stripe-success/page.tsx
 "use client";
 
 import { useEffect } from "react";
@@ -11,7 +11,7 @@ export default function StripeSuccessPage() {
   useEffect(() => {
     // Redirect back to the dashboard after a short delay
     const timer = setTimeout(() => {
-      router.push("/motorista/dashboard");
+      router.push("/vendedor/dashboard");
     }, 3000); // 3 seconds delay
 
     return () => clearTimeout(timer); // Cleanup timer on unmount
@@ -26,7 +26,7 @@ export default function StripeSuccessPage() {
         <p className="text-gray-700 mb-6">
           Sua conta Stripe foi conectada com sucesso. Você será redirecionado para o seu dashboard em breve.
         </p>
-        <Link href="/motorista/dashboard">
+        <Link href="/vendedor/dashboard">
           <span className="text-indigo-600 hover:underline cursor-pointer">
             Voltar para o Dashboard agora
           </span>

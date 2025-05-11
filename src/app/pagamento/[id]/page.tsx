@@ -59,7 +59,7 @@ export default function PaginaPagamento() {
   useEffect(() => {
     async function fetchDriver() {
       if (!driverIdentifier) {
-        setError("Identificador do motorista não encontrado na URL.");
+        setError("Identificador do vendedor não encontrado na URL.");
         setLoadingProfile(false);
         return;
       }
@@ -70,7 +70,7 @@ export default function PaginaPagamento() {
         if (!res.ok) throw new Error(json.error || `Erro ${res.status}: ${res.statusText}`);
         setProfile(json.profile);
       } catch (err: any) {
-        console.error("Erro ao buscar motorista:", err);
+        console.error("Erro ao buscar vendedor:", err);
         setError(err.message);
       } finally {
         setLoadingProfile(false);
@@ -163,7 +163,7 @@ export default function PaginaPagamento() {
             />
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">{profile.nome || "Motorista"}</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{profile.nome || "Vendedor"}</h2>
             {profile.profissao && <p className="text-sm text-gray-600">{profile.profissao}</p>}
             {profile.celular && <p className="text-sm text-gray-500">{formatDisplayPhoneNumber(profile.celular)}</p>}
           </div>

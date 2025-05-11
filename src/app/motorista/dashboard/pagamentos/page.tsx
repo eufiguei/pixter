@@ -1,4 +1,4 @@
-// src/app/motorista/dashboard/pagamentos/page.tsx
+// src/app/vendedor/dashboard/pagamentos/page.tsx
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -49,7 +49,7 @@ export default function MeusPagamentosPage() {
     setLoading(true);
     setError("");
     try {
-      let url = "/api/motorista/payments";
+      let url = "/api/vendedor/payments";
       const params = new URLSearchParams();
       if (start) params.append("startDate", start);
       if (end)   params.append("endDate", end);
@@ -58,7 +58,7 @@ export default function MeusPagamentosPage() {
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) {
         if (res.status === 401) {
-          router.push("/motorista/login");
+          router.push("/vendedor/login");
           return;
         }
         const body = await res.json();
@@ -82,7 +82,7 @@ export default function MeusPagamentosPage() {
   useEffect(() => {
     if (sessionStatus === "loading") return;
     if (sessionStatus === "unauthenticated") {
-      router.push("/motorista/login");
+      router.push("/vendedor/login");
     } else {
       // Set initial date range for the last week
       const today = new Date();
@@ -149,8 +149,8 @@ export default function MeusPagamentosPage() {
       {/* <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Pixter</h1>
         <nav className="space-x-4">
-          <Link href="/motorista/dashboard/dados" className="text-gray-600 hover:text-gray-900">Meus Dados</Link>
-          <Link href="/motorista/dashboard/pagina-pagamento" className="text-gray-600 hover:text-gray-900">Minha Página de Pagamento</Link>
+          <Link href="/vendedor/dashboard/dados" className="text-gray-600 hover:text-gray-900">Meus Dados</Link>
+          <Link href="/vendedor/dashboard/pagina-pagamento" className="text-gray-600 hover:text-gray-900">Minha Página de Pagamento</Link>
         </nav>
       </div> */} 
 

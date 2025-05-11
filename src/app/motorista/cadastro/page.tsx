@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-export default function CadastroMotorista() {
+export default function CadastroVendedor() {
   const router = useRouter();
 
   /* ──────────────── Estados ──────────────── */
@@ -21,7 +21,7 @@ export default function CadastroMotorista() {
   const [nomeCompleto, setNomeCompleto] = useState('');
   const [email, setEmail] = useState('');
   const [cpf, setCpf] = useState('');
-  const [profissao, setProfissao] = useState('Motorista de táxi');
+  const [profissao, setProfissao] = useState('Vendedor de táxi');
   const [dataNascimento, setDataNascimento] = useState('');
   const [aceitaTermos, setAceitaTermos] = useState(false);
 
@@ -76,7 +76,7 @@ export default function CadastroMotorista() {
       if (!res.ok) throw new Error(data.error || 'Falha ao enviar código');
       setCodeSent(true);
       setCountdown(60);
-      setSuccess('Código enviado! Verifique o WhatsApp.');
+      setSuccess('Código enviado! Verifique o Celular.');
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -179,7 +179,7 @@ export default function CadastroMotorista() {
       const res = await fetch('/api/auth/complete-registration', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro ao finalizar cadastro');
-      router.push('/motorista/dashboard');
+      router.push('/vendedor/dashboard');
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -192,12 +192,12 @@ export default function CadastroMotorista() {
     if (step === 'phone') {
       return (
         <div className="space-y-6">
-          <h2 className="text-2xl font-bold text-center">Cadastro de Motorista</h2>
-          <p className="text-center text-gray-600">Informe seu número de WhatsApp para começar</p>
+          <h2 className="text-2xl font-bold text-center">Cadastro de Vendedor</h2>
+          <p className="text-center text-gray-600">Informe seu número de Celular para começar</p>
 
           {/* telefone */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp (com DDD)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Celular (com DDD)</label>
             <div className="flex">
               <span className="inline-flex items-center px-3 bg-gray-100 border border-r-0 border-gray-300 rounded-l-md text-gray-500">
                 +{countryCode}
@@ -266,7 +266,7 @@ export default function CadastroMotorista() {
 
           <p className="text-center text-sm text-gray-500">
             Já tem uma conta?{' '}
-            <Link href="/motorista/login" className="text-purple-600 hover:text-purple-800">
+            <Link href="/vendedor/login" className="text-purple-600 hover:text-purple-800">
               Acesse aqui
             </Link>
           </p>

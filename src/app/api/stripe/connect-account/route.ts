@@ -84,8 +84,8 @@ export async function GET(request: Request) {
 
     // 5. Create Stripe Account Link
     const origin = request.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://pixter-mu.vercel.app/";
-    const returnUrl = `${origin}/motorista/stripe-success`;
-    const refreshUrl = `${origin}/motorista/stripe-refresh`;
+    const returnUrl = `${origin}/vendedor/stripe-success`;
+    const refreshUrl = `${origin}/vendedor/stripe-refresh`;
 
     const accountLink = await stripe.accountLinks.create({
       account: stripeAccountId,

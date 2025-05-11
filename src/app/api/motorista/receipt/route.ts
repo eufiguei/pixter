@@ -77,7 +77,7 @@ export async function GET(request: Request) {
       .single();
 
     if (error) {
-      console.error('Erro ao buscar pagamento para motorista:', error);
+      console.error('Erro ao buscar pagamento para vendedor:', error);
       if (error.code === 'PGRST116') { // Not found or insufficient privilege
          return NextResponse.json({ error: 'Pagamento não encontrado ou acesso negado' }, { status: 404 });
       }
@@ -234,7 +234,7 @@ export async function GET(request: Request) {
     });
 
   } catch (error: any) {
-    console.error('Erro ao gerar comprovante para motorista:', error);
+    console.error('Erro ao gerar comprovante para vendedor:', error);
     return NextResponse.json(
       { error: error.message || 'Erro interno no servidor ao gerar comprovante' },
       { status: 500 }

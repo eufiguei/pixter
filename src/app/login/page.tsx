@@ -39,7 +39,7 @@ export default function Login() {
       setError("")
 
       // Check if currently logged in as a driver and sign out if needed
-      if (status === "authenticated" && session?.user?.tipo === "motorista") {
+      if (status === "authenticated" && session?.user?.tipo === "vendedor") {
         await signOut({ redirect: false })
       }
       
@@ -81,7 +81,7 @@ export default function Login() {
       setError("")
 
       // Check if currently logged in as a driver and sign out if needed
-      if (status === "authenticated" && session?.user?.tipo === "motorista") {
+      if (status === "authenticated" && session?.user?.tipo === "vendedor") {
         await signOut({ redirect: false })
       }
       
@@ -194,7 +194,7 @@ export default function Login() {
         </form>
         
         <div className="mt-6 text-center text-sm text-gray-500">
-          É motorista? <Link href="/motorista/login" className="text-purple-600 hover:text-purple-800">Acesse aqui</Link>
+          É vendedor? <Link href="/vendedor/login" className="text-purple-600 hover:text-purple-800">Acesse aqui</Link>
         </div>
       </div>
     </main>

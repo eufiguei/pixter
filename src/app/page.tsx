@@ -20,7 +20,7 @@ export default function Home() {
           </div>
           <nav className="hidden md:flex items-center space-x-6">
             <Link href="/login" className="text-gray-700 hover:text-purple-700">Acessar Conta</Link>
-            <Link href="/motorista/login" className="text-gray-700 hover:text-purple-700">Acessar Motoristas/Vendedores</Link>
+            <Link href="/vendedor/login" className="text-gray-700 hover:text-purple-700">Acessar Vendedors/Vendedores</Link>
           </nav>
         </div>
       </header>
@@ -35,11 +35,11 @@ export default function Home() {
                 Receba Pagamentos em QR Code, Sem Maquininha.
               </h1>
               <p className="text-lg text-gray-700 mb-8">
-                Com o Pixter, motoristas, feirantes e vendedores aceitam Pix, Cartão de Crédito e Apple Pay direto pelo celular. Rápido, seguro e sem mensalidade.
+                Com o Pixter, vendedors, feirantes e vendedores aceitam Pix, Cartão de Crédito e Apple Pay direto pelo celular. Rápido, seguro e sem mensalidade.
               </p>
               <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
                 <Link 
-                  href="/motorista/cadastro" 
+                  href="/vendedor/cadastro" 
                   className="bg-purple-600 text-white py-3 px-6 rounded-md font-medium hover:bg-purple-700 transition text-center"
                 >
                   Criar Conta Gratuita
@@ -50,7 +50,7 @@ export default function Home() {
               <div className="relative w-full max-w-md">
                 <Image 
                   src="/images/homepage/driver.png" 
-                  alt="Motorista usando Pixter"
+                  alt="Vendedor usando Pixter"
                   width={500}
                   height={400}
                   unoptimized
@@ -106,7 +106,7 @@ export default function Home() {
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-3xl font-bold mb-8">Feito para quem vende na rua, na feira, ou dirige pelas cidades.</h2>
           <p className="text-lg text-gray-700 max-w-3xl mx-auto mb-10">
-            Pixter é a solução ideal para motoristas de táxi, vendedores de feira, ambulantes e pequenos negócios que precisam aceitar pagamentos de forma moderna, sem complicação, e sem precisar investir em maquininhas.
+            Pixter é a solução ideal para vendedors de táxi, vendedores de feira, ambulantes e pequenos negócios que precisam aceitar pagamentos de forma moderna, sem complicação, e sem precisar investir em maquininhas.
           </p>
         </div>
       </section>

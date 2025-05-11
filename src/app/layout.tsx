@@ -10,7 +10,7 @@ import NavBarWrapper from '@/components/NavBarWrapper'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Pixter - Pagamento rápido para motoristas',
+  title: 'Pixter - Pagamento rápido para vendedors',
   description:
     'Receba pagamentos via QR code sem maquininha. Pix, Apple Pay e cartão de crédito.',
 }

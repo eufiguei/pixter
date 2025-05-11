@@ -1,4 +1,4 @@
-// src/app/api/motorista/profile/route.ts
+// src/app/api/vendedor/profile/route.ts
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth/options";
@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   if (!session || !session.user?.id) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
-  if (session.user.tipo !== "motorista") {
+  if (session.user.tipo !== "vendedor") {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
   }
 
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     .from("profiles")
     .select("id, nome, email, celular, tipo, profissao, stripe_account_id, stripe_account_status, avatar_url")
     .eq("id", userId)
-    .eq("tipo", "motorista")
+    .eq("tipo", "vendedor")
     .single();
 
   if (error) {
@@ -82,8 +82,8 @@ export async function GET(request: Request) {
         .from("profiles")
         .insert({
           id: userId,
-          tipo: "motorista",
-          nome: session.user.name || "Motorista",
+          tipo: "vendedor",
+          nome: session.user.name || "Vendedor",
           email: session.user.email,
           celular: userPhone, // Use properly typed variable
           stripe_account_status: "unconnected"
@@ -92,9 +92,9 @@ export async function GET(request: Request) {
         .single();
 
       if (createError) {
-        console.error("Erro ao criar perfil do motorista:", createError);
+        console.error("Erro ao criar perfil do vendedor:", createError);
         return NextResponse.json(
-          { error: "Erro ao criar perfil do motorista" },
+          { error: "Erro ao criar perfil do vendedor" },
           { status: 500 }
         );
       }
@@ -102,9 +102,9 @@ export async function GET(request: Request) {
       return NextResponse.json(newProfile);
     }
 
-    console.error("Erro ao buscar perfil do motorista:", error);
+    console.error("Erro ao buscar perfil do vendedor:", error);
     return NextResponse.json(
-      { error: "Erro ao buscar perfil do motorista" },
+      { error: "Erro ao buscar perfil do vendedor" },
       { status: 500 }
     );
   }
@@ -119,7 +119,7 @@ export async function PUT(request: Request) {
   if (!session || !session.user?.id) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
-  if (session.user.tipo !== "motorista") {
+  if (session.user.tipo !== "vendedor") {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
   }
 
@@ -165,14 +165,14 @@ export async function PUT(request: Request) {
     .from("profiles")
     .update(allowedUpdates)
     .eq("id", userId)
-    .eq("tipo", "motorista")
+    .eq("tipo", "vendedor")
     .select("id, nome, email, celular, tipo, profissao, stripe_account_id, stripe_account_status, avatar_url") // Return updated profile
     .single();
 
   if (error) {
-    console.error("Erro ao atualizar perfil do motorista:", error);
+    console.error("Erro ao atualizar perfil do vendedor:", error);
     return NextResponse.json(
-      { error: "Erro ao atualizar perfil do motorista" },
+      { error: "Erro ao atualizar perfil do vendedor" },
       { status: 500 }
     );
   }

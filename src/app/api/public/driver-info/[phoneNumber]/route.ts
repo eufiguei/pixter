@@ -24,25 +24,25 @@ export async function GET(
       .from("profiles")
       .select("id, nome, profissao, avatar_url, stripe_account_id, celular, tipo")
       .eq("celular", e164)
-      .eq("tipo", "motorista")
+      .eq("tipo", "vendedor")
       .maybeSingle();
 
     if (error) {
       console.error("public driver-info error:", error);
       return NextResponse.json(
-        { error: "Erro ao buscar informações do motorista." },
+        { error: "Erro ao buscar informações do vendedor." },
         { status: 500 }
       );
     }
     if (!prof) {
       return NextResponse.json(
-        { error: "Motorista não encontrado." },
+        { error: "Vendedor não encontrado." },
         { status: 404 }
       );
     }
     if (!prof.stripe_account_id) {
       return NextResponse.json(
-        { error: "Motorista não habilitado para pagamentos." },
+        { error: "Vendedor não habilitado para pagamentos." },
         { status: 404 }
       );
     }

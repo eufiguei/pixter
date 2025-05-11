@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     console.log("Supabase OTP initiated for:", formattedPhone);
     return NextResponse.json({
       success: true,
-      message: "Código enviado com sucesso! Verifique seu WhatsApp/SMS.",
+      message: "Código enviado com sucesso! Verifique seu Celular/SMS.",
     });
   } catch (error: any) {
     console.error("Erro geral em send-verification:", error);

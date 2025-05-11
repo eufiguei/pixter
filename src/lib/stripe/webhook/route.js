@@ -77,14 +77,14 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
     // Registra o pagamento no banco de dados
     await supabase.from('pagamentos').insert({
       stripe_payment_id: id,
-      motorista_id: driverId,
+      vendedor_id: driverId,
       valor: amount / 100, // Converte de centavos para reais
       metodo: payment_method_types[0],
       status: 'succeeded',
       created_at: new Date().toISOString()
     });
     
-    // Processa a transferência para o motorista
+    // Processa a transferência para o vendedor
     // Isso pode ser feito aqui ou em um job separado
     
   } catch (error) {
@@ -99,7 +99,7 @@ async function handleAccountUpdated(account) {
     const { id, metadata, payouts_enabled } = account;
     const { driverId } = metadata;
     
-    // Atualiza o status da conta do motorista
+    // Atualiza o status da conta do vendedor
     if (driverId) {
       await supabase.from('profiles').update({
         stripe_account_id: id,

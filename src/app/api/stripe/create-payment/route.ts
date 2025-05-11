@@ -48,18 +48,18 @@ export async function POST(request: Request) {
       .from('profiles') // Assuming drivers are in 'profiles' table
       .select('nome, stripe_connect_id') // Select necessary fields
       .eq('id', driverId)
-      .eq('tipo', 'motorista')
+      .eq('tipo', 'vendedor')
       .single();
 
     if (driverError || !driverProfile) {
       console.error('Driver fetch error:', driverError);
-      return NextResponse.json({ error: 'Motorista não encontrado' }, { status: 404 });
+      return NextResponse.json({ error: 'Vendedor não encontrado' }, { status: 404 });
     }
 
     const stripeConnectAccountId = driverProfile.stripe_connect_id;
     if (!stripeConnectAccountId) {
       return NextResponse.json(
-        { error: 'Motorista não está habilitado para receber pagamentos online.' },
+        { error: 'Vendedor não está habilitado para receber pagamentos online.' },
         { status: 400 }
       );
     }
@@ -78,8 +78,8 @@ export async function POST(request: Request) {
           price_data: {
             currency: 'brl',
             product_data: {
-              name: 'Pagamento para Motorista',
-              description: `Pixter - ${driverProfile.nome || 'Motorista'}`,
+              name: 'Pagamento para Vendedor',
+              description: `Pixter - ${driverProfile.nome || 'Vendedor'}`,
               // images: ['your_logo_url'] // Optional: Add your logo
             },
             unit_amount: totalAmountCents, // Charge the total amount as one item

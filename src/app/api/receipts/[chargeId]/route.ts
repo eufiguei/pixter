@@ -216,7 +216,7 @@ export async function GET(
       // If driver is requesting, authenticate and fetch their profile
       const { data: { session }, error: sessionError } = await supabaseAuth.auth.getSession();
       if (sessionError || !session) {
-        return NextResponse.json({ error: "Não autorizado para recibo do motorista" }, { status: 401 });
+        return NextResponse.json({ error: "Não autorizado para recibo do vendedor" }, { status: 401 });
       }
       const userId = session.user.id;
       const { data: profile, error: profileError } = await supabase
@@ -227,7 +227,7 @@ export async function GET(
 
       if (profileError || !profile) {
         console.error("Driver profile error:", profileError);
-        return NextResponse.json({ error: "Perfil do motorista não encontrado." }, { status: 404 });
+        return NextResponse.json({ error: "Perfil do vendedor não encontrado." }, { status: 404 });
       }
       // Security check: Ensure the requested charge belongs to this driver\'s Stripe account
       if (!stripeAccountId) { // Infer if not found via transfer/on_behalf_of
@@ -254,7 +254,7 @@ export async function GET(
     }
 
     // Fallback names/details if profile lookup failed or wasn\'t needed
-    const driverName = driverProfile?.nome || "Motorista Pixter";
+    const driverName = driverProfile?.nome || "Vendedor Pixter";
     const driverProfession = driverProfile?.profissao || "Profissional";
     // Corrected line 260:
     const driverPhone = driverProfile?.celular?.replace(/\D/g, '') || null;

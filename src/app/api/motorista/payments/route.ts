@@ -1,4 +1,4 @@
-// src/app/api/motorista/payments/route.ts
+// src/app/api/vendedor/payments/route.ts
 
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
@@ -73,7 +73,7 @@ async function getPaymentDetails(tx: Stripe.BalanceTransaction, stripeAccountId:
 }
 
 export async function GET(request: Request) {
-  console.log("[PaymentsAPI] Received GET request for motorista payments.");
+  console.log("[PaymentsAPI] Received GET request for vendedor payments.");
 
   if (!stripe) {
     console.error("[PaymentsAPI] Stripe not initialized. STRIPE_SECRET_KEY might be missing.");
@@ -81,7 +81,7 @@ export async function GET(request: Request) {
   }
 
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id || session.user.tipo !== "motorista") {
+  if (!session?.user?.id || session.user.tipo !== "vendedor") {
     console.warn("[PaymentsAPI] Unauthorized access attempt.");
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }

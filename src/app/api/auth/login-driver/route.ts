@@ -55,7 +55,7 @@ export async function POST(request: Request) {
         );
     }
 
-    // 4. Verification successful, user is logged in. Now check if they are a motorista.
+    // 4. Verification successful, user is logged in. Now check if they are a vendedor.
     const userId = otpData.user.id;
 
     // Use supabaseAdmin for a reliable check, bypassing RLS if needed
@@ -70,23 +70,23 @@ export async function POST(request: Request) {
         // Log out the user if profile check fails
         await supabase.auth.signOut(); // Use the route handler client to sign out
         return NextResponse.json(
-            { error: "Erro ao buscar perfil do motorista." },
+            { error: "Erro ao buscar perfil do vendedor." },
             { status: 500 }
         );
     }
 
-    if (!profileData || profileData.tipo?.toLowerCase() !== "motorista") {
-        console.log("User is not a motorista or profile missing. Type:", profileData?.tipo);
+    if (!profileData || profileData.tipo?.toLowerCase() !== "vendedor") {
+        console.log("User is not a vendedor or profile missing. Type:", profileData?.tipo);
         // Log out the user as they shouldn't access the driver section
         await supabase.auth.signOut(); // Use the route handler client to sign out
         return NextResponse.json(
-            { error: "Acesso não autorizado. Este usuário não é um motorista." },
+            { error: "Acesso não autorizado. Este usuário não é um vendedor." },
             { status: 403 } // Forbidden
         );
     }
 
-    // 5. Success: Code verified, session created, user is a motorista
-    console.log("Motorista login successful for user:", userId);
+    // 5. Success: Code verified, session created, user is a vendedor
+    console.log("Vendedor login successful for user:", userId);
     // The session is automatically handled by the Auth Helpers middleware and client.
     // Return success and potentially user info (but not the session object itself from here).
     return NextResponse.json({
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
       message: "Login realizado com sucesso!",
       userId: userId,
       // You might return minimal user details if needed by the frontend immediately
-      // user: { id: otpData.user.id, email: otpData.user.email, phone: otpData.user.phone, tipo: 'motorista' }
+      // user: { id: otpData.user.id, email: otpData.user.email, phone: otpData.user.phone, tipo: 'vendedor' }
     });
 
   } catch (error: any) {

@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const driverId = searchParams.get("driverId");
 
     if (!driverId) {
-      return NextResponse.json({ error: "ID do motorista não fornecido." }, { status: 400 });
+      return NextResponse.json({ error: "ID do vendedor não fornecido." }, { status: 400 });
     }
 
     // 1. Fetch driver profile to get phone number
@@ -17,12 +17,12 @@ export async function GET(request: NextRequest) {
       .from("profiles")
       .select("celular")
       .eq("id", driverId)
-      .eq("tipo", "motorista") // Ensure it's a driver
+      .eq("tipo", "vendedor") // Ensure it's a driver
       .single();
 
     if (profileError || !profile || !profile.celular) {
       console.error("Error fetching profile or missing phone number:", profileError?.message);
-      return NextResponse.json({ error: "Perfil do motorista não encontrado ou número de celular ausente." }, { status: 404 });
+      return NextResponse.json({ error: "Perfil do vendedor não encontrado ou número de celular ausente." }, { status: 404 });
     }
 
     // 2. Construct the public payment URL
