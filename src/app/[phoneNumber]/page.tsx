@@ -12,13 +12,14 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { signOut, useSession } from "next-auth/react";
-import { LogIn, LogOut, User, Phone } from "lucide-react"; // Added Phone icon
+// Corrected: Ensure all icons including Settings are from lucide-react
+import { LogIn, LogOut, User, Phone, Settings } from "lucide-react"; 
 
 const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ""
 );
 
-const defaultAvatar = "/images/avatars/avatar_1.png"; // Ensure this path is correct or use a placeholder
+const defaultAvatar = "/images/avatars/avatar_1.png"; 
 
 const formatPhoneNumber = (phone: string) => {
   const digits = phone.replace(/\D/g, "");
@@ -26,10 +27,10 @@ const formatPhoneNumber = (phone: string) => {
   if (nationalNumber.length >= 10) {
     const areaCode = nationalNumber.substring(0, 2);
     const number = nationalNumber.substring(2);
-    if (nationalNumber.length === 11) { // (XX) XXXXX-XXXX
+    if (nationalNumber.length === 11) { 
         return `(${areaCode}) ${number.substring(0,5)}-${number.substring(5)}`;
     }
-    return `(${areaCode}) ${number.substring(0,4)}-${number.substring(4)}`; // (XX) XXXX-XXXX
+    return `(${areaCode}) ${number.substring(0,4)}-${number.substring(4)}`; 
   }
   return nationalNumber;
 };
@@ -124,7 +125,7 @@ export default function VendedorPaymentPage({
   const handleAmountInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     const digits = value.replace(/\D/g, "");
-    setRawAmountDigits(digits.slice(0, 9)); // Max R$ 9.999.999,99
+    setRawAmountDigits(digits.slice(0, 9)); 
   };
 
   useEffect(() => {
@@ -149,8 +150,8 @@ export default function VendedorPaymentPage({
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              amount: num, // Send amount in cents
-              driverPhoneNumber: phoneNumber, // Ensure backend uses this correctly
+              amount: num, 
+              driverPhoneNumber: phoneNumber, 
             }),
           });
           if (!res.ok) {
@@ -166,15 +167,13 @@ export default function VendedorPaymentPage({
       }, 500);
     } else {
       setClientSecret("");
-      if (!rawAmountDigits) setError(""); // Clear error if input is empty
+      if (!rawAmountDigits) setError(""); 
     }
   }, [rawAmountDigits, phoneNumber]);
 
   const handleSuccess = (pi: any) => {
     setPaymentSuccess(true);
     setPaymentDetails(pi);
-    // Potentially redirect or show a more detailed success message
-    // router.push(`/pagamento/sucesso?payment_intent=${pi.id}`);
   };
 
   if (loadingInfo) {
@@ -185,7 +184,7 @@ export default function VendedorPaymentPage({
     );
   }
 
-  if (error && !vendedorInfo?.profile) { // Show error if info loading failed and no profile
+  if (error && !vendedorInfo?.profile) { 
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
         <div className="p-8 bg-white rounded-lg shadow-xl text-center max-w-md">
@@ -200,7 +199,7 @@ export default function VendedorPaymentPage({
   }
   
   const profile = vendedorInfo?.profile;
-  if (!profile) { // Handles case where vendedorInfo is fetched but profile is missing
+  if (!profile) { 
       return (
           <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
               <div className="p-8 bg-white rounded-lg shadow-xl text-center max-w-md">
@@ -219,7 +218,6 @@ export default function VendedorPaymentPage({
       <main className="flex-grow flex flex-col items-center p-4 sm:p-6 md:p-8">
         <div className="w-full max-w-md bg-white rounded-xl shadow-2xl p-6 sm:p-8 space-y-6">
           
-          {/* Logged-in User Info / Sign In/Out links - Top right of the card */}
           <div className="flex justify-end w-full -mt-2 -mr-2 sm:mt-0 sm:mr-0">
             <div className="space-x-3 text-xs sm:text-sm">
               {!session ? (
@@ -252,7 +250,6 @@ export default function VendedorPaymentPage({
             </div>
           </div>
 
-          {/* Vendedor Info - Centered */} 
           <div className="flex flex-col items-center text-center space-y-2 pt-2">
             <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden relative shadow-md">
               <Image
@@ -261,7 +258,7 @@ export default function VendedorPaymentPage({
                 fill
                 sizes="(max-width: 640px) 80px, 96px"
                 style={{ objectFit: "cover" }}
-                onError={(e) => { e.currentTarget.src = defaultAvatar; }} // Fallback for broken images
+                onError={(e) => { e.currentTarget.src = defaultAvatar; }} 
                 priority
               />
             </div>
@@ -280,7 +277,6 @@ export default function VendedorPaymentPage({
             )}
           </div>
 
-          {/* Pixter Logo - Centered, below vendor info */} 
           <div className="flex items-center justify-center pt-2 pb-4">
             <Link href="/" className="flex items-center space-x-2" aria-label="Pixter Home">
               <div className="w-9 h-9 sm:w-10 sm:h-10 bg-purple-600 rounded-lg flex items-center justify-center shadow">
@@ -343,4 +339,3 @@ export default function VendedorPaymentPage({
     </div>
   );
 }
-
