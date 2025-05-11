@@ -165,7 +165,7 @@ export async function GET(request: Request) {
     const pendingBalance = await stripe.balanceTransactions.list({
       ...listParams,
       type: 'charge',
-      status: 'pending'
+      available_on: { gt: Math.floor(Date.now() / 1000) } // ✅ Valid filter
     }, { stripeAccount: stripeAccountId });
     
     // Then get the actual charge details for each pending transaction
