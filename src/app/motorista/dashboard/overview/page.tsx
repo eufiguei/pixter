@@ -482,37 +482,6 @@ export default function DriverDashboardPage() {
             </button>
           </Link>
         </section>
-
-        {/* Minha Página de Pagamento */}
-        <section className="bg-white p-4 rounded-lg shadow-md flex flex-col items-center">
-          <h2 className="text-xl font-semibold mb-4 text-gray-700">
-            Minha Página de Pagamento
-          </h2>
-          <input
-            readOnly
-            value={paymentPageLink}
-            className="w-full mb-4 px-3 py-2 border rounded text-center bg-gray-50"
-          />
-          <button
-            onClick={() => navigator.clipboard.writeText(paymentPageLink)}
-            className="w-full mb-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
-          >
-            Copiar link
-          </button>
-          {qrCodeUrl && <img src={qrCodeUrl} alt="QR Code" width={150} height={150} />}
-          <canvas ref={qrCodeRef} style={{ display: "none" }} />
-          <button
-            onClick={() => {
-              const a = document.createElement("a");
-              a.download = `qr_${profile.id}.png`;
-              a.href = qrCodeRef.current!.toDataURL();
-              a.click();
-            }}
-            className="mt-4 w-full py-2 border border-purple-600 rounded hover:bg-purple-50"
-          >
-            Baixar QR Code
-          </button>
-        </section>
       </div>
     </div>
   );
