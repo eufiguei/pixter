@@ -30,40 +30,48 @@ export async function GET(request: Request) {
   }
   const stripeAccount = profile.stripe_account_id;
 
-  // 3) First verify the Stripe account exists and is active
   try {
-    console.log(`Verifying Stripe account: ${stripeAccount}`);
-    const account = await stripe.accounts.retrieve(stripeAccount);
-    console.log('Stripe account status:', account.details_submitted, account.payouts_enabled, account.charges_enabled);
+    console.log(`Fetching payments for Stripe account: ${stripeAccount}`);
     
-    if (!account.details_submitted || !account.payouts_enabled || !account.charges_enabled) {
-      console.warn('Stripe account not fully set up:', {
-        details_submitted: account.details_submitted,
-        payouts_enabled: account.payouts_enabled,
-        charges_enabled: account.charges_enabled
-      });
-    }
-
-    // 4) Fetch the balance on the CONNECTED account
-    console.log(`Fetching balance for Stripe account: ${stripeAccount}`);
-    
-    const balance = await stripe.balance.retrieve(
-      {},
+    // Fetch the last 10 payments for this connected account
+    const payments = await stripe.charges.list(
+      {
+        limit: 10,
+        expand: ['data.balance_transaction'],
+      },
       { stripeAccount }
     );
     
-    console.log('Raw balance response:', JSON.stringify(balance, null, 2));
-
-    // Find the BRL balance entry
-    const availableBRL = balance.available.find((b) => b.currency === "brl")?.amount ?? 0;
-    const pendingBRL = balance.pending.find((b) => b.currency === "brl")?.amount ?? 0;
+    console.log(`Found ${payments.data.length} payments`);
     
-    console.log('Available BRL:', availableBRL, 'Pending BRL:', pendingBRL);
-
+    // Calculate total amounts
+    const totalPaid = payments.data.reduce((sum, charge) => {
+      if (charge.paid && charge.status === 'succeeded') {
+        return sum + charge.amount;
+      }
+      return sum;
+    }, 0);
+    
+    // Format the response
+    const formattedPayments = payments.data.map(charge => ({
+      id: charge.id,
+      amount: charge.amount / 100, // Convert to reais
+      currency: charge.currency,
+      status: charge.status,
+      paid: charge.paid,
+      created: new Date(charge.created * 1000).toISOString(),
+      description: charge.description || 'Sem descrição',
+      payment_method: charge.payment_method_details?.type || 'unknown',
+      receipt_url: charge.receipt_url
+    }));
+    
+    console.log(`Total paid: ${totalPaid / 100} ${payments.data[0]?.currency?.toUpperCase() || 'BRL'}`);
+    
     return NextResponse.json({
-      available: availableBRL, // in cents
-      pending: pendingBRL,     // in cents
-      currency: "BRL",
+      total_paid: totalPaid, // in cents
+      currency: payments.data[0]?.currency?.toUpperCase() || 'BRL',
+      payments: formattedPayments,
+      count: payments.data.length
     });
   } catch (err: any) {
     console.error("Stripe Balance Retrieve Error:", err);
