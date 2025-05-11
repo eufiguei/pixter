@@ -38,5 +38,12 @@ declare module 'lucide-react' {
   export const EyeOff: any;
   export const User: any;
   export const Lock: any;
+  export const Menu: any;
+  export const X: any;
+  export const ChevronDown: any;
+  export const CreditCard: any;
+  export const History: any;
+  export const Settings: any;
+  export const ExternalLink: any;
   // Add any other icons you're using
 }
