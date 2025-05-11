@@ -215,7 +215,7 @@ export async function GET(request: Request) {
       description: charge.description || "Pagamento pendente",
       created: new Date(charge.created * 1000).toISOString(),
       type: "charge", // Pending items are charges
-      metodo: charge.payment_method_details?.type || charge.payment_method_types?.[0] || "card",
+      metodo: charge.payment_method_details?.type || "Pagamento pendente",
       cliente: charge.billing_details?.email || charge.receipt_email || (charge.customer as Stripe.Customer)?.email || "Não informado",
       fee: charge.application_fee_amount ? formatAmount(charge.application_fee_amount, charge.currency) : "R$ 0,00",
       status: "pending",
