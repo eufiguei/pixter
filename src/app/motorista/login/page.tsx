@@ -115,10 +115,7 @@ export default function VendedorLogin() {
       if (newOtp[index]) {
         newOtp[index] = ""; // Clear current input
         setOtp(newOtp);
-        // Optionally, focus previous input if current was cleared and not the first one
-        // if (index > 0) inputsRef.current[index -1]?.focus(); 
       } else if (index > 0) {
-        // If current is empty and backspace is pressed, move to previous and clear it
         newOtp[index - 1] = "";
         setOtp(newOtp);
         inputsRef.current[index - 1]?.focus();
@@ -129,10 +126,8 @@ export default function VendedorLogin() {
         if (newOtp[index]) {
             newOtp[index] = "";
             setOtp(newOtp);
-            // No auto-focus change on delete, user might want to type in the same box
         }
     }
-    // Arrow key navigation (optional, but good for UX)
     else if (e.key === "ArrowLeft" && index > 0) {
       inputsRef.current[index - 1]?.focus();
     }
@@ -143,59 +138,42 @@ export default function VendedorLogin() {
 
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
-    const pastedData = e.clipboardData.getData("text/plain").replace(/\D/g, ""); // Get only digits
+    const pastedData = e.clipboardData.getData("text/plain").replace(/\D/g, "");
     if (!pastedData) return;
 
-    const newOtp = [...otp]; // Start with current OTP state or empty array
-    let currentFocusIndex = 0;
-
-    // Determine where paste started if possible (tricky without knowing target directly here)
-    // For simplicity, we assume paste can happen in any box but will try to fill from the first available or from box 0.
-    // The logic below fills from the start of the OTP array.
+    const newOtp = [...otp]; 
     for (let i = 0; i < otp.length; i++) {
       if (i < pastedData.length) {
         newOtp[i] = pastedData[i];
-      } else {
-        // newOtp[i] = ""; // Clear remaining if pasted data is shorter, or keep existing
       }
     }
     setOtp(newOtp);
 
-    // Focus the next empty input or the last input if all are filled
-    currentFocusIndex = Math.min(pastedData.length, otp.length - 1);
+    const currentFocusIndex = Math.min(pastedData.length, otp.length - 1);
     inputsRef.current[currentFocusIndex]?.focus();
     
-    // If pasted data fills all, try to submit or just focus last
     if (pastedData.length >= otp.length) {
         inputsRef.current[otp.length - 1]?.focus();
-        // Consider auto-submitting if full code is pasted and valid length
-        // if (newOtp.join("").length === otp.length) {
-        //   verificarCodigo(); // Be cautious with auto-submit
-        // }
     }
   };
 
   useEffect(() => {
-    if (otp.every((d) => d === "")) {
-      // inputsRef.current[0]?.focus(); // This might be too aggressive if user is deleting intentionally
-    }
+    // Optional: if (otp.every((d) => d === "")) { inputsRef.current[0]?.focus(); }
   }, [otp]);
   
-  // Auto-submit when OTP is complete
   useEffect(() => {
     const code = otp.join("");
     if (code.length === 6) {
       verificarCodigo();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [otp]); // Trigger when otp state changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otp]);
 
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white p-6 sm:p-8 rounded-lg shadow-xl">
         <div className="text-center mb-6">
           <Link href="/" className="inline-block mb-2">
-            {/* Replace with Pixter Logo Component if available */}
             <span className="text-4xl font-bold text-purple-600">Pixter</span>
           </Link>
           <h2 className="text-2xl font-semibold text-gray-800">Login de Vendedor</h2>
@@ -209,11 +187,11 @@ export default function VendedorLogin() {
             {error}
           </div>
         )}
-        {success && !codeSent && /* Show general success if not related to code sent */ (
+        {success && !codeSent &&
           <div className="bg-green-50 border-l-4 border-green-400 text-green-700 p-3 rounded mb-4 text-sm">
             {success}
           </div>
-        )}
+        }
 
         {!codeSent ? (
           <form onSubmit={(e) => { e.preventDefault(); enviarCodigo(); }} className="space-y-4">
@@ -231,7 +209,7 @@ export default function VendedorLogin() {
                   autoComplete="tel"
                   required
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, 	text.slice(0,11)))} // Allow only digits, max 11 for BR phone
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0,11))} 
                   disabled={loading}
                   placeholder="11987654321"
                   className={`flex-1 block w-full border-gray-300 rounded-r-md px-3 py-2.5 text-base shadow-sm focus:ring-purple-500 focus:border-purple-500 sm:text-sm ${loading ? "bg-gray-100" : ""}`}
@@ -261,7 +239,7 @@ export default function VendedorLogin() {
                 <input
                   key={i}
                   ref={(el) => (inputsRef.current[i] = el)}
-                  type="text" // Changed from "tel" to "text" with inputMode for better paste
+                  type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
                   maxLength={1}
@@ -288,7 +266,7 @@ export default function VendedorLogin() {
             ) : (
               <button
                 type="button"
-                onClick={enviarCodigo} // Resend code
+                onClick={enviarCodigo}
                 disabled={loading}
                 className="text-xs text-purple-600 hover:text-purple-500 hover:underline disabled:text-gray-400 disabled:no-underline"
               >
