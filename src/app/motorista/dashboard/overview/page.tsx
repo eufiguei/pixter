@@ -18,6 +18,7 @@ import {
   ResponsiveContainer,
   Legend
 } from "recharts";
+import Image from 'next/image';
 
 // Type for individual transaction/payment item
 interface TransactionItem {
@@ -401,7 +402,13 @@ export default function VendedorDashboardPage() {
           {qrCodeUrl && (
             <div className="mt-4 flex flex-col items-center">
                 <h3 className="text-md font-medium text-gray-700 mb-2">QR Code para Pagamento</h3>
-                <Image src={qrCodeUrl} alt="QR Code Pagamento" width={180} height={180} />
+                <Image
+                  src={qrCodeUrl}
+                  alt="QR Code Pagamento"
+                  width={180}
+                  height={180}
+                  className="border rounded-md"
+                />
                 <canvas ref={qrCodeRef} style={{ display: "none" }} /> 
             </div>
           )}
@@ -410,4 +417,3 @@ export default function VendedorDashboardPage() {
     </div>
   );
 }
-
