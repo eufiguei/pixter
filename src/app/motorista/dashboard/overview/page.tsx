@@ -9,9 +9,11 @@ import QRCode from "qrcode";
 import { format, subDays, subMonths, startOfWeek, endOfWeek, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-type BalanceEntry = {
-  amount: string;     // e.g. "R$ 500,00"
-  currency: string;   // "brl"
+// The API returns balance as numbers in cents
+type Balance = {
+  available: number;  // in cents
+  pending: number;    // in cents
+  currency: string;   // e.g. "brl"
 };
 
 type Transaction = {
@@ -39,7 +41,7 @@ export default function DriverDashboardPage() {
   const { data: session, status: sessionStatus } = useSession();
 
   const [profile, setProfile]           = useState<Profile | null>(null);
-  const [balance, setBalance]           = useState<{ available: BalanceEntry[]; pending: BalanceEntry[] } | null>(null);
+  const [balance, setBalance]           = useState<Balance | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState("");
@@ -108,8 +110,9 @@ export default function DriverDashboardPage() {
             // Don't throw, just set an error message and continue with default values
             setError(`Erro de pagamentos: ${data.error}`);
             setBalance({
-              available: [{ amount: "R$ 0,00", currency: "brl" }],
-              pending: [{ amount: "R$ 0,00", currency: "brl" }]
+              available: 0,
+              pending: 0,
+              currency: "brl"
             });
             setTransactions([]);
           }
@@ -118,8 +121,9 @@ export default function DriverDashboardPage() {
             console.log("Stripe connection needed:", data.message);
             // Set default empty values but continue rendering the page
             setBalance({
-              available: [{ amount: "R$ 0,00", currency: "brl" }],
-              pending: [{ amount: "R$ 0,00", currency: "brl" }]
+              available: 0,
+              pending: 0,
+              currency: "brl"
             });
             setTransactions([]);
             
@@ -144,8 +148,9 @@ export default function DriverDashboardPage() {
           console.error("Error fetching payment data:", error);
           setError("Erro ao carregar dados de pagamento. Por favor, tente novamente.");
           setBalance({
-            available: [{ amount: "R$ 0,00", currency: "brl" }],
-            pending: [{ amount: "R$ 0,00", currency: "brl" }]
+            available: 0,
+            pending: 0,
+            currency: "brl"
           });
           setTransactions([]);
         }
@@ -184,9 +189,20 @@ export default function DriverDashboardPage() {
     );
   }
 
-  // Show only the first available bucket (usually there's just one)
-  const formattedAvailable = balance.available[0]?.amount || "R$ 0,00";
-  const formattedPending   = balance.pending[0]?.amount;
+  // Format balance from cents to reais
+  const formatFromCents = (cents: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(cents / 100);
+  };
+
+  // Get the available and pending amounts (convert from cents to reais)
+  const availableInCents = typeof balance.available === 'number' ? balance.available : 0;
+  const pendingInCents = typeof balance.pending === 'number' ? balance.pending : 0;
+  
+  const formattedAvailable = formatFromCents(availableInCents);
+  const formattedPending = pendingInCents > 0 ? formatFromCents(pendingInCents) : null;
 
   return (
     <div className="p-4 md:p-8 space-y-8">
