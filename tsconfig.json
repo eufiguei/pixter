@@ -33,7 +33,7 @@
     "plugins": [
       { "name": "next" }
     ],
-    "types": ["next", "node", "react", "react-dom", "recharts"]
+    "types": ["next", "next-auth", "node", "react", "react-dom", "recharts"]
   },
 
   "include": [
