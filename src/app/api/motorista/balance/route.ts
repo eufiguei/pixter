@@ -30,18 +30,35 @@ export async function GET(request: Request) {
   }
   const stripeAccount = profile.stripe_account_id;
 
-  // 3) Fetch the balance on the CONNECTED account
+  // 3) First verify the Stripe account exists and is active
   try {
+    console.log(`Verifying Stripe account: ${stripeAccount}`);
+    const account = await stripe.accounts.retrieve(stripeAccount);
+    console.log('Stripe account status:', account.details_submitted, account.payouts_enabled, account.charges_enabled);
+    
+    if (!account.details_submitted || !account.payouts_enabled || !account.charges_enabled) {
+      console.warn('Stripe account not fully set up:', {
+        details_submitted: account.details_submitted,
+        payouts_enabled: account.payouts_enabled,
+        charges_enabled: account.charges_enabled
+      });
+    }
+
+    // 4) Fetch the balance on the CONNECTED account
+    console.log(`Fetching balance for Stripe account: ${stripeAccount}`);
+    
     const balance = await stripe.balance.retrieve(
       {},
       { stripeAccount }
     );
+    
+    console.log('Raw balance response:', JSON.stringify(balance, null, 2));
 
     // Find the BRL balance entry
-    const availableBRL =
-      balance.available.find((b) => b.currency === "brl")?.amount ?? 0;
-    const pendingBRL =
-      balance.pending.find((b) => b.currency === "brl")?.amount ?? 0;
+    const availableBRL = balance.available.find((b) => b.currency === "brl")?.amount ?? 0;
+    const pendingBRL = balance.pending.find((b) => b.currency === "brl")?.amount ?? 0;
+    
+    console.log('Available BRL:', availableBRL, 'Pending BRL:', pendingBRL);
 
     return NextResponse.json({
       available: availableBRL, // in cents
