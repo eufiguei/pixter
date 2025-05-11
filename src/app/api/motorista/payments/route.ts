@@ -52,14 +52,14 @@ async function getPaymentDetails(tx: Stripe.BalanceTransaction, stripeAccountId:
       }, { stripeAccount: stripeAccountId });
       
       chargeId = charge.id;
-      metodo = charge.payment_method_details?.type || charge.payment_method_types?.[0] || "Desconhecido";
+      metodo = charge.payment_method_details?.type || "Desconhecido";
       cliente = charge.billing_details?.email || charge.receipt_email || (charge.customer as Stripe.Customer)?.email || "Não informado";
       receipt_url = charge.receipt_url;
       console.log(`[PaymentsAPI] Charge details for ${tx.source}: metodo=${metodo}, cliente=${cliente}, receipt_url=${receipt_url}`);
     } else if (tx.source && typeof tx.source === "object" && tx.source.object === "charge") {
       const charge = tx.source as Stripe.Charge;
       chargeId = charge.id;
-      metodo = charge.payment_method_details?.type || charge.payment_method_types?.[0] || "Desconhecido";
+      metodo = charge.payment_method_details?.type || "Desconhecido";
       cliente = charge.billing_details?.email || charge.receipt_email || "Não informado";
       receipt_url = charge.receipt_url;
       console.log(`[PaymentsAPI] Expanded charge details: metodo=${metodo}, cliente=${cliente}, receipt_url=${receipt_url}`);
