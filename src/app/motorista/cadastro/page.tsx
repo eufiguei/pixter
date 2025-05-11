@@ -41,9 +41,12 @@ export default function CadastroMotorista() {
   const [success, setSuccess] = useState('');
 
   /* ──────────────── Refs ──────────────── */
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  // @ts-ignore - generic removed, use type assertion instead
+  const videoRef = useRef(null as HTMLVideoElement | null);
+  // @ts-ignore - generic removed, use type assertion instead
+  const canvasRef = useRef(null as HTMLCanvasElement | null);
+  // @ts-ignore - generic removed, use type assertion instead
+  const streamRef = useRef(null as MediaStream | null);
 
   /* ──────────────── Avatares ──────────────── */
   const avatars = Array.from({ length: 9 }, (_, i) => `/images/avatars/avatar_${i + 1}.png`);
