@@ -156,13 +156,30 @@ export async function GET(request: Request) {
     console.log(`[PaymentsAPI] Fetching pending charges for ${stripeAccountId}`);
     const pendingChargesParams: Stripe.ChargeListParams = { 
       limit: 100, 
-      status: 'pending', 
       expand: ['balance_transaction', 'customer'] 
     };
     if (listParams.created) {
       pendingChargesParams.created = listParams.created;
     }
-    const pendingStripeCharges = await stripe.charges.list(pendingChargesParams, { stripeAccount: stripeAccountId });
+    // First get pending balance transactions
+    const pendingBalance = await stripe.balanceTransactions.list({
+      ...listParams,
+      type: 'charge',
+      status: 'pending'
+    }, { stripeAccount: stripeAccountId });
+    
+    // Then get the actual charge details for each pending transaction
+    const pendingChargeIds = pendingBalance.data
+      .map(tx => typeof tx.source === 'string' ? tx.source : tx.source?.id)
+      .filter((id): id is string => !!id && (id.startsWith('ch_') || id.startsWith('py_')));
+    
+    const pendingStripeCharges = {
+      data: await Promise.all(
+        pendingChargeIds.map(id => 
+          stripe.charges.retrieve(id, { expand: ['balance_transaction', 'customer'] }, { stripeAccount: stripeAccountId })
+        )
+      )
+    };
     console.log(`[PaymentsAPI] Raw pending charges for ${stripeAccountId} (${pendingStripeCharges.data.length} found):`, JSON.stringify(pendingStripeCharges.data.slice(0,3), null, 2)); // Log first 3
 
     const formattedAvailable = balance.available.map(b => ({ amount: formatAmount(b.amount, b.currency), currency: b.currency.toUpperCase() }));
