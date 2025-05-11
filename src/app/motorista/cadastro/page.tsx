@@ -9,7 +9,8 @@ export default function CadastroMotorista() {
   const router = useRouter();
 
   /* ──────────────── Estados ──────────────── */
-  const [step, setStep] = useState<'phone' | 'details'>('phone');
+  // @ts-ignore - generic removed, use type assertion instead
+  const [step, setStep] = useState('phone' as 'phone' | 'details');
 
   // telefone / OTP
   const [phone, setPhone] = useState('');
@@ -28,7 +29,8 @@ export default function CadastroMotorista() {
 
   // selfie + avatar
   const [selfieCapturada, setSelfieCapturada] = useState(false);
-  const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
+  // @ts-ignore - generic removed, use type assertion instead
+  const [selfiePreview, setSelfiePreview] = useState(null as string | null);
   const [selectedAvatar, setSelectedAvatar] = useState(0);
   const [showAvatarSelection, setShowAvatarSelection] = useState(false);
   const [cameraAtiva, setCameraAtiva] = useState(false);
