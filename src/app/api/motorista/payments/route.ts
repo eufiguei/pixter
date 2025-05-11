@@ -154,8 +154,14 @@ export async function GET(request: Request) {
     console.log(`[PaymentsAPI] Raw completed transactions for ${stripeAccountId} (${completedTransactions.data.length} found):`, JSON.stringify(completedTransactions.data.slice(0,3), null, 2)); // Log first 3
 
     console.log(`[PaymentsAPI] Fetching pending charges for ${stripeAccountId}`);
-    const pendingChargesParams: Stripe.ChargeListParams = { limit: 100, status: "pending", expand:["data.balance_transaction", "data.customer"] };
-    if(listParams.created) pendingChargesParams.created = listParams.created;
+    const pendingChargesParams: Stripe.ChargeListParams = { 
+      limit: 100, 
+      status: 'pending', 
+      expand: ['balance_transaction', 'customer'] 
+    };
+    if (listParams.created) {
+      pendingChargesParams.created = listParams.created;
+    }
     const pendingStripeCharges = await stripe.charges.list(pendingChargesParams, { stripeAccount: stripeAccountId });
     console.log(`[PaymentsAPI] Raw pending charges for ${stripeAccountId} (${pendingStripeCharges.data.length} found):`, JSON.stringify(pendingStripeCharges.data.slice(0,3), null, 2)); // Log first 3
 
