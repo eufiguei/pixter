@@ -9,21 +9,24 @@ import QRCode from "qrcode";
 import { format, subDays, subMonths, startOfWeek, endOfWeek, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-// The API returns balance as numbers in cents
-type Balance = {
-  available: number;  // in cents
-  pending: number;    // in cents
-  currency: string;   // e.g. "brl"
+// The API returns payment information
+type Payment = {
+  id: string;
+  amount: number;     // in cents
+  currency: string;
+  status: string;
+  paid: boolean;
+  created: string;    // ISO date
+  description: string;
+  payment_method: string;
+  receipt_url?: string;
 };
 
-type Transaction = {
-  id: string;
-  amount: string;     // formatted
+type PaymentData = {
+  total_paid: number;  // in cents
   currency: string;
-  description: string;
-  created: string;    // ISO date
-  type: string;       // e.g. "payment"
-  fee?: string;       // formatted, if you include fees
+  payments: Payment[];
+  count: number;
 };
 
 type Profile = {
@@ -40,11 +43,10 @@ export default function DriverDashboardPage() {
   const router = useRouter();
   const { data: session, status: sessionStatus } = useSession();
 
-  const [profile, setProfile]           = useState<Profile | null>(null);
-  const [balance, setBalance]           = useState<Balance | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState("");
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [paymentPageLink, setPaymentPageLink] = useState("");
   const qrCodeRef = useRef<HTMLCanvasElement>(null);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
@@ -120,12 +122,12 @@ export default function DriverDashboardPage() {
           else if (data.needsConnection) {
             console.log("Stripe connection needed:", data.message);
             // Set default empty values but continue rendering the page
-            setBalance({
-              available: 0,
-              pending: 0,
-              currency: "brl"
+            setPaymentData({
+              total_paid: 0,
+              currency: "BRL",
+              payments: [],
+              count: 0
             });
-            setTransactions([]);
             
             // Set stripe status explicitly based on needsConnection flag
             setStripeStatus(prevStatus => ({
@@ -134,11 +136,14 @@ export default function DriverDashboardPage() {
             }));
           } else {
             // Normal case: Stripe is connected
-            const { balance: bal, transactions: txs } = data;
-            setBalance(bal);
-            setTransactions(txs);
+            setPaymentData({
+              total_paid: data.total_paid,
+              currency: data.currency,
+              payments: data.payments,
+              count: data.count
+            });
             
-            // Mark as verified if we got balance data successfully
+            // Mark as verified if we got payment data successfully
             setStripeStatus(prevStatus => ({
               ...prevStatus,
               status: "verified",
@@ -147,12 +152,12 @@ export default function DriverDashboardPage() {
         } catch (error) {
           console.error("Error fetching payment data:", error);
           setError("Erro ao carregar dados de pagamento. Por favor, tente novamente.");
-          setBalance({
-            available: 0,
-            pending: 0,
-            currency: "brl"
+          setPaymentData({
+            total_paid: 0,
+            currency: "BRL",
+            payments: [],
+            count: 0
           });
-          setTransactions([]);
         }
 
         // 4) Fetch Stripe status
@@ -180,7 +185,7 @@ export default function DriverDashboardPage() {
   if (loading) {
     return <div className="p-6 text-center">Carregando dashboard...</div>;
   }
-  if (error || !profile || !balance) {
+  if (error || !profile || !paymentData) {
     return (
       <div className="p-6 text-red-500">
         <p className="font-semibold">Erro ao carregar dashboard:</p>
@@ -197,12 +202,11 @@ export default function DriverDashboardPage() {
     }).format(cents / 100);
   };
 
-  // Get the available and pending amounts (convert from cents to reais)
-  const availableInCents = typeof balance.available === 'number' ? balance.available : 0;
-  const pendingInCents = typeof balance.pending === 'number' ? balance.pending : 0;
-  
-  const formattedAvailable = formatFromCents(availableInCents);
-  const formattedPending = pendingInCents > 0 ? formatFromCents(pendingInCents) : null;
+  // Format the total paid amount
+  const formattedTotal = paymentData ? new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: paymentData.currency || 'BRL',
+  }).format(paymentData.total_paid / 100) : 'R$ 0,00';
 
   return (
     <div className="p-4 md:p-8 space-y-8">
@@ -210,22 +214,22 @@ export default function DriverDashboardPage() {
         Olá, {profile.nome || "Motorista"}!
       </h1>
 
-      {/* Saldo Disponível */}
+      {/* Total Recebido */}
       <section className="bg-white p-6 rounded-lg shadow-md">
         <div className="flex justify-between items-start">
           <div>
-            <h2 className="text-xl font-semibold mb-2">Saldo Disponível</h2>
-            <p className="text-4xl font-bold text-gray-900">{formattedAvailable}</p>
-            {formattedPending && (
+            <h2 className="text-xl font-semibold mb-2">Total Recebido</h2>
+            <p className="text-4xl font-bold text-gray-900">{formattedTotal}</p>
+            {paymentData?.payments?.length > 0 && (
               <p className="mt-1 text-sm text-gray-500">
-                (Pendente: {formattedPending})
+                {paymentData.count} pagamento{paymentData.count !== 1 ? 's' : ''} no total
               </p>
             )}
           </div>
           <div className="text-right">
-            <h2 className="text-xl font-semibold mb-2">Últimos Meses</h2>
-            <p className="text-4xl font-bold text-gray-900">{formattedAvailable}</p>
-            <p className="mt-1 text-xs text-gray-500">Últimos 30 dias</p>
+            <h2 className="text-xl font-semibold mb-2">Últimos Pagamentos</h2>
+            <p className="text-2xl font-bold text-gray-900">{paymentData?.payments?.length || 0}</p>
+            <p className="mt-1 text-xs text-gray-500">Últimos 10 pagamentos</p>
           </div>
         </div>
       </section>
@@ -335,15 +339,15 @@ export default function DriverDashboardPage() {
         )}
       </section>
       
-      {/* Movimentações / Transactions */}
+      {/* Últimos Pagamentos */}
       <section className="bg-white p-4 rounded-lg shadow-md">
-        <h2 className="text-xl font-semibold mb-4">Pagamentos</h2>
-        {transactions.length > 0 ? (
+        <h2 className="text-xl font-semibold mb-4">Últimos Pagamentos</h2>
+        {paymentData?.payments?.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  {["Data", "Valor", "Descrição", "Taxa", "Tipo"].map((th) => (
+                  {["Data", "Valor", "Status", "Método", "Recibo"].map((th) => (
                     <th
                       key={th}
                       className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase"
@@ -354,22 +358,41 @@ export default function DriverDashboardPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {transactions.map((t) => (
-                  <tr key={t.id}>
+                {paymentData.payments.map((payment) => (
+                  <tr key={payment.id}>
                     <td className="px-4 py-2 text-sm text-gray-700">
-                      {new Date(t.created).toLocaleDateString("pt-BR")}
+                      {new Date(payment.created).toLocaleDateString("pt-BR")}
                     </td>
                     <td className="px-4 py-2 text-sm font-medium text-gray-900">
-                      {t.amount}
+                      {new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: payment.currency || 'BRL',
+                      }).format(payment.amount / 100)}
                     </td>
-                    <td className="px-4 py-2 text-sm text-gray-700">
-                      {t.description || "-"}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-gray-700">
-                      {t.fee || "-"}
+                    <td className="px-4 py-2">
+                      <span className={`px-2 py-1 text-xs rounded-full ${
+                        payment.status === 'succeeded' ? 'bg-green-100 text-green-800' : 
+                        payment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {payment.status === 'succeeded' ? 'Pago' : 
+                         payment.status === 'pending' ? 'Pendente' : 'Falha'}
+                      </span>
                     </td>
                     <td className="px-4 py-2 text-sm text-gray-700 capitalize">
-                      {t.type}
+                      {payment.payment_method}
+                    </td>
+                    <td className="px-4 py-2 text-sm">
+                      {payment.receipt_url ? (
+                        <a 
+                          href={payment.receipt_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-purple-600 hover:underline"
+                        >
+                          Ver recibo
+                        </a>
+                      ) : 'N/A'}
                     </td>
                   </tr>
                 ))}
@@ -377,7 +400,7 @@ export default function DriverDashboardPage() {
             </table>
           </div>
         ) : (
-          <p className="text-gray-500">Nenhuma movimentação encontrada.</p>
+          <p className="text-gray-500">Nenhum pagamento encontrado.</p>
         )}
       </section>
 
