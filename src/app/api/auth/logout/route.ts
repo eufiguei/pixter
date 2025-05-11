@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   try {
     // Sign out the user
     const { error } = await supabase.auth.signOut();
-
+    
     if (error) {
       console.error('Error signing out:', error);
       return NextResponse.json(

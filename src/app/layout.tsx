@@ -5,6 +5,7 @@ import './globals.css'
 
 import { AuthProvider } from '@/lib/auth/session'
 import NavBar from '@/components/NavBar'
+import NavBarWrapper from '@/components/NavBarWrapper'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -25,7 +26,8 @@ export default function RootLayout({
         {/* Contexto de autenticação */}
         <AuthProvider>
           {/* Barra de navegação com logo P + dropdown */}
-          <NavBar />
+          {/* <NavBar /> */}
+          <NavBarWrapper/>
 
           {/* Conteúdo das rotas */}
           {children}

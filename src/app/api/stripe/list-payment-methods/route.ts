@@ -1,12 +1,10 @@
 // src/app/api/stripe/list-payment-methods/route.ts
 import { NextResponse } from "next/server";
-// @ts-ignore - Bypassing TypeScript errors for NextAuth imports
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth/options"; // Adjust path as needed
-import Stripe from "stripe"; // Fixed import syntax
+import { Stripe } from "stripe";
 
 // Initialize Stripe (Use environment variables!)
-// @ts-ignore - Bypass process.env error
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_YOUR_KEY", {
   apiVersion: "2022-11-15", // Use your desired API version
 });
@@ -14,25 +12,16 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_YOUR_KEY", {
 export async function GET(request: Request) {
   try {
     // 1. Get session and Stripe Customer ID
-    const session = await getServerSession(authOptions) as {
-      user?: {
-        id: string;
-        tipo?: string;
-        email?: string;
-        name?: string;
-        stripeCustomerId?: string;
-      }
-    } | null;
+    const session = await getServerSession(authOptions);
 
-    // Access stripe customer ID after proper typing
-    const stripeCustomerId = session?.user?.stripeCustomerId;
+    // Type assertion to access custom properties
+    const stripeCustomerId = (session?.user as any)?.stripeCustomerId;
 
-    if (!session || !session.user || !stripeCustomerId) {
+    if (!session || !stripeCustomerId) {
       return NextResponse.json({ error: "Usuário não autenticado ou não encontrado." }, { status: 401 });
     }
 
     // 2. List payment methods from Stripe
-    // @ts-ignore - Bypassing TypeScript errors for Stripe API
     const paymentMethods = await stripe.paymentMethods.list({
       customer: stripeCustomerId,
       type: "card",

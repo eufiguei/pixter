@@ -9,10 +9,8 @@ interface OTPInputProps {
 }
 
 export default function OTPInput({ length, onChange }: OTPInputProps) {
-  // @ts-ignore - generic removed, use type assertion instead
-  const [values, setValues] = useState(Array(length).fill("") as string[]);
-  // @ts-ignore - generic removed, use type assertion instead
-  const inputsRef = useRef([] as (HTMLInputElement | null)[]);
+  const [values, setValues] = useState<string[]>(Array(length).fill(""));
+  const inputsRef = useRef<HTMLInputElement[]>([]);
 
   // whenever values changes, notify parent
   useEffect(() => {

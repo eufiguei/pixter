@@ -1,7 +1,6 @@
 "use client";
 
-// @ts-ignore - Bypassing TypeScript errors for React imports in Next.js
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -34,25 +33,21 @@ type StripeStatus = {
 
 export default function MeusDadosPage() {
   const router = useRouter();
-  // @ts-ignore - Bypassing TypeScript errors for useState generic type
-  const [profile, setProfile] = useState(null as Profile | null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  // @ts-ignore - Bypassing TypeScript errors for useState generic type
-  const [error, setError] = useState(null as string | null);
+  const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showAvatarSelector, setShowAvatarSelector] = useState(false);
-  // @ts-ignore - Bypassing TypeScript errors for useState generic type
-  const [formState, setFormState] = useState({ 
+  const [formState, setFormState] = useState<FormState>({ 
     nome: "", 
     profissao: "", 
     avatar_url: null 
-  } as FormState);
-  // @ts-ignore - Bypassing TypeScript errors for useState generic type
-  const [stripeStatus, setStripeStatus] = useState({ 
+  });
+  const [stripeStatus, setStripeStatus] = useState<StripeStatus>({ 
     status: null, 
     accountLink: null, 
     requirements: null 
-  } as StripeStatus);
+  });
   const [loadingStripeStatus, setLoadingStripeStatus] = useState(false);
   const [loadingStripeLink, setLoadingStripeLink] = useState(false);
 

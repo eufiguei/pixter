@@ -1,6 +1,5 @@
 'use client';
 
-// @ts-ignore - Bypassing TypeScript errors for React hooks
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -9,8 +8,7 @@ export default function CadastroMotorista() {
   const router = useRouter();
 
   /* ──────────────── Estados ──────────────── */
-  // @ts-ignore - generic removed, use type assertion instead
-  const [step, setStep] = useState('phone' as 'phone' | 'details');
+  const [step, setStep] = useState<'phone' | 'details'>('phone');
 
   // telefone / OTP
   const [phone, setPhone] = useState('');
@@ -29,8 +27,7 @@ export default function CadastroMotorista() {
 
   // selfie + avatar
   const [selfieCapturada, setSelfieCapturada] = useState(false);
-  // @ts-ignore - generic removed, use type assertion instead
-  const [selfiePreview, setSelfiePreview] = useState(null as string | null);
+  const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
   const [selectedAvatar, setSelectedAvatar] = useState(0);
   const [showAvatarSelection, setShowAvatarSelection] = useState(false);
   const [cameraAtiva, setCameraAtiva] = useState(false);
@@ -41,12 +38,9 @@ export default function CadastroMotorista() {
   const [success, setSuccess] = useState('');
 
   /* ──────────────── Refs ──────────────── */
-  // @ts-ignore - generic removed, use type assertion instead
-  const videoRef = useRef(null as HTMLVideoElement | null);
-  // @ts-ignore - generic removed, use type assertion instead
-  const canvasRef = useRef(null as HTMLCanvasElement | null);
-  // @ts-ignore - generic removed, use type assertion instead
-  const streamRef = useRef(null as MediaStream | null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   /* ──────────────── Avatares ──────────────── */
   const avatars = Array.from({ length: 9 }, (_, i) => `/images/avatars/avatar_${i + 1}.png`);

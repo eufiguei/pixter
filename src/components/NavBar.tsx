@@ -45,10 +45,8 @@ export default function NavBar() {
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
-  // @ts-ignore - generic removed, use type assertion instead
-  const menuRef = useRef(null as HTMLDivElement | null);
-  // @ts-ignore - generic removed, use type assertion instead
-  const profileDropdownRef = useRef(null as HTMLDivElement | null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   const userType = session?.user?.tipo;
   const user = session?.user || null; // Get user object from session

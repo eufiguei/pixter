@@ -1,7 +1,6 @@
 // src/app/cliente/payment-methods/page.tsx
 "use client";
 
-// @ts-ignore - Bypassing TypeScript errors for React hooks
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -22,11 +21,9 @@ type PaymentMethod = {
 export default function WalletPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
-  // @ts-ignore - Bypassing TypeScript errors for useState generic type
-  const [paymentMethods, setPaymentMethods] = useState([] as PaymentMethod[]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
-  // @ts-ignore - Bypassing TypeScript errors for useState generic type
-  const [error, setError] = useState(null as string | null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Redirect if not authenticated

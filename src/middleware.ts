@@ -37,13 +37,16 @@ export async function middleware(req: NextRequest) {
   
   // If not authenticated and trying to access a protected route
   if (!isAuthenticated && !isPublic) {
-    // Create a new URL for the login page
-    const loginUrl = new URL(
-      pathname.startsWith('/motorista') ? '/motorista/login' : '/login',
-      req.url
-    );
-    
-    // Add callback URL
+    // Preserve the original url so we can send the user back after login
+    const loginUrl = req.nextUrl.clone();
+         
+    // Determine the right login page based on the path
+    if (pathname.startsWith('/motorista')) {
+      loginUrl.pathname = '/motorista/login';
+    } else {
+      loginUrl.pathname = '/login';
+    }
+         
     loginUrl.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(loginUrl);
   }
@@ -73,7 +76,7 @@ export async function middleware(req: NextRequest) {
   }
    
   // Session is present OR the route is public → let the request pass
-  return new Response(null, { status: 200 });
+  return NextResponse.next();
 }
 
 /* ---------------------------------------------------------------

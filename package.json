@@ -34,7 +34,6 @@
     "@types/node": "^20.8.10",
     "@types/react": "18.2.33",
     "@types/react-dom": "18.2.14",
-    "@types/recharts": "^2.0.0",
     "@types/stripe": "^8.0.416",
     "autoprefixer": "10.4.16",
     "eslint": "8.52.0",

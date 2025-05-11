@@ -1,6 +1,5 @@
 // src/app/api/motorista/profile/route.ts
 import { NextResponse } from "next/server";
-// @ts-ignore - Bypassing TypeScript errors for NextAuth imports
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth/options";
 import { supabaseServer } from "@/lib/supabase/client";
@@ -10,15 +9,7 @@ const VALID_AVATAR_PATHS = Array.from({ length: 9 }, (_, i) => `/images/avatars/
 
 export async function GET(request: Request) {
   // 1) Validate via NextAuth
-  const session = await getServerSession(authOptions) as {
-    user?: {
-      id: string;
-      tipo?: string;
-      email?: string;
-      name?: string;
-    }
-  } | null;
-  
+  const session = await getServerSession(authOptions);
   if (!session || !session.user?.id) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
@@ -124,16 +115,7 @@ export async function GET(request: Request) {
 
 // PUT handler to update the driver’s info
 export async function PUT(request: Request) {
-  // 1) Validate via NextAuth
-  const session = await getServerSession(authOptions) as {
-    user?: {
-      id: string;
-      tipo?: string;
-      email?: string;
-      name?: string;
-    }
-  } | null;
-  
+  const session = await getServerSession(authOptions);
   if (!session || !session.user?.id) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
@@ -141,7 +123,6 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
   }
 
-  // 2) Get userId from session
   const userId = session.user.id;
   let updates: { [key: string]: any };
   try {

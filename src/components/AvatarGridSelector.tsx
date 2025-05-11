@@ -17,8 +17,7 @@ export default function AvatarGridSelector({
   onSelect,
   loading = false,
 }: AvatarGridSelectorProps) {
-  // @ts-ignore - generic removed, use type assertion instead
-  const [selectedAvatar, setSelectedAvatar] = useState(currentAvatarUrl as string | null | undefined);
+  const [selectedAvatar, setSelectedAvatar] = useState<string | null | undefined>(currentAvatarUrl);
 
   const handleSelect = (path: string) => {
     if (loading) return; // Prevent selection while loading/saving
@@ -56,3 +55,4 @@ export default function AvatarGridSelector({
     </div>
   );
 }
+

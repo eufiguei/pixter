@@ -12,14 +12,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { // Added non-null as
 
 export async function GET(request: Request) {
   // 1. Get Authenticated User ID using NextAuth.js getServerSession
-  const session = await getServerSession(authOptions) as {
-    user?: {
-      id: string;
-      tipo?: string;
-      email?: string;
-      name?: string;
-    }
-  } | null;
+  const session = await getServerSession(authOptions);
 
   // Check if session exists and has the user ID (added in your NextAuth callbacks)
   if (!session || !session.user || !session.user.id) {

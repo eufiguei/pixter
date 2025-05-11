@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import {
-  BarChart as RechartBarChart,
+  BarChart,
   Bar,
   XAxis,
   YAxis,
@@ -14,7 +14,6 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { format, subDays, subMonths, parseISO } from "date-fns";
 
 type BalanceEntry = { amount: string; currency: string };
 type Transaction = {
@@ -29,26 +28,22 @@ type Transaction = {
   fee?: string;
 };
 
-type ViewMode = "weekly" | "monthly";
+type Period = "day" | "week" | "month";
 
 export default function MeusPagamentosPage() {
   const router = useRouter();
-  const { data: session, status: sessionStatus } = useSession();
+  const { status: sessionStatus } = useSession();
 
-  // @ts-ignore - Bypassing TypeScript errors for useState generic type
-  const [balance, setBalance] = useState(null as {
+  const [balance, setBalance] = useState<{
     available: BalanceEntry[];
     pending: BalanceEntry[];
-  } | null);
-  // @ts-ignore - Bypassing TypeScript errors for useState generic type
-  const [transactions, setTransactions] = useState([] as Transaction[]);
+  } | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  // @ts-ignore - Bypassing TypeScript errors for useState generic type
-  const [viewMode, setViewMode] = useState("weekly" as ViewMode); // Default weekly view
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [period, setPeriod] = useState<Period>("week"); // Default to week as per image
 
   const fetchPayments = async (start?: string, end?: string) => {
     setLoading(true);
@@ -72,6 +67,9 @@ export default function MeusPagamentosPage() {
 
       const json = await res.json();
       setBalance(json.balance);
+      console.log("Balance:", json.balance);
+      console.log("Transactions:", json.transactions);
+      
       setTransactions(json.transactions);
     } catch (err: any) {
       console.error("Erro ao carregar pagamentos:", err);
@@ -86,91 +84,46 @@ export default function MeusPagamentosPage() {
     if (sessionStatus === "unauthenticated") {
       router.push("/motorista/login");
     } else {
-      // Set default to last 7 days
-      setLastDaysRange(7);
+      // Set initial date range for the last week
+      const today = new Date();
+      const weekAgo = new Date(today);
+      weekAgo.setDate(today.getDate() - 6);
+      const initialStartDate = weekAgo.toISOString().split('T')[0];
+      const initialEndDate = today.toISOString().split('T')[0];
+      setStartDate(initialStartDate);
+      setEndDate(initialEndDate);
+      fetchPayments(initialStartDate, initialEndDate);
     }
   }, [sessionStatus, router]);
-  
-  // Helper function to set date range for last N days
-  const setLastDaysRange = (days: number) => {
-    const today = new Date();
-    const pastDate = new Date(today);
-    pastDate.setDate(today.getDate() - (days - 1)); // Subtract days-1 to include today
-    
-    const start = pastDate.toISOString().split('T')[0];
-    const end = today.toISOString().split('T')[0];
-    
-    setStartDate(start);
-    setEndDate(end);
-    fetchPayments(start, end);
-  };
-  
-  // Helper function to set date range for last N months
-  const setLastMonthsRange = (months: number) => {
-    const today = new Date();
-    const pastDate = new Date(today);
-    pastDate.setMonth(today.getMonth() - (months - 1));
-    pastDate.setDate(1); // Start of month
-    
-    const start = pastDate.toISOString().split('T')[0];
-    const end = today.toISOString().split('T')[0];
-    
-    setStartDate(start);
-    setEndDate(end);
-    fetchPayments(start, end);
-  };
 
   const handleFilter = () => {
     fetchPayments(startDate, endDate);
   };
 
-  // Generate chart data based on transactions and view mode
+  // --- Chart Data Calculation (simplified for brevity, might need adjustment) ---
   const chartData = useMemo(() => {
     const map: Record<string, number> = {};
     const parseValue = (v: string) =>
       parseFloat(v.replace(/[^\d,-]/g, "").replace(",", "."));
 
-    // Process all transactions
     transactions.forEach((t) => {
       const date = new Date(t.data);
-      let label;
-      
-      // Format differently based on view mode
-      if (viewMode === "weekly") {
-        // For weekly view, use day/month format
-        label = date.toLocaleDateString("pt-BR", { day: '2-digit', month: '2-digit' });
-      } else {
-        // For monthly view, use month/year format
-        label = date.toLocaleDateString("pt-BR", { month: '2-digit', year: '2-digit' });
-      }
-      
+      const label = date.toLocaleDateString("pt-BR", { day: '2-digit', month: '2-digit' }); // Format as DD/MM
       map[label] = (map[label] || 0) + parseValue(t.amount);
     });
 
-    // Create appropriate date entries based on selected view mode
+    // Ensure we have entries for the last 7 days relative to endDate
     const end = endDate ? new Date(endDate) : new Date();
     const finalMap: Record<string, number> = {};
-    
-    if (viewMode === "weekly") {
-      // Last 7 days for weekly view
-      for (let i = 6; i >= 0; i--) {
+    for (let i = 6; i >= 0; i--) {
         const d = new Date(end);
         d.setDate(end.getDate() - i);
         const label = d.toLocaleDateString("pt-BR", { day: '2-digit', month: '2-digit' });
-        finalMap[label] = map[label] || 0;
-      }
-    } else {
-      // Last 6 months for monthly view
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date(end);
-        d.setMonth(end.getMonth() - i);
-        const label = d.toLocaleDateString("pt-BR", { month: '2-digit', year: '2-digit' });
-        finalMap[label] = map[label] || 0;
-      }
+        finalMap[label] = map[label] || 0; // Use existing value or 0
     }
 
     return Object.entries(finalMap).map(([label, value]) => ({ label, value }));
-  }, [transactions, endDate, viewMode]);
+  }, [transactions, endDate]);
 
   const totalLastMonths = useMemo(() => {
     // Placeholder for "Últimos Meses" - requires different API logic or calculation
@@ -201,118 +154,36 @@ export default function MeusPagamentosPage() {
         </nav>
       </div> */} 
 
-      {/* View Mode and Date Filter Controls */}
-      <div className="bg-white p-4 rounded-lg shadow mb-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
-          <h2 className="text-xl font-semibold mb-2 sm:mb-0">Faturamento por {viewMode === "weekly" ? "Semana" : "Mês"}</h2>
-          <div className="flex space-x-2">
-            <button 
-              onClick={() => setViewMode("weekly")} 
-              className={`px-3 py-1 text-sm rounded-md ${viewMode === "weekly" ? "bg-purple-600 text-white" : "bg-gray-200 text-gray-700"}`}
-            >
-              Semanal
-            </button>
-            <button 
-              onClick={() => setViewMode("monthly")} 
-              className={`px-3 py-1 text-sm rounded-md ${viewMode === "monthly" ? "bg-purple-600 text-white" : "bg-gray-200 text-gray-700"}`}
-            >
-              Mensal
-            </button>
-          </div>
-        </div>
-        
-        {/* Date Selection */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-          <div className="flex items-center mb-2 sm:mb-0">
-            <span className="text-gray-600 mr-2">Período:</span>
-            <span className="font-medium">{formattedDateRange}</span>
-          </div>
-          <div className="flex space-x-2">
-            <button 
-              onClick={() => setLastDaysRange(7)}
-              className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md"
-            >
-              Última Semana
-            </button>
-            <button 
-              onClick={() => setLastDaysRange(30)}
-              className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md"
-            >
-              Últimos 30 dias
-            </button>
-            <button 
-              onClick={() => setShowDatePicker(!showDatePicker)}
-              className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md flex items-center"
-            >
-              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-              </svg>
-              Selecionar
-            </button>
-          </div>
-        </div>
-        
-        {/* Date Picker (visible when showDatePicker is true) */}
-        {showDatePicker && (
-          <div className="mt-4 p-4 border rounded-md">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Data Inicial</label>
-                <input 
-                  type="date" 
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full border rounded-md px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Data Final</label>
-                <input 
-                  type="date" 
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full border rounded-md px-3 py-2"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <button 
-                onClick={() => {
-                  setShowDatePicker(false);
-                  fetchPayments(startDate, endDate);
-                }}
-                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
-              >
-                Aplicar
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* Top Widgets */} 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        {/* Faturamento Chart */} 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Faturamento por Semana Chart */} 
         <div className="md:col-span-2 bg-white p-4 rounded-lg shadow">
-          <div style={{ width: "100%", height: 170 }}>
+          <h2 className="text-lg font-medium text-gray-700 mb-3">Faturamento por Semana</h2>
+          <div style={{ width: "100%", height: 150 }}>
             <ResponsiveContainer>
-              <RechartBarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+              <BarChart data={chartData} margin={{ top: 5, right: 0, left: -30, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="label" axisLine={false} tickLine={false} fontSize={12} />
                 <YAxis axisLine={false} tickLine={false} fontSize={12} />
                 <Tooltip formatter={(value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)} />
                 <Bar dataKey="value" fill="#d8b4fe" radius={[4, 4, 0, 0]} />
-              </RechartBarChart>
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Saldo no Período */} 
+        {/* Últimos Meses Value */} 
         <div className="bg-white p-4 rounded-lg shadow flex flex-col justify-center">
-          <h2 className="text-lg font-medium text-gray-700 mb-2">Saldo no Período</h2>
+          <h2 className="text-lg font-medium text-gray-700 mb-2">Últimos Meses</h2>
+          {/* Note: This value needs proper calculation logic */} 
           <p className="text-3xl font-bold text-gray-800">{totalLastMonths}</p>
-          <p className="text-sm text-gray-500 mt-1">{formattedDateRange}</p>
         </div>
+      </div>
+
+      {/* Date Filter Display */} 
+      <div className="bg-white p-3 rounded-lg shadow flex justify-center items-center text-gray-700">
+        <span>{formattedDateRange}</span>
+        {/* Consider adding a date picker component here for interaction */} 
       </div>
 
       {/* Pagamentos Section */} 
@@ -368,7 +239,12 @@ export default function MeusPagamentosPage() {
         )}
       </div>
 
-
+      {/* Hidden Date Filter Inputs (or replace with a proper date range picker component) */}
+      <div className="hidden">
+        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+        <button onClick={handleFilter}>Filter</button>
+      </div>
     </div>
   );
 }

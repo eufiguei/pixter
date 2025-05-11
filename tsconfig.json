@@ -12,37 +12,32 @@
     "strict": false,
     "noEmit": true,
     "incremental": true,
-    "forceConsistentCasingInFileNames": true,
 
     /* ---------- Resolução ---------- */
     "moduleResolution": "node",
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "allowSyntheticDefaultImports": true,
 
     /* ---------- Alias ------------ */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "react": ["./node_modules/react"],
-      "react/*": ["./node_modules/react/*"]
+      "@/*": ["./src/*"]          // agora está dentro de "paths"
     },
 
     /* ---------- Plugins ---------- */
     "plugins": [
       { "name": "next" }
     ],
-    "types": ["next", "next-auth", "node", "react", "react-dom", "recharts"]
+    "types": ["next", "node"]
   },
 
   "include": [
     "next-env.d.ts",
-    "react-env.d.ts",
     ".next/types/**/*.ts",
     "**/*.ts",
     "**/*.tsx",
-    "**/*.d.ts"
+    "**/*.d.ts"                  // garante leitura dos arquivos de declaração
   ],
 
   "exclude": ["node_modules"]

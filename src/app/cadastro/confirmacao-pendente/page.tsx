@@ -2,9 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-// @ts-ignore - Bypassing TypeScript errors for React hooks
 import { useState } from "react";
-// @ts-ignore - Bypassing TypeScript errors for lucide-react
 import { Mail, AlertCircle, ArrowLeft, Loader2 } from "lucide-react";
 
 export default function ConfirmationPending() {
@@ -12,11 +10,10 @@ export default function ConfirmationPending() {
   const email = searchParams.get("email");
 
   const [resending, setResending] = useState(false);
-  // @ts-ignore - Bypassing TypeScript errors for useState generic type
-  const [resendStatus, setResendStatus] = useState({} as {
+  const [resendStatus, setResendStatus] = useState<{
     success?: boolean;
     message?: string;
-  });
+  }>({});
 
   const handleResendEmail = async () => {
     if (!email || resending) return;

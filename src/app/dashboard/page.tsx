@@ -1,6 +1,5 @@
 'use client'
 
-// @ts-ignore - Bypassing TypeScript errors for React hooks
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -9,8 +8,6 @@ import { useSession } from 'next-auth/react'
 export default function ClientDashboard() {
   const router = useRouter()
   const { data: session, status } = useSession()
-  // Add type assertion for session.user to include nome property
-  const user = session?.user as { name?: string; email?: string; image?: string; id?: string; nome?: string } | undefined
   
   const [activeTab, setActiveTab] = useState('payments')
   const [payments, setPayments] = useState([])
@@ -140,7 +137,7 @@ export default function ClientDashboard() {
         )}
         
         <div className="mb-6">
-          <h2 className="text-3xl font-bold text-gray-900">Olá, {user?.nome || user?.name || 'Cliente'}!</h2>
+          <h2 className="text-3xl font-bold text-gray-900">Olá, {session?.user?.name || 'Cliente'}!</h2>
         </div>
         
         {activeTab === 'payments' && (
@@ -281,7 +278,7 @@ export default function ClientDashboard() {
             <div className="space-y-4">
               <div>
                 <p className="text-sm font-medium text-gray-500">Nome</p>
-                <div className="text-lg font-semibold">{user?.nome || user?.name || 'Cliente'}</div>
+                <p className="text-base text-gray-900">{session?.user?.name}</p>
               </div>
               
               <div>

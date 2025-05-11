@@ -1,20 +1,16 @@
 // src/app/cliente/dashboard/dados/page.tsx
 "use client";
 
-// @ts-ignore - Bypassing TypeScript errors for React hooks
 import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { getProfile, updateProfile } from "@/lib/supabase/client"; // Assuming these functions exist and work client-side
 
 export default function MeusDadosClientePage() {
   const { data: session, status } = useSession();
-  // @ts-ignore - Bypassing TypeScript errors for useState generic type
-  const [profileData, setProfileData] = useState(null as any);
+  const [profileData, setProfileData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  // @ts-ignore - Bypassing TypeScript errors for useState generic type
-  const [error, setError] = useState(null as string | null);
-  // @ts-ignore - Bypassing TypeScript errors for useState generic type
-  const [success, setSuccess] = useState(null as string | null);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchProfile() {
