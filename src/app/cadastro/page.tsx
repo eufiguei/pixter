@@ -329,7 +329,7 @@ export default function ClientSignUp() {
         </form>
         
         <div className="mt-6 text-center text-sm text-gray-500">
-          É vendedor? <Link href="/vendedor/cadastro" className="text-purple-600 hover:text-purple-800">Cadastre-se aqui</Link>
+          É motorista? <Link href="/motorista/cadastro" className="text-purple-600 hover:text-purple-800">Cadastre-se aqui</Link>
         </div>
       </div>
     </main>

@@ -28,7 +28,7 @@ export const createCheckoutSession = async (params: {
   return session
 }
 
-// Função para obter o QR code de um vendedor
+// Função para obter o QR code de um motorista
 export const getDriverQRCode = async (driverId: string) => {
   const response = await fetch(`/api/driver-qr-code?driverId=${driverId}`)
   const data = await response.json()

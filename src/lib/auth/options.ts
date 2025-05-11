@@ -240,7 +240,7 @@ export const authOptions: NextAuthOptions = {
           }
 
           // Verify the profile is a driver
-          if (profile.tipo !== "vendedor") {
+          if (profile.tipo !== "motorista") {
             console.error("User exists but is not a driver:", verifyData.user.id);
             return null;
           }

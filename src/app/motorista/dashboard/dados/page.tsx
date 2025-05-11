@@ -57,7 +57,7 @@ export default function MeusDadosPage() {
     
     try {
       setLoadingStripeStatus(true);
-      const resp = await fetch("/api/vendedor/stripe");
+      const resp = await fetch("/api/motorista/stripe");
       if (resp.ok) {
         const data = await resp.json();
         setStripeStatus({
@@ -80,7 +80,7 @@ export default function MeusDadosPage() {
   const fetchProfile = async () => {
     try {
       setLoading(true);
-      const resp = await fetch("/api/vendedor/profile");
+      const resp = await fetch("/api/motorista/profile");
       
       if (!resp.ok) {
         throw new Error("Erro ao buscar perfil");
@@ -131,7 +131,7 @@ export default function MeusDadosPage() {
         avatar_url: formState.avatar_url,
       });
       
-      const resp = await fetch("/api/vendedor/profile", {
+      const resp = await fetch("/api/motorista/profile", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -195,7 +195,7 @@ export default function MeusDadosPage() {
     
     try {
       setLoadingStripeLink(true);
-      const resp = await fetch("/api/vendedor/stripe/login");
+      const resp = await fetch("/api/motorista/stripe/login");
       
       if (resp.ok) {
         const data = await resp.json();
@@ -282,7 +282,7 @@ export default function MeusDadosPage() {
                 {formState.avatar_url ? (
                   <Image 
                     src={formState.avatar_url} 
-                    alt="Avatar do vendedor"
+                    alt="Avatar do motorista"
                     width={96}
                     height={96}
                     className="object-cover"
@@ -357,7 +357,7 @@ export default function MeusDadosPage() {
 
         {/* Phone Field */}
         <div>
-          <label className="block text-sm font-medium text-gray-700">Celular</label>
+          <label className="block text-sm font-medium text-gray-700">WhatsApp</label>
           <p className="text-gray-900 mt-1">{profile.celular}</p>
         </div>
 
@@ -391,7 +391,7 @@ export default function MeusDadosPage() {
                   </p>
                   <button
                     onClick={() =>
-                      fetch("/api/vendedor/stripe", { method: "POST" })
+                      fetch("/api/motorista/stripe", { method: "POST" })
                         .then((r) => r.json())
                         .then((data) => {
                           if (data.url) window.location.href = data.url;

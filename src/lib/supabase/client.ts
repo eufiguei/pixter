@@ -156,7 +156,7 @@ export const formatPhoneNumber = (phone: string, code = '55') => {
        password,
        email_confirm: true, // Mark email as confirmed (since it's temporary or provided)
        phone_confirm: true, // Mark phone as confirmed (assuming OTP was verified before calling this)
-       user_metadata: { tipo: 'vendedor', nome: userData.nome /* Add other metadata if needed */ }
+       user_metadata: { tipo: 'motorista', nome: userData.nome /* Add other metadata if needed */ }
      });
    
      if (authErr) {
@@ -176,7 +176,7 @@ export const formatPhoneNumber = (phone: string, code = '55') => {
      const profilePayload = {
        id: userId,
        celular: phone,
-       tipo: 'vendedor',
+       tipo: 'motorista',
        nome: userData.nome,
        cpf: userData.cpf, // Add other fields from userData as needed
        email: emailProvided, // Store the real email if provided

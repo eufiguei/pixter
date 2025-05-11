@@ -23,7 +23,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Valor inválido." }, { status: 400 });
     }
     if (!driverPhoneNumber || typeof driverPhoneNumber !== "string") {
-      return NextResponse.json({ error: "Identificação do vendedor inválida." }, { status: 400 });
+      return NextResponse.json({ error: "Identificação do motorista inválida." }, { status: 400 });
     }
 
     // Convert amount to cents (Stripe expects integer amount in smallest currency unit)
@@ -41,17 +41,17 @@ export async function POST(request: Request) {
       .from("profiles")
       .select("id, stripe_account_id") // Select Stripe ID
       .eq("celular", formattedPhone) // Querying by 'celular' column
-      .eq("tipo", "vendedor")
+      .eq("tipo", "motorista")
       .maybeSingle(); // Use maybeSingle to handle not found gracefully
 
     if (profileError) {
       console.error("Error fetching driver profile:", profileError.message);
-      return NextResponse.json({ error: "Erro ao buscar vendedor." }, { status: 500 });
+      return NextResponse.json({ error: "Erro ao buscar motorista." }, { status: 500 });
     }
 
     if (!profile || !profile.stripe_account_id) {
       console.log("Driver not found or Stripe not connected for phone:", formattedPhone);
-      return NextResponse.json({ error: "Vendedor não encontrado ou não habilitado para pagamentos." }, { status: 404 });
+      return NextResponse.json({ error: "Motorista não encontrado ou não habilitado para pagamentos." }, { status: 404 });
     }
 
     const stripeAccountId = profile.stripe_account_id;

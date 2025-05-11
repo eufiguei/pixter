@@ -69,7 +69,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
 
   if (!driverId) {
     console.error("Missing driverId in PaymentIntent metadata:", id);
-    return; // Pare o processamento se não pudermos vinculá-lo a um vendedor
+    return; // Pare o processamento se não pudermos vinculá-lo a um motorista
   }
 
   try {
@@ -79,7 +79,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       .from("pagamentos") // Certifique-se que a tabela é "pagamentos"
       .upsert({
         stripe_payment_id: id,
-        vendedor_id: driverId, // <<< Use a variável driverId corrigida
+        motorista_id: driverId, // <<< Use a variável driverId corrigida
         valor: amount / 100, // Converta centavos para a unidade monetária base
         moeda: currency,
         status: status,
@@ -91,7 +91,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       console.error("Erro ao fazer upsert no histórico de pagamentos:", upsertError.message);
     } else {
       console.log("Histórico de pagamentos registrado/atualizado para:", id);
-      // Opcionalmente: Acione a notificação para o vendedor aqui
+      // Opcionalmente: Acione a notificação para o motorista aqui
     }
 
   } catch (error) {

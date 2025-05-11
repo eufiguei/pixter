@@ -1,4 +1,4 @@
-// src/app/vendedor/stripe-refresh/page.tsx
+// src/app/motorista/stripe-refresh/page.tsx
 "use client";
 
 import { useEffect } from "react";
@@ -11,7 +11,7 @@ export default function StripeRefreshPage() {
   // Optional: Redirect back to dashboard automatically after a delay
   // useEffect(() => {
   //   const timer = setTimeout(() => {
-  //     router.push("/vendedor/dashboard");
+  //     router.push("/motorista/dashboard");
   //   }, 5000); // 5 seconds delay
   //   return () => clearTimeout(timer);
   // }, [router]);
@@ -25,7 +25,7 @@ export default function StripeRefreshPage() {
         <p className="text-gray-700 mb-6">
           O link para conectar sua conta Stripe expirou ou ocorreu um problema. Por favor, volte ao seu dashboard e tente conectar novamente.
         </p>
-        <Link href="/vendedor/dashboard">
+        <Link href="/motorista/dashboard">
           <span className="inline-block bg-indigo-600 text-white py-2 px-4 rounded hover:bg-indigo-700 cursor-pointer">
             Voltar para o Dashboard
           </span>

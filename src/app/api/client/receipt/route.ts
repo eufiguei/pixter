@@ -194,7 +194,7 @@ export async function GET(request: Request) {
             </div>
             <div class="info-row">
               <span class="info-label">Recebedor:</span>
-              <span class="info-value">${payment.driver_profile?.nome || 'Não especificado'} (${payment.driver_profile?.profissao || 'Vendedor'})</span>
+              <span class="info-value">${payment.driver_profile?.nome || 'Não especificado'} (${payment.driver_profile?.profissao || 'Motorista'})</span>
             </div>
             <div class="info-row">
               <span class="info-label">Valor:</span>

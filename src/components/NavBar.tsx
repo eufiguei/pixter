@@ -20,7 +20,7 @@ import {
 // Define a type for the user object within the session for better type safety
 interface UserSession {
   id?: string;
-  tipo?: "cliente" | "vendedor";
+  tipo?: "cliente" | "motorista";
   celular?: string; // Use celular for public page link
   email?: string; // For displaying in profile dropdown
   name?: string; // For displaying in profile dropdown
@@ -50,7 +50,7 @@ export default function NavBar() {
 
   const userType = session?.user?.tipo;
   const user = session?.user || null; // Get user object from session
-  // console.log("Session info in NavBar:", session, status, user);
+  console.log("Session info in NavBar:", session, status, user);
 
   const isLoading = status === "loading";
   const isAuthenticated = status === "authenticated";
@@ -88,11 +88,12 @@ export default function NavBar() {
   useEffect(() => {
     if (isLoading) return;
 
+    // Regex to specifically match /[phoneNumber] (assuming it's numeric) and not other root paths
     const isPublicPaymentPage = /^\/\+?[0-9]{10,}$/.test(pathname);
     const isClientAuthPage = ["/login", "/cadastro"].includes(pathname);
     const isDriverAuthPage = [
-      "/vendedor/login",
-      "/vendedor/cadastro",
+      "/motorista/login",
+      "/motorista/cadastro",
     ].includes(pathname);
 
     if (isAuthenticated) {
@@ -100,36 +101,38 @@ export default function NavBar() {
         router.replace("/cliente/dashboard");
         return;
       }
-      if (userType === "vendedor" && isDriverAuthPage) {
-        router.replace("/vendedor/dashboard/overview");
+      if (userType === "motorista" && isDriverAuthPage) {
+        router.replace("/motorista/dashboard/overview");
         return;
       }
       if (pathname === "/") {
         if (userType === "cliente") router.replace("/cliente/dashboard");
-        if (userType === "vendedor")
-          router.replace("/vendedor/dashboard/overview");
+        if (userType === "motorista")
+          router.replace("/motorista/dashboard/overview");
         return;
       }
-      if (userType === "cliente" && pathname.startsWith("/vendedor/")) {
+      if (userType === "cliente" && pathname.startsWith("/motorista/")) {
         router.replace("/cliente/dashboard");
         return;
       }
+      // Allow driver to be on their own public page
       const driverPublicPagePath = session?.user?.celular
         ? `/${session.user.celular.replace(/\D/g, "")}`
         : null;
       if (
-        userType === "vendedor" &&
+        userType === "motorista" &&
         (pathname.startsWith("/cliente/") ||
           pathname.startsWith("/dashboard") ||
           pathname.startsWith("/payment-methods")) &&
         pathname !== driverPublicPagePath
       ) {
-        router.replace("/vendedor/dashboard/overview");
+        router.replace("/motorista/dashboard/overview");
         return;
       }
     }
 
     if (status === "unauthenticated") {
+      // Only redirect if definitively unauthenticated
       const callbackUrlParam = `?callbackUrl=${encodeURIComponent(
         pathname + searchParams.toString()
       )}`;
@@ -141,8 +144,8 @@ export default function NavBar() {
         router.replace(`/login${callbackUrlParam}`);
         return;
       }
-      if (pathname.startsWith("/vendedor/") && !isDriverAuthPage) {
-        router.replace(`/vendedor/login${callbackUrlParam}`);
+      if (pathname.startsWith("/motorista/") && !isDriverAuthPage) {
+        router.replace(`/motorista/login${callbackUrlParam}`);
         return;
       }
     }
@@ -167,93 +170,102 @@ export default function NavBar() {
   // --- Determine Logo Link ---
   let logoHref = "/";
   if (isAuthenticated) {
-    if (userType === "vendedor") logoHref = "/vendedor/dashboard/overview";
+    if (userType === "motorista") logoHref = "/motorista/dashboard/overview";
     else if (userType === "cliente") logoHref = "/cliente/dashboard";
   }
 
   // --- Profile Menu Items ---
   const getProfileMenuItems = () => {
+    // if (!isAuthenticated) return [];
+
     if (userType === "cliente") {
       return [
         {
           href: "/cliente/dashboard/dados",
-          text: "Meu Perfil",
+          text: "My Profile",
           icon: <User className="w-4 h-4 mr-2" />,
         },
         {
           href: "/cliente/dashboard/historico",
-          text: "Histórico de Pagamentos",
+          text: "Payment History",
           icon: <History className="w-4 h-4 mr-2" />,
         },
         {
           href: "/cliente/payment-methods",
-          text: "Minha Carteira",
+          text: "My Wallet",
           icon: <CreditCard className="w-4 h-4 mr-2" />,
         },
         {
           onClick: handleSignOut,
-          text: "Sair",
+          text: "Sign Out",
           icon: <LogOut className="w-4 h-4 mr-2" />,
         },
       ];
-    } else if (userType === "vendedor") {
+    } else if (userType === "motorista") {
       const driverPublicPageLink = session?.user?.celular
         ? `/${session.user.celular.replace(/\D/g, "")}`
         : "#";
       return [
         {
-          href: "/vendedor/dashboard/dados",
-          text: "Meu Perfil",
+          href: "/motorista/dashboard/dados",
+          text: "My Profile",
           icon: <User className="w-4 h-4 mr-2" />,
         },
         {
-          href: "/vendedor/dashboard/overview",
-          text: "Painel",
+          href: "/motorista/dashboard/overview",
+          text: "Dashboard",
           icon: <Settings className="w-4 h-4 mr-2" />,
         },
         {
-          href: "/vendedor/dashboard/pagamentos",
-          text: "Pagamentos",
+          href: "/motorista/dashboard/pagamentos",
+          text: "Payments",
           icon: <CreditCard className="w-4 h-4 mr-2" />,
         },
         {
           href: driverPublicPageLink,
-          text: "Minha Página Pública",
+          text: "My Public Page",
           icon: <ExternalLink className="w-4 h-4 mr-2" />,
-          disabled: driverPublicPageLink === "#", // Task 11: Link should be unavailable if no stripe connection
+          disabled: driverPublicPageLink === "#",
         },
         {
           onClick: handleSignOut,
-          text: "Sair",
+          text: "Sign Out",
           icon: <LogOut className="w-4 h-4 mr-2" />,
         },
       ];
     }
+
     return [];
   };
 
   // --- Navigation Links ---
   const getNavigationLinks = () => {
+    // Regex to specifically match /[phoneNumber] (assuming it's numeric) and not other root paths
     const isPublicPaymentPage = /^\/\+?[0-9]{10,}$/.test(pathname);
     const callbackUrlParam = `?callbackUrl=${encodeURIComponent(
       pathname + searchParams.toString()
     )}`;
 
     if (isPublicPaymentPage) {
-      if (!isAuthenticated || userType === "vendedor") {
+      // Public payment page links
+      if (!isAuthenticated || userType === "motorista") {
         return [
-          { href: `/login${callbackUrlParam}`, text: "Entrar" },
-          { href: `/cadastro${callbackUrlParam}`, text: "Criar Conta" },
+          { href: `/login${callbackUrlParam}`, text: "Sign In" },
+          { href: `/cadastro${callbackUrlParam}`, text: "Create Account" },
         ];
       }
+      // No additional nav links for authenticated clients on public page (will use profile dropdown)
       return [];
     } else if (!isAuthenticated) {
+      // Unauthenticated user on non-public page
       return [
-        { href: "/login", text: "Entrar" },
-        { href: "/cadastro", text: "Criar Conta" },
-        { href: "/vendedor/login", text: "Sou Vendedor" }, // Changed from "I'm a Driver"
+        { href: "/login", text: "Sign In" },
+        { href: "/cadastro", text: "Create Account" },
+        { href: "/motorista/login", text: "I'm a Driver" },
       ];
     }
+
+    // Authenticated user will use profile dropdown, no additional nav links needed
     return [];
   };
 
@@ -290,7 +302,7 @@ export default function NavBar() {
           className={`${baseStyle} opacity-50 cursor-not-allowed flex items-center`}
         >
           {link.icon && link.icon}
-          {link.text} (Indisponível)
+          {link.text} (Unavailable)
         </span>
       );
     } else if (link.onClick) {
@@ -308,9 +320,11 @@ export default function NavBar() {
     return null;
   };
 
+  // --- Render NavBar ---
+  // Determine if the simplified public view should be shown (Guests and Drivers on Public Page)
   const isPublicPaymentPage = /^\/\+?[0-9]{10,}$/.test(pathname);
   const showSimplifiedPublicView =
-    isPublicPaymentPage && (!isAuthenticated || userType === "vendedor");
+    isPublicPaymentPage && (!isAuthenticated || userType === "motorista");
 
   return (
     <header
@@ -319,6 +333,7 @@ export default function NavBar() {
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Simplified view for Guests/Drivers on Public Page */}
         {showSimplifiedPublicView ? (
           <div className="flex items-center justify-center h-16 space-x-6">
             {isLoading ? (
@@ -328,7 +343,9 @@ export default function NavBar() {
             )}
           </div>
         ) : (
+          /* Standard view for all other cases */
           <div className="flex items-center justify-between h-16">
+            {/* Logo - Hidden in simplified view */}
             <div className="flex-shrink-0">
               <Link href={logoHref} className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-purple-600 rounded flex items-center justify-center">
@@ -340,11 +357,14 @@ export default function NavBar() {
               </Link>
             </div>
 
+            {/* Desktop Navigation */}
             <div className="hidden md:flex md:items-center md:space-x-6">
               {isLoading ? (
                 <div className="h-6 w-24 bg-gray-200 animate-pulse rounded"></div>
               ) : isAuthenticated ? (
                 <>
+                  
+                  {/* <span onClick={handleSignOut}>Logout</span> */}
                   <div className="relative" ref={profileDropdownRef}>
                     <button
                       onClick={() =>
@@ -356,7 +376,7 @@ export default function NavBar() {
                         {session?.user?.image ? (
                           <img
                             src={session.user.image}
-                            alt="Perfil"
+                            alt="Profile"
                             className="w-8 h-8 rounded-full"
                           />
                         ) : (
@@ -364,13 +384,14 @@ export default function NavBar() {
                         )}
                       </div>
                       <span>
-                        {session?.user?.name || session?.user?.email || "Usuário"}
+                        {session?.user?.name || session?.user?.email || "User"}
                       </span>
                       <ChevronDown className="w-4 h-4" />
                     </button>
 
+                    {/* Profile Dropdown Menu */}
                     {isProfileDropdownOpen && (
-                      <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-10 border border-gray-200">
+                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10 border border-gray-200">
                         {getProfileMenuItems().map((item) =>
                           renderLink(item, false)
                         )}
@@ -379,10 +400,12 @@ export default function NavBar() {
                   </div>
                 </>
               ) : (
+                // Regular links for unauthenticated users
                 getNavigationLinks().map((link) => renderLink(link, false))
               )}
             </div>
 
+            {/* Mobile Menu Button */}
             <div className="flex items-center md:hidden">
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -391,7 +414,7 @@ export default function NavBar() {
                 aria-controls="mobile-menu"
                 aria-expanded={isMobileMenuOpen}
               >
-                <span className="sr-only">Abrir menu principal</span>
+                <span className="sr-only">Open main menu</span>
                 {isMobileMenuOpen ? (
                   <X className="block h-6 w-6" aria-hidden="true" />
                 ) : (
@@ -403,6 +426,7 @@ export default function NavBar() {
         )}
       </div>
 
+      {/* Mobile Menu */}
       {!showSimplifiedPublicView && isMobileMenuOpen && (
         <div
           ref={menuRef}
@@ -415,13 +439,14 @@ export default function NavBar() {
                 <div className="h-6 w-24 bg-gray-200 animate-pulse rounded"></div>
               </div>
             ) : isAuthenticated ? (
+              // User profile section in mobile menu
               <div className="px-4 py-2 border-b border-gray-200 mb-2">
                 <div className="flex items-center space-x-3 mb-3">
                   <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
                     {session?.user?.image ? (
                       <img
                         src={session.user.image}
-                        alt="Perfil"
+                        alt="Profile"
                         className="w-10 h-10 rounded-full"
                       />
                     ) : (
@@ -430,16 +455,19 @@ export default function NavBar() {
                   </div>
                   <div>
                     <div className="font-medium">
-                      {session?.user?.name || "Usuário"}
+                      {session?.user?.name || "User"}
                     </div>
                     <div className="text-sm text-gray-500">
                       {session?.user?.email || ""}
                     </div>
                   </div>
                 </div>
+
+                {/* Profile menu items */}
                 {getProfileMenuItems().map((item) => renderLink(item, true))}
               </div>
             ) : (
+              // Regular links for unauthenticated users
               getNavigationLinks().map((link) => renderLink(link, true))
             )}
           </div>
@@ -448,4 +476,3 @@ export default function NavBar() {
     </header>
   );
 }
-

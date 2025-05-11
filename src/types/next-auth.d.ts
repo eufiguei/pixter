@@ -2,15 +2,10 @@ import NextAuth, { DefaultSession, DefaultUser } from "next-auth";
 
 declare module "next-auth" {
   interface Session extends DefaultSession {
-    user: DefaultSession["user"] & {
-      id: string;
-      tipo: string;
-      celular?: string | null; // Added celular property
-    };
+    user: DefaultSession["user"] & { id: string; tipo: string };
   }
   interface User extends DefaultUser {
     tipo: string;
-    celular?: string | null; // Added celular property
   }
 }
 
@@ -18,9 +13,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     id: string;
     tipo: string;
-    celular?: string | null; // Added celular property
   }
 }
 
-export {}; // necessary because "isolatedModules": true
-
+export {};            // necessário porque "isolatedModules": true

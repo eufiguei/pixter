@@ -1,5 +1,5 @@
 
-// src/app/vendedor/dashboard/pagina-pagamento/page.tsx
+// src/app/motorista/dashboard/pagina-pagamento/page.tsx
 
 // This page contains the "Minha Página de Pagamento" section, including
 // the public payment link, QR code, and Stripe connection status/button.
@@ -41,10 +41,10 @@ export default function MinhaPaginaPagamentoPage() {
       setLoading(true);
       setError('');
       try {
-        const profileRes = await fetch('/api/vendedor/profile');
+        const profileRes = await fetch('/api/motorista/profile');
         if (!profileRes.ok) {
           if (profileRes.status === 401) {
-            router.push('/vendedor/login');
+            router.push('/motorista/login');
             return;
           }
           throw new Error(`Erro ao carregar perfil (${profileRes.status})`);
