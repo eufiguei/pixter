@@ -111,12 +111,12 @@ export default function DriverDashboardPage() {
             console.error("Payment API error:", data.error, data.code);
             // Don't throw, just set an error message and continue with default values
             setError(`Erro de pagamentos: ${data.error}`);
-            setBalance({
-              available: 0,
-              pending: 0,
-              currency: "brl"
+            setPaymentData({
+              total_paid: 0,
+              currency: "BRL",
+              payments: [],
+              count: 0
             });
-            setTransactions([]);
           }
           // Handle response when Stripe account is not connected
           else if (data.needsConnection) {
