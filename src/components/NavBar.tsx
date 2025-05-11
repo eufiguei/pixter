@@ -259,9 +259,9 @@ export default function NavBar() {
     } else if (!isAuthenticated) {
       // Unauthenticated user on non-public page
       return [
-        { href: "/login", text: "Sign In" },
-        { href: "/cadastro", text: "Create Account" },
-        { href: "/motorista/login", text: "I'm a Driver" },
+        { href: "/login", text: "Acesse sua Conta" },
+        { href: "/cadastro", text: "Criar Conta" },
+        { href: "/motorista/login", text: "Sou Vendedor" },
       ];
     }
 

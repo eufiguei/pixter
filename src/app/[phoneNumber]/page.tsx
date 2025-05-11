@@ -229,6 +229,17 @@ export default function DriverPaymentPage({
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <main className="flex-grow flex flex-col items-center p-4 pt-8 md:pt-16">
+        {/* Logo Header */}
+        <div className="mb-8 flex flex-col items-center justify-center space-y-2">
+          <h1 className="text-xl font-semibold text-gray-800">Acessar Conta</h1>
+          <Link href="/" className="flex items-center space-x-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded bg-purple-600">
+              <span className="text-lg font-bold text-white">P</span>
+            </div>
+            <span className="text-2xl font-bold text-purple-600">PIXTER</span>
+          </Link>
+        </div>
+
         <div className="w-full max-w-md md:max-w-lg lg:max-w-xl bg-white rounded-lg shadow-md p-8 space-y-8">
           {/* Pixter Header Section */}
           <div className="flex items-center justify-center">
@@ -413,7 +424,7 @@ export default function DriverPaymentPage({
       </main>
 
       <footer className="py-4 text-center text-sm text-gray-500">
-        © {new Date().getFullYear()} Pixter. Todos os direitos reservados.
+        &copy; {new Date().getFullYear()} Pixter. Todos os direitos reservados.
       </footer>
     </div>
   );
