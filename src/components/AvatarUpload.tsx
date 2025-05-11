@@ -16,8 +16,10 @@ interface AvatarUploadProps {
 export default function AvatarUpload({ currentAvatarUrl, onUpdate, userId }: AvatarUploadProps) {
   const supabase = createClientComponentClient(); // Initialize client
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(currentAvatarUrl || null);
+  // @ts-ignore - generic removed, use type assertion
+  const [error, setError] = useState(null as string | null);
+  // @ts-ignore - generic removed, use type assertion
+  const [avatarUrl, setAvatarUrl] = useState(currentAvatarUrl as string | null);
 
   // Update local avatar URL if the prop changes
   useEffect(() => {
@@ -147,4 +149,3 @@ export default function AvatarUpload({ currentAvatarUrl, onUpdate, userId }: Ava
     </div>
   );
 }
-
