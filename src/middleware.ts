@@ -73,7 +73,7 @@ export async function middleware(req: NextRequest) {
   }
    
   // Session is present OR the route is public → let the request pass
-  return NextResponse.next({ request: req });
+  return new Response(null, { status: 200 });
 }
 
 /* ---------------------------------------------------------------
