@@ -204,7 +204,8 @@ export default function NavBar() {
     } else if (userType === "motorista") {
       const driverPublicPageLink = session?.user?.celular
         ? `/${session.user.celular.replace(/\D/g, "")}`
-        : "#";
+        : null;
+
       return [
         {
           href: "/motorista/dashboard/dados",
@@ -222,10 +223,13 @@ export default function NavBar() {
           icon: <CreditCard className="w-4 h-4 mr-2" />,
         },
         {
-          href: driverPublicPageLink,
+          href: driverPublicPageLink || "/motorista/dashboard/dados",
           text: "Minha Pagina de Pagamento",
           icon: <ExternalLink className="w-4 h-4 mr-2" />,
-          disabled: driverPublicPageLink === "#",
+          disabled: !driverPublicPageLink,
+          title: !driverPublicPageLink
+            ? "Configure seu número de celular nas configurações de perfil"
+            : undefined,
         },
         {
           onClick: handleSignOut,
@@ -277,6 +281,7 @@ export default function NavBar() {
       onClick?: () => void;
       icon?: React.ReactNode;
       disabled?: boolean;
+      title?: string;
     },
     isMobile: boolean
   ) => {
@@ -290,6 +295,7 @@ export default function NavBar() {
           key={link.text}
           href={link.href}
           className={`${baseStyle} flex items-center`}
+          title={link.title}
         >
           {link.icon && link.icon}
           {link.text}
@@ -300,6 +306,7 @@ export default function NavBar() {
         <span
           key={link.text}
           className={`${baseStyle} opacity-50 cursor-not-allowed flex items-center`}
+          title={link.title}
         >
           {link.icon && link.icon}
           {link.text} (Unavailable)
@@ -311,6 +318,7 @@ export default function NavBar() {
           key={link.text}
           onClick={link.onClick}
           className={`${baseStyle} flex items-center`}
+          title={link.title}
         >
           {link.icon && link.icon}
           {link.text}
@@ -363,7 +371,6 @@ export default function NavBar() {
                 <div className="h-6 w-24 bg-gray-200 animate-pulse rounded"></div>
               ) : isAuthenticated ? (
                 <>
-                  
                   {/* <span onClick={handleSignOut}>Logout</span> */}
                   <div className="relative" ref={profileDropdownRef}>
                     <button
