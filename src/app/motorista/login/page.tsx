@@ -122,13 +122,14 @@ export default function MotoristaLogin() {
     const pasted = e.clipboardData.getData("Text").replace(/\D/g, "").slice(0, 6);
     if (!pasted) return;
 
-    const next = pasted.split("");
+    // Split pasted code into array and fill remaining with empty strings
+    const next = [...pasted.split("")];
     while (next.length < 6) next.push("");
     setOtp(next);
 
-    // focus next empty or last
-    const pos = pasted.length >= 6 ? 5 : pasted.length;
-    inputsRef.current[pos]?.focus();
+    // Focus on the last filled box or the last box if all are filled
+    const focusIndex = Math.min(pasted.length, 5);
+    inputsRef.current[focusIndex]?.focus();
   };
 
   // if user clears all boxes, reset focus to the first
@@ -211,6 +212,13 @@ export default function MotoristaLogin() {
                   value={digit}
                   onChange={(e) => handleChange(i, e.target.value)}
                   onPaste={handlePaste}
+                  onFocus={() => {
+                    // When focusing an empty box, move cursor to first empty box
+                    if (digit === "" && i > 0 && otp[i-1] === "") {
+                      const firstEmpty = otp.findIndex(d => d === "");
+                      if (firstEmpty !== -1) inputsRef.current[firstEmpty]?.focus();
+                    }
+                  }}
                   className="w-12 h-14 text-center border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-2xl font-semibold" // Larger size, bigger text, focus style
                 />
               ))}
@@ -256,4 +264,3 @@ export default function MotoristaLogin() {
     </main>
   );
 }
-
