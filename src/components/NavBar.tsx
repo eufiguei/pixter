@@ -242,6 +242,12 @@ export default function NavBar() {
       ];
     }
 
+    console.log('Session data:', {
+      celular: session?.user?.celular,
+      stripeAccountId: session?.user?.stripeAccountId,
+      isStripeConnected: !!session?.user?.stripeAccountId
+    });
+
     return [];
   };
 
