@@ -25,6 +25,7 @@ interface UserSession {
   email?: string; // For displaying in profile dropdown
   name?: string; // For displaying in profile dropdown
   image?: string; // For avatar in profile dropdown
+  stripeAccountId?: string; // Assuming this exists when Stripe is connected
   // Add other user properties if available and needed
 }
 
@@ -203,8 +204,10 @@ export default function NavBar() {
       ];
     } else if (userType === "motorista") {
       const driverPublicPageLink = session?.user?.celular
-        ? `/${session.user.celular.replace(/\D/g, "")}`
+        ? `https://pixter-mu.vercel.app/${session.user.celular.replace(/\D/g, "")}`
         : null;
+
+      const isStripeConnected = session?.user?.stripeAccountId;
 
       return [
         {
@@ -223,12 +226,12 @@ export default function NavBar() {
           icon: <CreditCard className="w-4 h-4 mr-2" />,
         },
         {
-          href: driverPublicPageLink || "/motorista/dashboard/dados",
+          href: isStripeConnected ? driverPublicPageLink : "#",
           text: "Minha Pagina de Pagamento",
           icon: <ExternalLink className="w-4 h-4 mr-2" />,
-          disabled: !driverPublicPageLink,
-          title: !driverPublicPageLink
-            ? "Configure seu número de celular nas configurações de perfil"
+          disabled: !isStripeConnected,
+          title: !isStripeConnected
+            ? "Conecte sua conta Stripe para habilitar esta página"
             : undefined,
         },
         {
