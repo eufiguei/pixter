@@ -25,25 +25,7 @@ export default function ClienteDashboard() {
 
   return (
     <main className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white py-4 shadow-sm">
-        <div className="container mx-auto px-4 flex justify-between items-center">
-          <div className="flex items-center">
-            <Link href="/" className="text-2xl font-bold text-black flex items-center">
-              <div className="w-10 h-10 bg-purple-700 rounded-md flex items-center justify-center mr-2">
-                <span className="text-white font-bold">P</span>
-              </div>
-              Pixter
-            </Link>
-          </div>
-          <nav className="hidden md:flex items-center space-x-6">
-            <Link href="#pagamentos" className="text-gray-700 hover:text-purple-700">Pagamentos</Link>
-            <Link href="#dados" className="text-gray-700 hover:text-purple-700">Meus Dados</Link>
-            <Link href="#cartoes" className="text-gray-700 hover:text-purple-700">Cartões Salvos</Link>
-            <button className="text-gray-700 hover:text-purple-700">Sair</button>
-          </nav>
-        </div>
-      </header>
+     
 
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-4xl font-bold mb-8">Olá, Ana!</h1>
