@@ -318,17 +318,16 @@ export default function DriverPaymentPage({
       
         <div className="w-full max-w-md md:max-w-lg lg:max-w-xl bg-white rounded-lg shadow-md p-8 space-y-8">
           {/* Pixter Header Section */}
-    <Link href="/" className="flex items-center space-x-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded bg-purple-600">
-              <span className="text-lg font-bold text-white">P</span>
-            </div>
-          </Link>
-          <div className="flex items-center justify-center">
-            <Link href="/" className="text-3xl font-bold text-center">
+          <div className="flex flex-col items-center space-y-2">
+            <Link href="/" className="flex items-center justify-center space-x-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded bg-purple-600">
+                <span className="text-lg font-bold text-white">P</span>
+              </div>
+            </Link>
+            <Link href="/" className="text-3xl font-bold">
               Pixter
             </Link>
           </div>
-
 
           {/* Driver Info - Access via profile object */}
           <div className="flex flex-col items-center space-y-2">
