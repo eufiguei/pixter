@@ -229,25 +229,7 @@ export default function DriverPaymentPage({
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <main className="flex-grow flex flex-col items-center p-4 pt-8 md:pt-16">
-        {/* Logo Header */}
-        <div className="mb-8 flex flex-col items-center justify-center space-y-2">
-          <h1 className="text-xl font-semibold text-gray-800">Acessar Conta</h1>
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded bg-purple-600">
-              <span className="text-lg font-bold text-white">P</span>
-            </div>
-            <span className="text-2xl font-bold text-purple-600">PIXTER</span>
-          </Link>
-        </div>
-
-        <div className="w-full max-w-md md:max-w-lg lg:max-w-xl bg-white rounded-lg shadow-md p-8 space-y-8">
-          {/* Pixter Header Section */}
-          <div className="flex items-center justify-center">
-            <Link href="/" className="text-3xl font-bold text-center">
-              Pixter
-            </Link>
-          </div>
-
+        
           <div className="flex justify-end w-full mt-2 mb-4">
             <div className="space-x-4">
               {!data ? (
@@ -332,6 +314,25 @@ export default function DriverPaymentPage({
               )}
             </div>
           </div>
+{/* Logo Header */}
+        <div className="mb-8 flex flex-col items-center justify-center space-y-2">
+          <Link href="/" className="flex items-center space-x-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded bg-purple-600">
+              <span className="text-lg font-bold text-white">P</span>
+            </div>
+            <span className="text-2xl font-bold text-purple-600">PIXTER</span>
+          </Link>
+        </div>
+
+        <div className="w-full max-w-md md:max-w-lg lg:max-w-xl bg-white rounded-lg shadow-md p-8 space-y-8">
+          {/* Pixter Header Section */}
+          <div className="flex items-center justify-center">
+            <Link href="/" className="text-3xl font-bold text-center">
+              Pixter
+            </Link>
+          </div>
+
+
           {/* Driver Info - Access via profile object */}
           <div className="flex flex-col items-center space-y-2">
             <div className="w-24 h-24 rounded-full overflow-hidden relative">
