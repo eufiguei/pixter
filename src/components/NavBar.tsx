@@ -207,7 +207,9 @@ export default function NavBar() {
         ? `https://pixter-mu.vercel.app/${session.user.celular.replace(/\D/g, "")}`
         : null;
 
-      const isStripeConnected = session?.user?.stripeAccountId;
+      const isStripeConnected = session?.user?.stripeAccountId !== undefined && 
+                         session.user.stripeAccountId !== null &&
+                         session.user.stripeAccountId !== '';
 
       return [
         {
@@ -230,9 +232,9 @@ export default function NavBar() {
           text: "Minha Pagina de Pagamento",
           icon: <ExternalLink className="w-4 h-4 mr-2" />,
           disabled: !isStripeConnected,
-          title: !isStripeConnected
-            ? "Conecte sua conta Stripe para habilitar esta página"
-            : undefined,
+          title: !isStripeConnected 
+            ? "Conecte sua conta Stripe nas configurações para habilitar" 
+            : undefined
         },
         {
           onClick: handleSignOut,
