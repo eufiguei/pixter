@@ -182,22 +182,22 @@ export default function NavBar() {
       return [
         {
           href: "/cliente/dashboard/dados",
-          text: "My Profile",
+          text: "Minha Conta",
           icon: <User className="w-4 h-4 mr-2" />,
         },
         {
           href: "/cliente/dashboard/historico",
-          text: "Payment History",
+          text: "Historico de Pagamentos",
           icon: <History className="w-4 h-4 mr-2" />,
         },
         {
           href: "/cliente/payment-methods",
-          text: "My Wallet",
+          text: "Carteira",
           icon: <CreditCard className="w-4 h-4 mr-2" />,
         },
         {
           onClick: handleSignOut,
-          text: "Sign Out",
+          text: "Sair da Conta",
           icon: <LogOut className="w-4 h-4 mr-2" />,
         },
       ];
@@ -208,7 +208,7 @@ export default function NavBar() {
       return [
         {
           href: "/motorista/dashboard/dados",
-          text: "My Profile",
+          text: "Minha Conta",
           icon: <User className="w-4 h-4 mr-2" />,
         },
         {
@@ -218,18 +218,18 @@ export default function NavBar() {
         },
         {
           href: "/motorista/dashboard/pagamentos",
-          text: "Payments",
+          text: "Pagamentos",
           icon: <CreditCard className="w-4 h-4 mr-2" />,
         },
         {
           href: driverPublicPageLink,
-          text: "My Public Page",
+          text: "Minha Pagina de Pagamento",
           icon: <ExternalLink className="w-4 h-4 mr-2" />,
           disabled: driverPublicPageLink === "#",
         },
         {
           onClick: handleSignOut,
-          text: "Sign Out",
+          text: "Sair da Conta",
           icon: <LogOut className="w-4 h-4 mr-2" />,
         },
       ];
