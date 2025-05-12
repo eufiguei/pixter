@@ -28,6 +28,7 @@ interface ExtendedUser extends User {
   account?: string;
   name?: string;
   image?: string;
+  stripeAccountId?: string;
 }
 
 /* ---------- Stripe ---------- */
@@ -134,11 +135,11 @@ export const authOptions: NextAuthOptions = {
         try {
           const countryCode = credentials.countryCode || "55";
           // If phone already starts with +, use it directly
-          const formattedPhone = credentials.phone.startsWith("+") 
-            ? credentials.phone 
+          const formattedPhone = credentials.phone.startsWith("+")
+            ? credentials.phone
             : formatPhoneNumber(credentials.phone, countryCode);
 
-          console.log('Formatted phone:', formattedPhone);
+          console.log("Formatted phone:", formattedPhone);
 
           // First verify the OTP
           const { data: verifyData, error: verifyError } =
@@ -147,8 +148,11 @@ export const authOptions: NextAuthOptions = {
               token: credentials.code,
               type: "sms",
             });
-          
-          console.log('OTP verification response:', { verifyData, verifyError });
+
+          console.log("OTP verification response:", {
+            verifyData,
+            verifyError,
+          });
 
           if (verifyError) {
             console.error(
@@ -165,11 +169,12 @@ export const authOptions: NextAuthOptions = {
 
           // Then find the profile
           let profile;
-          const { data: existingProfile, error: profileError } = await supabaseServer
-            .from("profiles")
-            .select("*")
-            .eq("id", verifyData.user.id)
-            .maybeSingle();
+          const { data: existingProfile, error: profileError } =
+            await supabaseServer
+              .from("profiles")
+              .select("*")
+              .eq("id", verifyData.user.id)
+              .maybeSingle();
 
           if (profileError) {
             console.error("Error finding profile:", profileError);
@@ -179,38 +184,54 @@ export const authOptions: NextAuthOptions = {
           // Try to find profile by phone number if no profile found by ID
           if (!existingProfile) {
             console.log("No profile found by ID, checking by phone number...");
-            
+
             // Get both formats of the phone number for checking
-            const phoneWithPlus = formattedPhone.startsWith("+") ? formattedPhone : `+${formattedPhone}`;
-            const phoneWithoutPlus = formattedPhone.startsWith("+") ? formattedPhone.substring(1) : formattedPhone;
-            
-            console.log("Checking for phone formats:", { phoneWithPlus, phoneWithoutPlus });
-            
+            const phoneWithPlus = formattedPhone.startsWith("+")
+              ? formattedPhone
+              : `+${formattedPhone}`;
+            const phoneWithoutPlus = formattedPhone.startsWith("+")
+              ? formattedPhone.substring(1)
+              : formattedPhone;
+
+            console.log("Checking for phone formats:", {
+              phoneWithPlus,
+              phoneWithoutPlus,
+            });
+
             // Check for profile with either phone format
-            const { data: phoneProfile, error: phoneProfileError } = await supabaseServer
-              .from("profiles")
-              .select("*")
-              .or(`celular.eq.${phoneWithPlus},celular.eq.${phoneWithoutPlus}`)
-              .maybeSingle();
+            const { data: phoneProfile, error: phoneProfileError } =
+              await supabaseServer
+                .from("profiles")
+                .select("*")
+                .or(
+                  `celular.eq.${phoneWithPlus},celular.eq.${phoneWithoutPlus}`
+                )
+                .maybeSingle();
 
             if (phoneProfileError) {
-              console.error("Error finding profile by phone:", phoneProfileError);
+              console.error(
+                "Error finding profile by phone:",
+                phoneProfileError
+              );
             } else if (phoneProfile) {
               console.log("Found profile by phone number:", phoneProfile.id);
               profile = phoneProfile;
-              
+
               // Update the auth user ID in the profile to match the authenticated user
               const { error: updateError } = await supabaseServer
                 .from("profiles")
                 .update({ id: verifyData.user.id })
                 .eq("id", phoneProfile.id);
-              
+
               if (updateError) {
                 console.error("Error updating profile ID:", updateError);
               } else {
-                console.log("Profile ID updated successfully to:", verifyData.user.id);
+                console.log(
+                  "Profile ID updated successfully to:",
+                  verifyData.user.id
+                );
               }
-              
+
               return {
                 id: verifyData.user.id,
                 email: phoneProfile.email || "",
@@ -218,30 +239,41 @@ export const authOptions: NextAuthOptions = {
                 image: phoneProfile.avatar_url || "",
                 tipo: phoneProfile.tipo || "",
                 account: phoneProfile.account || "phone",
+                stripeAccountId: profile?.stripe_account_id || "",
               };
             }
           }
 
           // If no profile exists after checking both ID and phone, return null (don't create account)
           if (!existingProfile && !profile) {
-            console.log("No profile found for phone number. User needs to register first.");
+            console.log(
+              "No profile found for phone number. User needs to register first."
+            );
             // Delete the authentication user since we don't want to keep auth entries without profiles
             try {
               await supabaseAdmin.auth.admin.deleteUser(verifyData.user.id);
-              console.log("Deleted auth user since no profile exists:", verifyData.user.id);
+              console.log(
+                "Deleted auth user since no profile exists:",
+                verifyData.user.id
+              );
             } catch (deleteErr) {
               console.error("Error deleting auth user:", deleteErr);
             }
-            
+
             // Return null with a custom error that will be displayed to the user
-            throw new Error("Usuário não encontrado. Por favor, crie uma conta primeiro.");
+            throw new Error(
+              "Usuário não encontrado. Por favor, crie uma conta primeiro."
+            );
           } else {
             profile = existingProfile || profile;
           }
 
           // Verify the profile is a driver
           if (profile.tipo !== "motorista") {
-            console.error("User exists but is not a driver:", verifyData.user.id);
+            console.error(
+              "User exists but is not a driver:",
+              verifyData.user.id
+            );
             return null;
           }
 
@@ -253,6 +285,7 @@ export const authOptions: NextAuthOptions = {
             image: profile.avatar_url || "",
             tipo: profile.tipo || "",
             account: profile.account || "phone",
+            stripeAccountId: profile?.stripe_account_id || "",
           };
         } catch (err) {
           console.error("Phone OTP verification error:", err);
@@ -263,7 +296,15 @@ export const authOptions: NextAuthOptions = {
   ],
 
   callbacks: {
-    async signIn({ user, account, profile }: { user: ExtendedUser, account: any, profile: any }) {
+    async signIn({
+      user,
+      account,
+      profile,
+    }: {
+      user: ExtendedUser;
+      account: any;
+      profile: any;
+    }) {
       // Google authentication flow
       if (account?.provider === "google" && user.email) {
         try {
@@ -357,6 +398,8 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.tipo = (user as ExtendedUser).tipo;
         token.account = (user as ExtendedUser).account;
+        token.stripeAccountId = (user as ExtendedUser)?.stripeAccountId|| null;
+        token.email = user.email;
       }
       return token;
     },

@@ -16,6 +16,7 @@ import {
   Settings,
   ExternalLink,
 } from "lucide-react";
+import { useMotoristaProfile } from "@/hooks/useMotoristaProfile";
 
 // Define a type for the user object within the session for better type safety
 interface UserSession {
@@ -40,6 +41,7 @@ export default function NavBar() {
     data: SessionData | null;
     status: "loading" | "authenticated" | "unauthenticated";
   };
+  const { profile } = useMotoristaProfile();
   const router = useRouter();
   const pathname = usePathname() || "/";
   const searchParams = useSearchParams();
@@ -51,7 +53,7 @@ export default function NavBar() {
 
   const userType = session?.user?.tipo;
   const user = session?.user || null; // Get user object from session
-  console.log("Session info in NavBar:", session, status, user);
+  // console.log("Session info in NavBar:", user);
 
   const isLoading = status === "loading";
   const isAuthenticated = status === "authenticated";
@@ -90,7 +92,7 @@ export default function NavBar() {
     if (isLoading) return;
 
     // Regex to specifically match /[phoneNumber] (assuming it's numeric) and not other root paths
-    const isPublicPaymentPage = /^\/\+?[0-9]{10,}$/.test(pathname);
+
     const isClientAuthPage = ["/login", "/cadastro"].includes(pathname);
     const isDriverAuthPage = [
       "/motorista/login",
@@ -203,19 +205,17 @@ export default function NavBar() {
         },
       ];
     } else if (userType === "motorista") {
-      const driverPublicPageLink = session?.user?.celular
-        ? `https://pixter-mu.vercel.app/${session.user.celular.replace(/\D/g, "")}`
+      const driverPublicPageLink = profile?.celular
+        ? `https://pixter-mu.vercel.app/${profile?.celular.replace(
+            /\D/g,
+            ""
+          )}`
         : null;
+         
+   
 
-      console.log('Stripe Connection Debug:', {
-        stripeAccountId: session?.user?.stripeAccountId,
-        stripeAccountIdType: typeof session?.user?.stripeAccountId,
-        stripeAccountIdLength: session?.user?.stripeAccountId?.length,
-        isStripeConnected: Boolean(session?.user?.stripeAccountId)
-      });
-
-      const isStripeConnected = !!session?.user?.stripeAccountId?.trim();
-
+      const isStripeConnected = profile?.stripe_account_id;
+          
       return [
         {
           href: "/motorista/dashboard/dados",
@@ -236,10 +236,8 @@ export default function NavBar() {
           href: isStripeConnected ? driverPublicPageLink : "#",
           text: "Minha Pagina de Pagamento",
           icon: <ExternalLink className="w-4 h-4 mr-2" />,
-          disabled: !isStripeConnected,
-          title: !isStripeConnected 
-            ? `Não disponível (Stripe status: ${session?.user?.stripeAccountId ? 'ID exists but invalid' : 'No ID'})` 
-            : undefined
+          // disabled: !isStripeConnected,
+      
         },
         {
           onClick: handleSignOut,
