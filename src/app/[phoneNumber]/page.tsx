@@ -239,7 +239,7 @@ export default function DriverPaymentPage({
                     href="/login"
                     className="text-sm text-gray-600 hover:text-purple-600"
                   >
-                    Sign In
+                    Acessar Conta
                   </Link>
                   <Link
                     href="/cadastro"
@@ -308,7 +308,7 @@ export default function DriverPaymentPage({
                     }}
                   >
                     <LogOut className="w-4 h-4" />
-                    Sign Out
+                    Sair da Conta
                   </button>
                 </div>
               )}
@@ -320,7 +320,6 @@ export default function DriverPaymentPage({
             <div className="flex h-8 w-8 items-center justify-center rounded bg-purple-600">
               <span className="text-lg font-bold text-white">P</span>
             </div>
-            <span className="text-2xl font-bold text-purple-600">PIXTER</span>
           </Link>
         </div>
 
