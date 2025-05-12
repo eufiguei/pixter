@@ -207,9 +207,7 @@ export default function NavBar() {
         ? `https://pixter-mu.vercel.app/${session.user.celular.replace(/\D/g, "")}`
         : null;
 
-      const isStripeConnected = session?.user?.stripeAccountId !== undefined && 
-                         session.user.stripeAccountId !== null &&
-                         session.user.stripeAccountId !== '';
+      const isStripeConnected = Boolean(session?.user?.stripeAccountId);
 
       return [
         {
@@ -233,7 +231,7 @@ export default function NavBar() {
           icon: <ExternalLink className="w-4 h-4 mr-2" />,
           disabled: !isStripeConnected,
           title: !isStripeConnected 
-            ? "Conecte sua conta Stripe nas configurações para habilitar" 
+            ? "Não disponível - Conecte sua conta Stripe" 
             : undefined
         },
         {
@@ -243,12 +241,6 @@ export default function NavBar() {
         },
       ];
     }
-
-    console.log('Session data:', {
-      celular: session?.user?.celular,
-      stripeAccountId: session?.user?.stripeAccountId,
-      isStripeConnected: !!session?.user?.stripeAccountId
-    });
 
     return [];
   };
